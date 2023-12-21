@@ -153,8 +153,7 @@ dmypy.json
 cython_debug/
 
 # PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
+#  I took the "nuclear option" and am ignoring ID settings completely when pushing
+# this library to source control.  TBH I don't know why it's "not recommended"
+# according to GH's template .gitignore but we could always get more nuanced later. -Lisa
+.idea/
