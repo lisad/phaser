@@ -1,11 +1,14 @@
 from phaser import Phase
 import pytest
 import os
+from pathlib import Path
 
-def test_load_and_save():
+current_path = Path(__file__).parent
+
+def test_load_and_save(tmpdir):
     class Transformer(Phase):
-        source = "fixtures/employees.csv"
-        working_dir = "tmp"
+        source = current_path / "fixtures" / "employees.csv"
+        working_dir = tmpdir
 
     Transformer().run()
-    assert os.path.exists("tmp/Transformer-employees.csv")
+    assert os.path.exists(os.path.join(tmpdir, "Transformer-employees.csv"))

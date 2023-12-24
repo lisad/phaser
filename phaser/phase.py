@@ -1,4 +1,5 @@
 import os
+from pathlib import PosixPath
 import pandas as pd
 
 class Phase:
@@ -10,9 +11,15 @@ class Phase:
         self.initialize_values()
 
     def initialize_values(self):
-        self.source_filename = self.source.split('/')[-1]
+        if isinstance(self.source, str):
+            self.source_filename = os.path.basename(self.source)
+        elif isinstance(self.source, PosixPath):
+            self.source_filename = self.source.name
+        else:
+            raise ValueError("Source filename attribute 'source' is not a string or Path")
+
         if not os.path.exists(self.working_dir):
-            raise Exception(f"Working dir {self.working_dir} does not exist.")
+            raise ValueError(f"Working dir {self.working_dir} does not exist.")
         destination_filename = '-'.join([self.__class__.__name__, self.source_filename])
         self.destination = os.path.join(self.working_dir, destination_filename)
 
