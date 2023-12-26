@@ -2,15 +2,17 @@ import os
 from pathlib import PosixPath
 import pandas as pd
 
-class Phase:
-    # LMDTODO How to make Phase abstract base class
 
+class Phase:
     def __init__(self, source=None, working_dir=None, dest=None, steps=None):
         self.source = source
+        self.source_filename = None
         self.working_dir = working_dir
-        self.dest = dest
+        self.dest = dest  # Filename
+        self.destination = None  # Path built from self.dest and self.working_dir
         self.steps = steps or []
-        self.data = []
+        self.row_data = []
+        self.dataframe_data = None
         self.initialize_values()
 
     def initialize_values(self):
@@ -35,7 +37,7 @@ class Phase:
 
     def run(self):
         # Break down run into load, steps, error handling, save and delegate
-        self.data = self.load()
+        self.load()
         self.run_steps()
         self.save()
 
@@ -61,6 +63,8 @@ class Phase:
                 for row in self.row_data:
                     new_data.append(step(self, row))
                 self.row_data = new_data
+            elif step_type == "batch_step":
+                self.row_data = step(self, self.row_data)
             elif step_type == "dataframe_step":
                 raise Exception("Not implemented yet")
             else:
