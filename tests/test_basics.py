@@ -1,11 +1,31 @@
-from phaser import Phase
-import pytest
+from phaser import Phase, row_step
+import pytest  # noqa # pylint: disable=unused-import
 import os
+from pathlib import Path
 
-def test_load_and_save():
-    class Transformer(Phase):
-        source = "fixtures/employees.csv"
-        working_dir = "tmp"
+current_path = Path(__file__).parent
 
-    Transformer().run()
-    assert os.path.exists("tmp/Transformer-employees.csv")
+
+def test_load_and_save(tmpdir):
+    source = current_path / "fixture_files" / "employees.csv"
+    Phase(source=source, working_dir=tmpdir, dest="Transformed-employees.csv").run()
+    assert os.path.exists(os.path.join(tmpdir, "Transformed-employees.csv"))
+
+
+@row_step
+def full_name_step(phase, row):
+    row["full name"] = " ".join([row["First name"], row["Last name"]])
+    return row
+
+
+def test_have_and_run_steps(tmpdir):
+    source = current_path / "fixture_files" / "employees.csv"
+    transformer = Phase(source=source,
+                        working_dir=tmpdir,
+                        steps=[
+                            full_name_step
+                        ])
+
+    transformer.load()
+    transformer.run_steps()
+    assert "full name" in transformer.row_data[0]
