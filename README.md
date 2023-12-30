@@ -24,11 +24,11 @@ by shortening the loop on debugging where a complex data integration is failing.
 
 To setup project for contributing:
 * python -m venv venv
-* pip install -r requirements
+* source venv/bin/activate
+* pip install -r requirements.txt
 * pip install -e .  # installs the phaser library (in edit mode!) so pytest can import it
 
 Then run:
-* source venv/bin/activate
 * pytest
 
 
