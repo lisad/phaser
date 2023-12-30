@@ -42,16 +42,42 @@ class Phase:
         self.save()
 
     def load(self):
-        # LMDTODO: Read all the read_csv options and choose the right ones and document
-        self.dataframe_data = pd.read_csv(self.source)
+        """ When creating a Phase, it may be desirable to subclass it and override the load()
+        function to do a different kind of loading.  Be sure to load the row_data into the
+        instance's row_data attribute as an iterable (list) containing dicts.
+        Defaults:
+        * assume all column values are strings, so leading zeros or trailing zeros don't get destroyed.
+        * assume ',' value-delimiter
+        * skip_blank_lines=True: allows blank AND '#'-led rows to be skipped and still find header row
+        * doesn't use indexing
+        * does attempt to decompress common compression formats if file uses them
+        * assume UTF-8 encoding
+        * uses '#' as the leading character to assume a row is comment
+        * Raises errors loading 'bad lines', rather than skip
+        """
+        self.dataframe_data = pd.read_csv(self.source,
+                                          dtype='str',
+                                          sep=',',
+                                          skip_blank_lines=True,
+                                          index_col=False,
+                                          comment='#')
         self.row_data = self.dataframe_data.to_dict('records')
-        print(self.row_data)
 
     def save(self):
-        # LMDTODO: Synch the dataframe version every step rather than just on save
+        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
+        It should be easy to override this method to save in a different way, using different
+        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
+        Defaults:
+        separator character is ','
+        encoding is UTF-8
+        compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
+        """
+        # LMDTODO: Synch the dataframe version every step rather than just on save - issue 13
         self.dataframe_data = pd.DataFrame(self.row_data)
-        # LMDTODO: Read all the to_csv options and choose the right ones haha
-        self.dataframe_data.to_csv(self.destination)
+        self.dataframe_data.to_csv(self.destination,
+                                   na_rep="NULL",   # LMDTODO Reconsider: this makes checkpoints more readable
+                                                    # but may make final import harder
+                                   )
 
     def run_steps(self):
         if self.row_data is None or self.row_data == []:
