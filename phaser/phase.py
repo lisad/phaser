@@ -1,16 +1,17 @@
 import os
 from pathlib import PosixPath
 import pandas as pd
-
+from .column import make_strict_name
 
 class Phase:
-    def __init__(self, source=None, working_dir=None, dest=None, steps=None):
+    def __init__(self, source=None, working_dir=None, dest=None, steps=None, columns=None):
         self.source = source
         self.source_filename = None
         self.working_dir = working_dir
         self.dest = dest  # Filename
         self.destination = None  # Path built from self.dest and self.working_dir
         self.steps = steps or []
+        self.columns = columns or []
         self.row_data = []
         self.dataframe_data = None
         self.initialize_values()
@@ -38,6 +39,7 @@ class Phase:
     def run(self):
         # Break down run into load, steps, error handling, save and delegate
         self.load()
+        self.do_column_stuff()
         self.run_steps()
         self.save()
 
@@ -62,6 +64,34 @@ class Phase:
                                           index_col=False,
                                           comment='#')
         self.row_data = self.dataframe_data.to_dict('records')
+
+    def headers(self):
+        # LMDTODO: This is a temporary solution what would be better?  For one thing
+        # this errors if the datatable is empty and the file only came with headers which is actually legit
+        return self.row_data[0].keys()
+
+    def do_column_stuff(self):
+        self.rename_columns()
+        for column in self.columns:
+            column.check(self.headers, self.row_data)
+
+    def rename_columns(self):
+        """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred
+        label format, and using a list of additional alternative names provided in each column definition.  """
+        rename_list = {alt: col.name for col in self.columns for alt in col.rename }
+        strict_name_list = {make_strict_name(col.name): col.name for col in self.columns}
+        new_data = []
+        for row in self.row_data:
+            new_row = {}
+            for key, value in row.items():
+                new_key = key.strip()
+                if make_strict_name(new_key) in strict_name_list.keys():
+                    new_key = strict_name_list[make_strict_name(new_key)]  # Convert to declared capital'n/separ'n
+                if key in rename_list.keys():
+                    new_key = rename_list[new_key]   # Do declared renames
+                new_row[new_key] = row[key]
+            new_data.append(new_row)
+        self.row_data = new_data
 
     def save(self):
         """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
