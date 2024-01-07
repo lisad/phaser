@@ -1,7 +1,9 @@
-import os
-from pathlib import PosixPath
 import pandas as pd
+import logging
 from .column import make_strict_name
+
+logger = logging.getLogger('phaser')
+logger.addHandler(logging.NullHandler())
 
 
 class Phase:
@@ -11,49 +13,22 @@ class Phase:
     steps = []
     columns = []
 
-    def __init__(self, source=None, working_dir=None, dest=None, steps=None, columns=None):
-        self.source = source or self.__class__.source
-        self.source_filename = None
-        self.working_dir = working_dir or self.__class__.working_dir
-        self.dest = dest  # Filename
-        self.destination = None  # Path built from self.dest and self.working_dir
+    def __init__(self, name=None, steps=None, columns=None):
+        self.name = name or self.__class__.__name__
         self.steps = steps or self.__class__.steps
         self.columns = columns or self.__class__.columns
+
         self.row_data = []
         self.dataframe_data = None
-        self.initialize_values()
 
-    def initialize_values(self):
-        if isinstance(self.source, str):
-            self.source_filename = os.path.basename(self.source)
-        elif isinstance(self.source, PosixPath):
-            self.source_filename = self.source.name
-        else:
-            raise ValueError("Source filename attribute 'source' is not a string or Path")
-
-        if self.dest is None:
-            # LMDTODO: Ideally this should detect if previous phases have
-            # already claimed this name.   Move to save function?
-            if self.__class__ == Phase:
-                self.dest = f"Transformed-{self.source_filename}"
-            else:
-                self.dest = f"{self.__class__.__name__}_output_{self.source_filename}"
-
-        if not os.path.exists(self.working_dir):
-            raise ValueError(f"Working dir {self.working_dir} does not exist.")
-
-        self.destination = os.path.join(self.working_dir, self.dest)
-        if str(self.destination) == str(self.source):
-            raise ValueError("Destination file cannot be same as source, it will overwrite")
-
-    def run(self):
+    def run(self, source, destination):
         # Break down run into load, steps, error handling, save and delegate
-        self.load()
+        self.load(source)
         self.do_column_stuff()
         self.run_steps()
-        self.save()
+        self.save(destination)
 
-    def load(self):
+    def load(self, source):
         """ When creating a Phase, it may be desirable to subclass it and override the load()
         function to do a different kind of loading.  Be sure to load the row_data into the
         instance's row_data attribute as an iterable (list) containing dicts.
@@ -67,7 +42,8 @@ class Phase:
         * uses '#' as the leading character to assume a row is comment
         * Raises errors loading 'bad lines', rather than skip
         """
-        self.dataframe_data = pd.read_csv(self.source,
+        logger.info(f"{self.name} loading input from {source}")
+        self.dataframe_data = pd.read_csv(source,
                                           dtype='str',
                                           sep=',',
                                           skip_blank_lines=True,
@@ -76,8 +52,8 @@ class Phase:
         self.row_data = self.dataframe_data.to_dict('records')
 
     def headers(self):
-        # LMDTODO: This is a temporary solution what would be better?  For one thing
-        # this errors if the datatable is empty and the file only came with headers which is actually legit
+        # LMDTODO: This is a temporary solution what would be better?  For one thing this approach
+        # errors if the datatable is empty and the file only came with headers which is actually legit
         return self.row_data[0].keys()
 
     def do_column_stuff(self):
@@ -104,7 +80,7 @@ class Phase:
             new_data.append(new_row)
         self.row_data = new_data
 
-    def save(self):
+    def save(self, destination):
         """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
         It should be easy to override this method to save in a different way, using different
         parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
@@ -115,10 +91,11 @@ class Phase:
         """
         # LMDTODO: Synch the dataframe version every step rather than just on save - issue 13
         self.dataframe_data = pd.DataFrame(self.row_data)
-        self.dataframe_data.to_csv(self.destination,
+        self.dataframe_data.to_csv(destination,
                                    na_rep="NULL",   # LMDTODO Reconsider: this makes checkpoints more readable
                                                     # but may make final import harder
                                    )
+        logger.info(f"{self.name} saved output to {destination}")
 
     def run_steps(self):
         if self.row_data is None or self.row_data == []:
