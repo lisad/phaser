@@ -3,15 +3,22 @@ from pathlib import PosixPath
 import pandas as pd
 from .column import make_strict_name
 
+
 class Phase:
+    # Subclasses can override to set source for all instances if appropriate
+    source = None
+    working_dir = None
+    steps = []
+    columns = []
+
     def __init__(self, source=None, working_dir=None, dest=None, steps=None, columns=None):
-        self.source = source
+        self.source = source or self.__class__.source
         self.source_filename = None
-        self.working_dir = working_dir
+        self.working_dir = working_dir or self.__class__.working_dir
         self.dest = dest  # Filename
         self.destination = None  # Path built from self.dest and self.working_dir
-        self.steps = steps or []
-        self.columns = columns or []
+        self.steps = steps or self.__class__.steps
+        self.columns = columns or self.__class__.columns
         self.row_data = []
         self.dataframe_data = None
         self.initialize_values()
@@ -27,7 +34,10 @@ class Phase:
         if self.dest is None:
             # LMDTODO: Ideally this should detect if previous phases have
             # already claimed this name.   Move to save function?
-            self.dest = f"Transformed-{self.source_filename}"
+            if self.__class__ == Phase:
+                self.dest = f"Transformed-{self.source_filename}"
+            else:
+                self.dest = f"{self.__class__.__name__}_output_{self.source_filename}"
 
         if not os.path.exists(self.working_dir):
             raise ValueError(f"Working dir {self.working_dir} does not exist.")
@@ -77,8 +87,9 @@ class Phase:
 
     def rename_columns(self):
         """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred
-        label format, and using a list of additional alternative names provided in each column definition.  """
-        rename_list = {alt: col.name for col in self.columns for alt in col.rename }
+        label format, and using a list of additional alternative names provided in each column definition.
+        """
+        rename_list = {alt: col.name for col in self.columns for alt in col.rename}
         strict_name_list = {make_strict_name(col.name): col.name for col in self.columns}
         new_data = []
         for row in self.row_data:

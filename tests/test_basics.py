@@ -11,6 +11,18 @@ def test_load_and_save(tmpdir):
     Phase(source=source, working_dir=tmpdir, dest="Transformed-employees.csv").run()
     assert os.path.exists(os.path.join(tmpdir, "Transformed-employees.csv"))
 
+def test_subclassing(tmpdir):
+    class Transformer(Phase):
+        source = current_path / "fixture_files" / "employees.csv"
+        working_dir = tmpdir
+
+    t = Transformer()
+    t.run()
+    assert os.path.exists(os.path.join(tmpdir, "Transformer_output_employees.csv"))
+
+@pytest.mark.skip
+def test_override_destination(tmpdir):
+    pass
 
 @row_step
 def full_name_step(phase, row):
