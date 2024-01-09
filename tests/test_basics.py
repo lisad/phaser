@@ -29,3 +29,8 @@ def test_have_and_run_steps(tmpdir):
     transformer.load()
     transformer.run_steps()
     assert "full name" in transformer.row_data[0]
+
+def test_duplicate_column_names(tmpdir):
+    transformer = Phase(source='xyz', working_dir=tmpdir)
+    # LMDTODO: Place duplicate column names in CSV and detect that this errors in load before
+    # we get to saving row_data in a way that would hide this
