@@ -37,11 +37,6 @@ def test_subclassing(tmpdir):
     assert os.path.exists(os.path.join(tmpdir, "test_output.csv"))
 
 
-@pytest.mark.skip
-def test_override_destination(tmpdir):
-    pass
-
-
 @row_step
 def full_name_step(phase, row):
     row["full name"] = " ".join([row["First name"], row["Last name"]])
@@ -57,8 +52,12 @@ def test_have_and_run_steps(tmpdir):
     assert "full name" in transformer.row_data[0]
 
 
-@pytest.mark.skip
+@pytest.mark.skip("Pandas.read_csv doesn't allow this detection it just renames the 2nd 'name' to 'name.1'")
 def test_duplicate_column_names(tmpdir):
-    transformer = Phase(source='xyz', working_dir=tmpdir)
-    # LMDTODO: Place duplicate column names in CSV and detect that this errors in load before
-    # we get to saving row_data in a way that would hide this
+    # See https://github.com/pandas-dev/pandas/issues/13262 - another reason to write our own CSV reader
+    with open(tmpdir / 'dupe-column-name.csv', 'w') as f:
+        f.write("id,name,name\n1,Percy,Jackson\n")
+    phase = Phase()
+    with pytest.raises(Exception):
+        phase.load(tmpdir / 'dupe-column-name.csv')
+        print(phase.row_data)
