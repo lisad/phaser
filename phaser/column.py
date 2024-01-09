@@ -24,7 +24,10 @@ class Column:
         :param null: Checks all values of the column for null values to raise as errors.
         :param default: A default value to apply if a column value is null. Not compatible with "null=False"
         :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
-        :param rename: A set of alternate names for the column, so phase can rename to preferred name.
+        :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
+            the preferred name of this column. Upon loading the data, all rows that have columns matching
+            any alternate name in this set will have a column with the preferred name with the same data in
+            it. In other words, any data in a column name in `rename` will end up in a column named `name`.
         :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
         """
         self.name = str(name).strip()
@@ -86,18 +89,23 @@ def call_method_on(obj, method):
         return isinstance(thing, (types.BuiltinFunctionType, types.BuiltinMethodType))
 
     if isinstance(method, str) and hasattr(obj, method):
+        # Examples: value.strip(), value.lstrip(), value.rstrip(), value.lower()... or going beyond strings,
+        # if the value is a date, value.weekday(), value.hour, value.year...
         result = getattr(obj, method)
         # Python has methods and builtin functions. Builtin functions like 'strip' are
         if inspect.ismethod(result) or is_builtin_function_or_descriptor(result):
             result = result()
         return result
     elif isinstance(method, str):
+        # Examples: passing the value to a function like bytearray, len, date.fromisoformat, or abs. (Will it work
+        # for date.fromisoformat without the right import?)
         if isinstance(obj, str):
             expression = f"{method}('{obj}')"
         else:
             expression = f"{method}({obj})"
         return eval(expression)
     elif callable(method):
+        # Users will have to pass the callable rather than a string if it's not in imported scope here
         return method(obj)
     else:
         raise Exception("Case not handled - method not callable or string or attribute of obj")
