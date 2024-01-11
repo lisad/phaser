@@ -1,4 +1,4 @@
-from phaser import Phase, row_step, Pipeline
+from phaser import Phase, row_step, Pipeline, Column
 import pytest  # noqa # pylint: disable=unused-import
 import os
 from pathlib import Path
@@ -61,3 +61,11 @@ def test_duplicate_column_names(tmpdir):
     with pytest.raises(Exception):
         phase.load(tmpdir / 'dupe-column-name.csv')
         print(phase.row_data)
+
+def test_do_column_stuff(tmpdir):
+    source = current_path / "fixture_files" / "employees.csv"
+    Phase(columns=[
+            Column("First name"),
+            Column("Last name")
+        ]).run(source, tmpdir / "Transformed-employees-columns.csv")
+    assert os.path.exists(os.path.join(tmpdir, "Transformed-employees-columns.csv"))
