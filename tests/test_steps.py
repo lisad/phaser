@@ -1,27 +1,26 @@
+from pathlib import Path
 import pytest
 
-from fixtures import transform_employees_phase
-from phaser.steps import check_unique
+from phaser import check_unique, Phase
+from fixtures import test_data_phase_class
+
+current_path = Path(__file__).parent
 
 
-def test_builtin_step(transform_employees_phase):
-    transform_employees_phase.steps = [
-        check_unique('employee id')
-    ]
-    transform_employees_phase.load()
-    transform_employees_phase.run_steps()
+def test_builtin_step():
+    phase = Phase(steps=[check_unique('employee id')])
+    phase.load(current_path / 'fixture_files' / 'employees.csv')
+    phase.run_steps()
 
 
-def test_check_unique_fails(transform_employees_phase):
-    transform_employees_phase.steps = [
-        check_unique('employee id')
-    ]
-    transform_employees_phase.row_data = [
-        {'employee id': '1'},
-        {'employee id': '1'}
+def test_check_unique_fails(test_data_phase_class):
+    phase = test_data_phase_class()
+    phase.row_data = [
+        {'id': '1'},
+        {'id': '1'}
     ]
     with pytest.raises(AssertionError):
-        transform_employees_phase.run_steps()
+        phase.run_steps()
 
 
 def test_check_unique_strips_spaces():
