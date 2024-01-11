@@ -58,8 +58,9 @@ class Phase:
 
     def do_column_stuff(self):
         self.rename_columns()
+        headers = self.headers()
         for column in self.columns:
-            column.check(self.headers, self.row_data)
+            column.check(headers, self.row_data)
 
     def rename_columns(self):
         """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred
