@@ -132,3 +132,9 @@ def test_date_column_casts_to_date():
     col = DateColumn(name="start")
     assert col.cast("2223/01/01") == date(2223,1,1)
 
+
+def test_date_column_range():
+    col=DateColumn(name="start", min_value=date(2019, 12, 1), max_value=date.today())
+    col.check_and_cast(['start'], [{'start': "2024-01-14"}])
+    with pytest.raises(ValueError):
+        col.check_and_cast(['start'], [{'start': "2012-01-01"}])
