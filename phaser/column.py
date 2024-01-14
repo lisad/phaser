@@ -1,3 +1,5 @@
+from datetime import datetime
+from dateutil.parser import parse
 from decimal import Decimal
 import inspect
 import types
@@ -126,7 +128,9 @@ class IntColumn(Column):
             any alternate name in this set will have a column with the preferred name with the same data in
             it. In other words, any data in a column name in `rename` will end up in a column named `name`.
         :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
-            To supply a range, use min_value and max_value instead.
+            To supply a range, use min_value and max_value instead.  NOTE: this is checked after casting,
+            so to check allowed values of a column specified to cast to int, such as IntColumn, check for
+            values like [1, 2, 3] rather than ["1", "2", "3"]
         :param min_value: If data is below this value, column raises errors
         :param max_value: If data is above this value, column raises errors
         """
@@ -151,6 +155,78 @@ class IntColumn(Column):
         if value is None:
             return None
         return int(Decimal(value))
+
+
+class DateTimeColumn(Column):
+
+    def __init__(self,
+                 name,
+                 required=True,
+                 null=True,
+                 default=None,
+                 fix_value_fn=None,
+                 rename=None,
+                 allowed_values=None,
+                 min_value=None,
+                 max_value=None,
+                 date_format_code=None,
+                 default_tz=None):
+        """
+        Sets up a DateColumn instance ready to do type, format, null and default checking on values, as well as
+        renaming the column name itself to chosen version.
+
+        :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
+        :param required: If the column is required, the phase will present errors if it is missing.
+        :param null: Checks all values of the column for null values to raise as errors.
+        :param default: A default value to apply if a column value is null. Not compatible with "null=False"
+        :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
+        :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
+            the preferred name of this column. Upon loading the data, all rows that have columns matching
+            any alternate name in this set will have a column with the preferred name with the same data in
+            it. In other words, any data in a column name in `rename` will end up in a column named `name`.
+        :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
+            To supply a range, use min_value and max_value instead.
+        :param min_value: If data is below this value, column raises errors
+        :param max_value: If data is above this value, column raises errors
+        :param date_format_code:  Formatting string used by datetime.strptime to parse string to date,
+            e.g. '%d/%m/%y %H:%M:%S.%f', '%d/%m/%Y' or '%m/%d/%y'.  If left None, class will use dateutil.parser.
+        :param default_tz: If timezone is not specified in value, assume this timezone applies.
+        """
+        super().__init__(name,
+                         required=required,
+                         null=null,
+                         default=default,
+                         fix_value_fn=fix_value_fn,
+                         rename=rename,
+                         allowed_values=allowed_values)
+        self.min_value = min_value
+        self.max_value = max_value
+        self.date_format_code = date_format_code
+        self.default_tz = default_tz
+
+    def check_value(self, value):
+        super().check_value(value)
+        if self.min_value is not None and (value < self.min_value):
+            raise ValueError(f"Value for {self.name} is {value}, less than min {self.min_value}")
+        if self.max_value is not None and (value > self.max_value):
+            raise ValueError(f"Value for {self.name} is {value}, more than max {self.max_value}")
+
+    def cast(self, value):
+        if value is None:
+            return None
+        if self.date_format_code:
+            value = datetime.strptime(value, self.date_format_code)
+        else:
+            value = parse(value)
+        if value.tzname() is None and self.default_tz is not None:
+            value  = value.replace(tzinfo=self.default_tz)
+        return value
+
+class DateColumn(DateTimeColumn):
+    def cast(self, value):
+        value = super().cast(value)
+        return datetime.date(value)
+
 
 # -------  Below here: not exported for user use  -------
 

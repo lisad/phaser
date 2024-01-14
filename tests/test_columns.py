@@ -1,6 +1,9 @@
-import pytest
+from datetime import datetime, date
 
-from phaser import Phase, Column, IntColumn
+import pytest
+from dateutil.tz import gettz
+
+from phaser import Phase, Column, IntColumn, DateColumn, DateTimeColumn
 
 
 def test_null_forbidden_but_null_default():
@@ -93,9 +96,11 @@ def test_int_column_casts():
     phase.do_column_stuff()
     assert [row['Age'] for row in phase.row_data] == [3,4,5]
 
+
 def test_int_column_null_value():
     col = IntColumn(name="Age")
     assert col.cast(None) is None
+
 
 def test_int_column_minmax():
     col = IntColumn(name="Age", min_value=0, max_value=130)
@@ -103,3 +108,27 @@ def test_int_column_minmax():
         col.check_value(-1)
     with pytest.raises(ValueError):
         col.check_value(2000)
+
+
+def test_datetime_column_casts():
+    col = DateTimeColumn(name="start")
+    with pytest.raises(ValueError):
+        col.cast('Data')
+    assert col.cast("2223/01/01 14:28") == datetime(2223,1,1, 14, 28)
+
+
+def test_datetime_column_custom_format():
+    col=DateTimeColumn(name="stardate", date_format_code="%Y%m%d")
+    assert col.cast("22230101") == datetime(2223,1,1)
+
+
+def test_datetime_column_applies_tz():
+    col = DateTimeColumn(name="start", default_tz=gettz("America/Los Angeles"))
+    value = col.cast("22230101")
+    assert value.tzname() == "PST"
+
+
+def test_date_column_casts_to_date():
+    col = DateColumn(name="start")
+    assert col.cast("2223/01/01") == date(2223,1,1)
+
