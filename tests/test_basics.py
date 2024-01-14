@@ -9,7 +9,7 @@ current_path = Path(__file__).parent
 
 def test_pipeline(tmpdir, null_step_phase, reconcile_phase_class):
     p = Pipeline(phases=[null_step_phase, reconcile_phase_class],
-                 source=current_path / 'fixture_files' / 'employees.csv',
+                 source=current_path / 'fixture_files' / 'crew.csv',
                  working_dir=tmpdir)
     p.run()
 
@@ -21,16 +21,16 @@ def test_pipeline_source_none(tmpdir, reconcile_phase_class):
 
 
 def test_load_and_save(tmpdir):
-    source = current_path / "fixture_files" / "employees.csv"
-    Phase().run(source, tmpdir / "Transformed-employees.csv")
-    assert os.path.exists(os.path.join(tmpdir, "Transformed-employees.csv"))
+    source = current_path / "fixture_files" / "crew.csv"
+    Phase().run(source, tmpdir / "Transformed-crew.csv")
+    assert os.path.exists(os.path.join(tmpdir, "Transformed-crew.csv"))
 
 
 def test_subclassing(tmpdir):
     class Transformer(Phase):
         pass
 
-    source = current_path / "fixture_files" / "employees.csv"
+    source = current_path / "fixture_files" / "crew.csv"
 
     t = Transformer()
     t.run(source, tmpdir / "test_output.csv")
@@ -44,7 +44,7 @@ def full_name_step(phase, row):
 
 
 def test_have_and_run_steps(tmpdir):
-    source = current_path / "fixture_files" / "employees.csv"
+    source = current_path / "fixture_files" / "crew.csv"
     transformer = Phase(steps=[full_name_step])
 
     transformer.load(source)
@@ -63,7 +63,7 @@ def test_duplicate_column_names(tmpdir):
         print(phase.row_data)
 
 def test_do_column_stuff(tmpdir):
-    source = current_path / "fixture_files" / "employees.csv"
+    source = current_path / "fixture_files" / "crew.csv"
     Phase(columns=[
             Column("First name"),
             Column("Last name")

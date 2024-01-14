@@ -13,7 +13,9 @@ class Phase:
     steps = []
     columns = []
 
-    def __init__(self, name=None, steps=None, columns=None):
+    def __init__(self, name=None, steps=None, columns=None, context={}):
+        """ Instantiate (or subclass) a Phase with an ordered list of steps (they will be called in this order) and
+        with an ordered list of columns (they will do their checks and type casting in this order).  """
         self.name = name or self.__class__.__name__
         self.steps = steps or self.__class__.steps
         self.columns = columns or self.__class__.columns
@@ -60,7 +62,7 @@ class Phase:
         self.rename_columns()
         headers = self.headers()
         for column in self.columns:
-            column.check(headers, self.row_data)
+            self.row_data = column.check_and_cast(headers, self.row_data)
 
     def rename_columns(self):
         """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred

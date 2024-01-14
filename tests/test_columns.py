@@ -1,5 +1,6 @@
 import pytest
-from phaser import Column, Phase
+
+from phaser import Phase, Column, IntColumn
 
 
 def test_null_forbidden_but_null_default():
@@ -8,22 +9,22 @@ def test_null_forbidden_but_null_default():
 
 
 def test_required_values():
-    mycol = Column('passenger', allowed_values=["Gilligan", "Skipper", "Professor"])
-    mycol.check(["passenger"], [{"passenger": "Gilligan"}, {"passenger": "Skipper"}])
+    mycol = Column('crew', allowed_values=["Kirk", "Riker", "Troi", "Crusher"])
+    mycol.check_and_cast(["crew"], [{"crew": "Kirk"}, {"crew": "Riker"}])
     with pytest.raises(Exception):
-        mycol.check(["passenger"], [{"passenger": "Shakespeare"}])
+        mycol.check_value("Gilligan")
 
 
 def test_null_forbidden():
     col = Column('employeeid', null=False)
     with pytest.raises(ValueError):
-        col.check(['employeeid'], [{'employeeid': None}])
+        col.check_and_cast(['employeeid'], [{'employeeid': None}])
 
 
 def test_default_value():
     col = Column('location', default='HQ')
-    data = [{'location': 'Atlanta'}, {'location': None}]
-    col.check(['location'], data)
+    input = [{'location': 'Atlanta'}, {'location': None}]
+    data = col.check_and_cast(['location'], input)
     for row in data:
         if row[col.name] is None:
             assert col.fix_value(row[col.name]) == 'HQ'
@@ -37,8 +38,7 @@ def test_fix_value_fn_instance_method():
 
 
 def test_abs_on_int_column():
-    #LMDTODO rewrite to actually use int column when that is built, and include transform to int
-    col = Column('value', fix_value_fn='abs')
+    col = IntColumn('value', fix_value_fn='abs')
     assert col.fix_value(-1) == 1
 
 
@@ -85,3 +85,21 @@ def test_forbidden_column_name_characters():
         Column('1\n2\n3')
     with pytest.raises(AssertionError):
         Column('a\tb\tc')
+
+def test_int_column_casts():
+    col = IntColumn(name="Age", min_value=0)
+    phase = Phase(columns=[col])
+    phase.row_data = [{'age': "3"}, {'age': "4 "}, {'age': "5.0"}]
+    phase.do_column_stuff()
+    assert [row['Age'] for row in phase.row_data] == [3,4,5]
+
+def test_int_column_null_value():
+    col = IntColumn(name="Age")
+    assert col.cast(None) is None
+
+def test_int_column_minmax():
+    col = IntColumn(name="Age", min_value=0, max_value=130)
+    with pytest.raises(ValueError):
+        col.check_value(-1)
+    with pytest.raises(ValueError):
+        col.check_value(2000)
