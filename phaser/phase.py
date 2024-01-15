@@ -1,6 +1,7 @@
 import pandas as pd
 import logging
 from .column import make_strict_name
+from .steps import ROW_STEP, BATCH_STEP, DATAFRAME_STEP, PROBE_VALUE
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -19,6 +20,7 @@ class Phase:
         self.name = name or self.__class__.__name__
         self.steps = steps or self.__class__.steps
         self.columns = columns or self.__class__.columns
+        self.context = context
 
         self.row_data = []
         self.dataframe_data = None
@@ -104,15 +106,15 @@ class Phase:
         if self.row_data is None or self.row_data == []:
             raise Exception("No data loaded yet")
         for step in self.steps:
-            step_type = step(self, "__PROBE__")  # LMDTODO Is there a better way to find out what kind of step?
-            if step_type == "row_step":
+            step_type = step(None, __probe__=PROBE_VALUE)
+            if step_type == ROW_STEP:
                 new_data = []
                 for row in self.row_data:
-                    new_data.append(step(self, row))
+                    new_data.append(step(row, context=self.context))
                 self.row_data = new_data
-            elif step_type == "batch_step":
-                self.row_data = step(self, self.row_data)
-            elif step_type == "dataframe_step":
+            elif step_type == BATCH_STEP:
+                self.row_data = step(self.row_data, context=self.context)
+            elif step_type == DATAFRAME_STEP:
                 raise Exception("Not implemented yet")
             else:
-                raise Exception("Unknown step type")
+                raise Exception(f"Unknown step type {step_type}")

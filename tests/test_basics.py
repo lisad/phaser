@@ -38,7 +38,7 @@ def test_subclassing(tmpdir):
 
 
 @row_step
-def full_name_step(phase, row):
+def full_name_step(row, **kwargs):
     row["full name"] = " ".join([row["First name"], row["Last name"]])
     return row
 
