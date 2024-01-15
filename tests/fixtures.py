@@ -3,7 +3,7 @@ from pathlib import Path
 from phaser import row_step, Phase, check_unique
 
 @row_step
-def null_step(phase, row):
+def null_step(row, **kwargs):
     return row
 
 
@@ -27,7 +27,7 @@ def reconcile_phase_class(tmpdir):
         MOCK_EXTERNAL_DATA = ['rabbit', 'pillow', 'clock', 'lintroller', 'bird', 'smokedetector']
 
         @row_step
-        def check_known_symbols(self, row):
+        def check_known_symbols(row, **kwargs):
             if 'symbol' in row.keys():
                 assert row['symbol'] in Reconciler.MOCK_EXTERNAL_DATA
             return row
