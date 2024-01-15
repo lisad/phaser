@@ -8,8 +8,8 @@ current_path = Path(__file__).parent
 
 
 def test_builtin_step():
-    phase = Phase(steps=[check_unique('employee id')])
-    phase.load(current_path / 'fixture_files' / 'employees.csv')
+    phase = Phase(steps=[check_unique('crew id')])
+    phase.load(current_path / 'fixture_files' / 'crew.csv')
     phase.run_steps()
 
 
