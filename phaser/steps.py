@@ -28,7 +28,8 @@ def batch_step(step_function):
         if __probe__ == PROBE_VALUE:
             return BATCH_STEP
         result = step_function(batch, context=context)
-        assert isinstance(result, list)
+        if not isinstance(result, list):
+            raise Exception(f"Step {step_function} returned a {result.__class__} rather than a list of rows")
         return result
     return _batch_step_wrapper
 

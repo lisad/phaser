@@ -4,6 +4,7 @@ from decimal import Decimal
 import inspect
 import types
 from collections.abc import Iterable
+from .pipeline import DropRowException, PipelineErrorException, WarningException
 
 
 class Column:
@@ -17,7 +18,8 @@ class Column:
                  default=None,
                  fix_value_fn=None,
                  rename=None,
-                 allowed_values=None):
+                 allowed_values=None,
+                 use_exception=PipelineErrorException):
         """
         Sets up a Column instance ready to do type, format, null and default checking on values, as well as
         renaming the column name itself to chosen version.
@@ -41,49 +43,55 @@ class Column:
         self.fix_value_fn = fix_value_fn
         self.rename = rename or []
         self.allowed_values = allowed_values
+        self.use_exception = use_exception  # LMDTODO should pick this from list instead of passing in class?
 
         if self.null is False and self.default is not None:
             raise Exception(f"Column {self.name} defined to error on null values, but also provides a non-null default")
 
-    def check_and_cast(self, headers, data):
+    def check_required(self, data_headers):
         """
         Checks a dataset to make sure the conditions put on this column are met, and casts to another data type if
         appropriate. Columns might need to do some checking, then some casting, then more checking,
         to complete their work.  However, users who want to subclass Column to do a special kind of column
         (e.g. ISBNNumberColumn) ought to need to only override check_value or cast.
-        :param headers: just the column headers found in data, for checking presence and fixing case
-        :param data: all of the batch data in list(dict) format
+        :param data_headers: just the column headers found in data, for checking presence and fixing case
         :return: None
         """
         # LMDTODO: This may significantly change structure when we introduce error handling.  Also it may violate
         # expectations that one column's logic not only casts its values, it also drops rows - so the next column
         # receives fewer rows.  I still think that's right for a data cleaning library but need to check this lots.
         if self.required:
-            if self.name not in headers:
-                raise Exception(f"Header {self.name} not found in {headers}")
-        new_rows = []
-        for row in data:
-            value = row[self.name]
-            if self.null is False and value is None:
-                # Checking for null values comes before casting
-                raise ValueError(f"Null value found in column {self.name}")
+            if self.name not in data_headers:
+                raise self.use_exception(f"Header {self.name} not found in {data_headers}")
 
-            new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
-            self.check_value(new_value)    # More checking comes after casting
-            new_value = self.fix_value(new_value)
-            row[self.name] = new_value
-            new_rows.append(row)
-        return new_rows
+# LMDTODO Add a test that if required=False, and the column is triggered to cast values, and its not there, it's OK
+
+    def check_and_cast_value(self, row):
+        """ This checks to see if the value is there before attempting to cast it.  It does some checks before
+        casting the value to a datatype, and some other checks afterward. .  Most of the time, a custom
+        algorithm for converting a value to a specific datatype can just override the simpler 'cast' method.
+        :param row: entire row is passed for simplicity elsewhere and in case this needs more scope
+        """
+        value = row[self.name]
+        if self.null is False and value is None:
+            raise self.use_exception(f"Null value found in column {self.name}")
+
+        new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
+
+        self.check_value(new_value)
+        new_value = self.fix_value(new_value)
+        row[self.name] = new_value
+        return row
 
     def cast(self, value):
-        """ Basic column does no casting. Override this method in a subclass to cast to other things besides strings """
+        """ Basic column does no casting. Override this method in a subclass to cast to other datatypes than strings """
         return value
 
     def check_value(self, value):
         """ Raises ValueError if something is wrong with a value in the column.  ValueError will be trapped by Phase
         to try to apply the appropriate error handling.  Override this (don't forget to call super().check_value() """
         if self.allowed_values and not (value in self.allowed_values):
-            raise ValueError(f"Column {self.name} had value {value} not found in allowed values")
+            raise self.use_exception(f"Column {self.name} had value {value} not found in allowed values")
 
     def fix_value(self, value):
         """ Sets value to default if provided and appropriate, and calls any functions or
@@ -205,6 +213,9 @@ class DateTimeColumn(Column):
         self.default_tz = default_tz
 
     def check_value(self, value):
+        """ Checks the value for every field
+        Override in order to have custom error handling for example
+        """
         super().check_value(value)
         if self.min_value is not None and (value < self.min_value):
             raise ValueError(f"Value for {self.name} is {value}, less than min {self.min_value}")

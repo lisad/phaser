@@ -3,7 +3,7 @@ from datetime import datetime, date
 import pytest
 from dateutil.tz import gettz
 
-from phaser import Phase, Column, IntColumn, DateColumn, DateTimeColumn
+from phaser import Phase, Column, IntColumn, DateColumn, DateTimeColumn, PipelineErrorException
 
 
 def test_null_forbidden_but_null_default():
@@ -13,21 +13,21 @@ def test_null_forbidden_but_null_default():
 
 def test_required_values():
     mycol = Column('crew', allowed_values=["Kirk", "Riker", "Troi", "Crusher"])
-    mycol.check_and_cast(["crew"], [{"crew": "Kirk"}, {"crew": "Riker"}])
-    with pytest.raises(Exception):
-        mycol.check_value("Gilligan")
+    mycol.check_and_cast_value({"crew": "Kirk", 'position': "Captain"})
+    with pytest.raises(PipelineErrorException):
+        mycol.check_and_cast_value({"crew": "Gilligan", 'position': "mate"})
 
 
 def test_null_forbidden():
     col = Column('employeeid', null=False)
-    with pytest.raises(ValueError):
-        col.check_and_cast(['employeeid'], [{'employeeid': None}])
+    with pytest.raises(PipelineErrorException):
+        col.check_and_cast_value({'employeeid': None})
 
 
 def test_default_value():
     col = Column('location', default='HQ')
     input = [{'location': 'Atlanta'}, {'location': None}]
-    data = col.check_and_cast(['location'], input)
+    data = [col.check_and_cast_value(row) for row in input]
     for row in data:
         if row[col.name] is None:
             assert col.fix_value(row[col.name]) == 'HQ'
@@ -70,17 +70,20 @@ def test_rename():
     phase = Phase(columns=[col1, col2])
     # Normally rowdata imported from CSV will have only one variant per file but this should work too
     # in case people import from inconsistent JSON
-    phase.row_data = [{'dept': 'Eng', 'dob': '20000101'}, {'division': 'Accounting', 'birthdate': '19820101'}]
+    phase.row_data = {1: {'dept': 'Eng', 'dob': '20000101'}, 2: {'division': 'Accounting', 'birthdate': '19820101'}}
+    phase.headers = ['dept', 'birthdate']
     phase.rename_columns()
-    assert all(list(row.keys()) == ['department', 'birth_date'] for row in phase.row_data)
-
+    assert all(list(row.keys()) == ['department', 'birth_date'] for row in phase.row_data.values())
+    assert phase.headers == ['department', 'birth_date']
 
 def test_canonicalize_names():
     col1 = Column("Country of Origin")
     phase = Phase(columns=[col1])
-    phase.row_data = [{'country of origin': 'UK'}, {'country_of_origin': 'US'}]
+    phase.row_data = {1: {'country of origin': 'UK'}, 2: {'country_of_origin': 'US'}}
+    phase.headers = ['country of origin']
     phase.rename_columns()
-    assert all(list(row.keys()) == ['Country of Origin'] for row in phase.row_data)
+    assert all(list(row.keys()) == ['Country of Origin'] for row in phase.row_data.values())
+    assert phase.headers == ['Country of Origin']
 
 
 def test_forbidden_column_name_characters():
@@ -92,9 +95,10 @@ def test_forbidden_column_name_characters():
 def test_int_column_casts():
     col = IntColumn(name="Age", min_value=0)
     phase = Phase(columns=[col])
-    phase.row_data = [{'age': "3"}, {'age': "4 "}, {'age': "5.0"}]
+    phase.row_data = {1: {'age': "3"}, 2: {'age': "4 "}, 3: {'age': "5.0"}}
+    phase.headers = ['age']
     phase.do_column_stuff()
-    assert [row['Age'] for row in phase.row_data] == [3,4,5]
+    assert [row['Age'] for row in phase.row_data.values()] == [3, 4, 5]
 
 
 def test_int_column_null_value():
@@ -135,6 +139,6 @@ def test_date_column_casts_to_date():
 
 def test_date_column_range():
     col=DateColumn(name="start", min_value=date(2019, 12, 1), max_value=date.today())
-    col.check_and_cast(['start'], [{'start': "2024-01-14"}])
+    col.check_and_cast_value({'start': "2024-01-14"})
     with pytest.raises(ValueError):
-        col.check_and_cast(['start'], [{'start': "2012-01-01"}])
+        col.check_and_cast_value({'start': "2012-01-01"})

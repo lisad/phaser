@@ -49,7 +49,7 @@ def test_have_and_run_steps(tmpdir):
 
     transformer.load(source)
     transformer.run_steps()
-    assert "full name" in transformer.row_data[0]
+    assert "full name" in transformer.row_data[1]
 
 
 @pytest.mark.skip("Pandas.read_csv doesn't allow this detection it just renames the 2nd 'name' to 'name.1'")

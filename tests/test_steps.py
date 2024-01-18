@@ -15,10 +15,10 @@ def test_builtin_step():
 
 def test_check_unique_fails(test_data_phase_class):
     phase = test_data_phase_class()
-    phase.row_data = [
-        {'id': '1'},
-        {'id': '1'}
-    ]
+    phase.row_data = {
+        1: {'id': '1'},
+        2: {'id': '1'}
+    }
     with pytest.raises(AssertionError):
         phase.run_steps()
 
@@ -48,10 +48,11 @@ def test_check_unique_case_insensitive():
 def test_context_available_to_step():
     @row_step
     def replace_value_fm_context(row, context):
-        row['secret'] = context['secret']
+        row['secret'] = context.get('secret')
         return row
 
-    transformer = Phase(steps=[replace_value_fm_context], context={'secret': "I'm always angry"})
-    transformer.row_data = [ {'id': 1, 'secret': 'unknown'}]
+    transformer = Phase(steps=[replace_value_fm_context])
+    transformer.context.add_variable('secret', "I'm always angry")
+    transformer.row_data = {1:  {'id': 1, 'secret': 'unknown'}}
     transformer.run_steps()
-    assert transformer.row_data[0]['secret'] == "I'm always angry"
+    assert transformer.row_data[1]['secret'] == "I'm always angry"

@@ -7,12 +7,64 @@ logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
 
 
+class PhaserException(Exception):
+    pass
+
+
+class PipelineErrorException(PhaserException):
+    """ Using this exception will cause the error to stop the pipeline, and this will be reported as an error.
+    If possible, the pipeline will keep going and collect more errors until it reaches the end of a phase.  """
+    pass
+
+
+class DropRowException(PhaserException):
+    """ Throwing this exception in a row_step will cause the current row to be dropped. """
+    pass
+
+
+class WarningException(PhaserException):
+    """ Throwing this exception will add warnings to the output of the pipeline.  While it can't be used
+    in methods where a return value is needed, it can be used in methods that check results without returning
+    fixed data.  """
+    pass
+
+
+class Context:
+    def __init__(self, variables=None):
+        self.errors = {}
+        self.warnings = {}
+        self.variables = variables or {}
+        self.current_row = None
+
+    def add_warning(self, warn_text):
+        if self.current_row is None:
+            raise Exception("Code error: Pipeline Context should always know what row we're operating on")
+        if self.current_row in self.warnings.keys():
+            self.warnings[self.current_row].append(warn_text)
+        else:
+            self.warnings[self.current_row] = [warn_text]
+
+    def add_variable(self, name, value):
+        """ Add variables that are global to the pipeline and accessible to steps and internal methods """
+        self.variables[name] = value
+
+    def get(self, name):
+        return self.variables.get(name)
+
+    def has_errors(self):
+        return self.errors != {}
+
 class Pipeline:
     # Subclasses can override here to set values for all instances, or override in instantiation
     working_dir = None
     source = None
     phases = []
 
+
+    ON_ERROR_WARN = "ON_ERROR_WARN"
+    ON_ERROR_COLLECT = "ON_ERROR_COLLECT"
+    ON_ERROR_DROP_ROW = "ON_ERROR_DROP_ROW"
+    ON_ERROR_STOP_NOW = "ON_ERROR_STOP_NOW"
 
     def __init__(self, working_dir=None, source=None, phases=None):
         self.working_dir = working_dir or self.__class__.working_dir
