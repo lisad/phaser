@@ -1,4 +1,5 @@
 from functools import wraps
+from .pipeline import PipelineErrorException
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
@@ -51,7 +52,8 @@ def check_unique(column_name, strip=True, ignore_case=False):
             values = [value.strip() for value in values]
         if ignore_case:
             values = [value.lower() for value in values]
-        assert len(set(values)) == len(values)
+        if len(set(values)) != len(values):
+            raise PipelineErrorException(f"Some values in {column_name} were duplicated, so unique check failed")
         return batch
 
     return check_unique_step

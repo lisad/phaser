@@ -3,7 +3,7 @@ from datetime import datetime, date
 import pytest
 from dateutil.tz import gettz
 
-from phaser import Phase, Column, IntColumn, DateColumn, DateTimeColumn, PipelineErrorException
+from phaser import Phase, Column, IntColumn, DateColumn, DateTimeColumn, PipelineErrorException, DropRowException
 
 
 def test_null_forbidden_but_null_default():
@@ -70,19 +70,18 @@ def test_rename():
     phase = Phase(columns=[col1, col2])
     # Normally rowdata imported from CSV will have only one variant per file but this should work too
     # in case people import from inconsistent JSON
-    phase.row_data = {1: {'dept': 'Eng', 'dob': '20000101'}, 2: {'division': 'Accounting', 'birthdate': '19820101'}}
-    phase.headers = ['dept', 'birthdate']
+    phase.load_data([{'dept': 'Eng', 'dob': '20000101'}, {'division': 'Accounting', 'birthdate': '19820101'}])
     phase.rename_columns()
-    assert all(list(row.keys()) == ['department', 'birth_date'] for row in phase.row_data.values())
+    assert all(list(row.keys()) == ['department', 'birth_date'] for row in phase.row_data)
     assert phase.headers == ['department', 'birth_date']
+
 
 def test_canonicalize_names():
     col1 = Column("Country of Origin")
     phase = Phase(columns=[col1])
-    phase.row_data = {1: {'country of origin': 'UK'}, 2: {'country_of_origin': 'US'}}
-    phase.headers = ['country of origin']
+    phase.load_data([{'country of origin': 'UK'}, {'country_of_origin': 'US'}])
     phase.rename_columns()
-    assert all(list(row.keys()) == ['Country of Origin'] for row in phase.row_data.values())
+    assert all(list(row.keys()) == ['Country of Origin'] for row in phase.row_data)
     assert phase.headers == ['Country of Origin']
 
 
@@ -92,13 +91,13 @@ def test_forbidden_column_name_characters():
     with pytest.raises(AssertionError):
         Column('a\tb\tc')
 
+
 def test_int_column_casts():
     col = IntColumn(name="Age", min_value=0)
     phase = Phase(columns=[col])
-    phase.row_data = {1: {'age': "3"}, 2: {'age': "4 "}, 3: {'age': "5.0"}}
-    phase.headers = ['age']
+    phase.load_data([{'age': "3"}, {'age': "4 "}, {'age': "5.0"}])
     phase.do_column_stuff()
-    assert [row['Age'] for row in phase.row_data.values()] == [3, 4, 5]
+    assert [row['Age'] for row in phase.row_data] == [3, 4, 5]
 
 
 def test_int_column_null_value():
@@ -108,15 +107,15 @@ def test_int_column_null_value():
 
 def test_int_column_minmax():
     col = IntColumn(name="Age", min_value=0, max_value=130)
-    with pytest.raises(ValueError):
+    with pytest.raises(PipelineErrorException):
         col.check_value(-1)
-    with pytest.raises(ValueError):
+    with pytest.raises(PipelineErrorException):
         col.check_value(2000)
 
 
 def test_datetime_column_casts():
     col = DateTimeColumn(name="start")
-    with pytest.raises(ValueError):
+    with pytest.raises(Exception):
         col.cast('Data')
     assert col.cast("2223/01/01 14:28") == datetime(2223,1,1, 14, 28)
 
@@ -138,7 +137,22 @@ def test_date_column_casts_to_date():
 
 
 def test_date_column_range():
-    col=DateColumn(name="start", min_value=date(2019, 12, 1), max_value=date.today())
+    col = DateColumn(name="start", min_value=date(2019, 12, 1), max_value=date.today())
     col.check_and_cast_value({'start': "2024-01-14"})
-    with pytest.raises(ValueError):
+    with pytest.raises(PipelineErrorException):
         col.check_and_cast_value({'start': "2012-01-01"})
+
+def test_column_error_selection():
+    col = Column(name='room', allowed_values=['stateroom', 'cabin'], on_error='drop_row')
+    row = {'room': 'single'}
+    with pytest.raises(DropRowException):
+        col.check_and_cast_value(row)
+
+# LMDTODO Add a test that if required=False, and the column is triggered to cast values, and its not there, it's OK
+
+# Add a test that rows are really dropped
+
+# Add a test that a custom column "MyColumn" can override the 'cast' method and apply a custom error handling by
+# throwing an exception
+
+# Test the output of warnings

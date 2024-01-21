@@ -1,6 +1,5 @@
 import pytest
-from pathlib import Path
-from phaser import row_step, Phase, check_unique
+from phaser import Phase, row_step, check_unique
 
 @row_step
 def null_step(row, **kwargs):
@@ -23,6 +22,7 @@ def null_step_phase(tmpdir):
 
 @pytest.fixture
 def reconcile_phase_class(tmpdir):
+    """ Creates a subclass of Phase with one step, checking 'symbols' column for values from a list"""
     class Reconciler(Phase):
         MOCK_EXTERNAL_DATA = ['rabbit', 'pillow', 'clock', 'lintroller', 'bird', 'smokedetector']
 

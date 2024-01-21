@@ -1,7 +1,7 @@
 import pandas as pd
 import logging
 from .column import make_strict_name
-from .pipeline import Pipeline, Context, DropRowException
+from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException
 from .steps import ROW_STEP, BATCH_STEP, DATAFRAME_STEP, PROBE_VALUE
 
 logger = logging.getLogger('phaser')
@@ -25,7 +25,7 @@ class Phase:
             # If a phase is being run in isolation and without the pipeline context, create a new one
             self.context = Context()
 
-        self.row_data = {}  # The row dict is indexed by ORIGINAL row number.  Rows can be dropped as steps happen.
+        self.row_data = []
         self.headers = None
         self.dataframe_data = None
         self.default_error_policy = error_policy or Pipeline.ON_ERROR_COLLECT
@@ -35,9 +35,12 @@ class Phase:
         self.load(source)
         self.do_column_stuff()
         self.run_steps()
-        if not self.context.has_errors():
+        if self.context.has_errors():
+            self.report_errors_and_warnings()
+            raise PipelineErrorException(f"Phase failed with {len(self.context.errors.keys())} errors.")
+        else:
+            self.report_errors_and_warnings()
             self.save(destination)
-        self.report_errors_and_warnings()
 
     def report_errors_and_warnings(self):
         # LMDTODO: ok this needs to be much better. save to file, also send to stdout or something...
@@ -68,20 +71,38 @@ class Phase:
                          index_col=False,
                          comment='#')
         self.headers = df.columns.values.tolist()
-        if "__phaser_row_num__" in df.columns.values.tolist():
-            # LMDTODO: Check that the rows are correctly numbered or can be ordered by number and unique?
-            pass
+        if Pipeline.ROW_NUM_FIELD in df.columns.values.tolist():
+            raise Exception("phaser does not currently expect __phaser_row_num__ to be saved and loaded")
+            # LMDTODO: Or could check that the rows are correctly numbered or can be ordered by number and unique?
+            # this would preserve original row numbers across data.  can't be done in reshape phases.
         else:
-            df['__phaser_row_num__'] = df.reset_index().index
+            df[Pipeline.ROW_NUM_FIELD] = df.reset_index().index
         self.dataframe_data = df
-        self.row_data = {row['__phaser_row_num__']: row for row in self.dataframe_data.to_dict('records')}
+        self.row_data = df.to_dict('records')
+
+    def load_data(self, data):
+        """ Alternate load method is useful in tests or in scripting Phase class where the data is not in a file.
+        This assumes data is in the form of a list of dicts where dicts have consistent keys (e.g. pandas 'record'
+        format) """
+        if len(data) > 0:
+            self.headers = data[0].keys()
+        self.row_data = data
 
     def do_column_stuff(self):
         self.rename_columns()
         for column in self.columns:
             column.check_required(self.headers)
-            for row_num, row in self.row_data.items():
-                self.row_data[row_num] = column.check_and_cast_value(row)
+            new_data = []
+            for row in self.row_data:
+                self.context.current_row = row.get(Pipeline.ROW_NUM_FIELD, "unknown")
+                try:
+                    new_row = column.check_and_cast_value(row)
+                    new_data.append(new_row)
+                except DropRowException:
+                    self.context.add_warning(column.name, row, f"Column requirements for {column.name} not met")
+                except WarningException as we:
+                    self.context.add_warning(column.name, row, we.message)
+            self.row_data = new_data
 
     def rename_columns(self):
         """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred
@@ -98,8 +119,7 @@ class Phase:
                 name = rename_list[name]  # Do declared renames
             return name
 
-        for row_num, row in self.row_data.items():
-            self.row_data[row_num] = {rename_me(key): value for key, value in row.items()}
+        self.row_data = [{rename_me(key): value for key, value in row.items()} for row in self.row_data]
         self.headers = [rename_me(name) for name in self.headers]
 
     def save(self, destination):
@@ -114,20 +134,22 @@ class Phase:
         # LMDTODO: Synch the dataframe version every step rather than just on save - issue 13
         self.check_headers_consistent()
 
-        self.dataframe_data = pd.DataFrame(self.row_data.values())
+        self.dataframe_data = pd.DataFrame(self.row_data)
         # LMDTODO: Should saving row numbers be an option?
-        self.dataframe_data.drop('__phaser_row_num__', axis='columns')
+        self.dataframe_data.drop(Pipeline.ROW_NUM_FIELD, axis='columns', inplace=True)
         self.dataframe_data.to_csv(destination,
+                                   index=False,
                                    na_rep="NULL",   # LMDTODO Reconsider: this makes checkpoints more readable
                                                     # but may make final import harder
                                    )
         logger.info(f"{self.name} saved output to {destination}")
 
     def check_headers_consistent(self):
-        for row in self.row_data.values():
+        for row in self.row_data:
             for field_name in row.keys():
                 if field_name not in self.headers and field_name != '__phaser_row_num__':
                     raise Exception(f"At some point, {field_name} was added to the row_data and not declared a header")
+        # LMDTODO: We could also check for fields dropped in row_data steps and add them if they can be null?
 
     def run_steps(self):
         if self.row_data is None or self.row_data == []:
@@ -144,20 +166,61 @@ class Phase:
                 raise Exception(f"Unknown step type {step_type}")
 
     def execute_row_step(self, step):
-        for row_num, row in self.row_data.items():
-            self.context.current_row = row_num
+        # LMDTODO: This is getting powerful enough that if and where possible, column operations should be done as
+        # steps and passed through this function. that would improve consistency of error handling, row numbering, etc.
+        new_data = []
+        for row_index, row in enumerate(self.row_data):
+            # In proper execution, row data has already been enriched with original row numbers.
+            # In tests or under scripting, row numbers may not have been set so include now for future steps.
+            self.context.current_row = row.get(Pipeline.ROW_NUM_FIELD)
+            if self.context.current_row is None:
+                row[Pipeline.ROW_NUM_FIELD] = row_index
+                self.context.current_row = row.get(Pipeline.ROW_NUM_FIELD)
+
+            if self.context.current_row in self.context.errors.keys():
+                continue    # Only trap the first error per row
+
+            # NOw that we know the row number run the step and handle exceptions.
             try:
                 new_row = step(row, context=self.context)
-            except DropRowException:
-                self.row_data.popitem(row_num)
-                self.context.add_warning(f"Step {step} dropped row ({row})")
-        self.row_data[row_num] = new_row
+                if new_row is None or not isinstance(new_row, dict):
+                    raise PipelineErrorException(f"Step should return row in dict format, not {new_row}")
+                new_data.append(new_row)
+            except DropRowException as drop_row_exception:
+                self.context.add_dropped_row(step, row, drop_row_exception.message)
+            except WarningException as we:
+                self.context.add_warning(step, row, str(we))
+                new_data.append(row)  # Don't drop it.  LMDTODO but what about changing the row??
+            except Exception as e:
+                # Unknown exception type - can at least provide class name and if class casts to string with a
+                # message, include that too.
+                # LMDTODO: The case where a step does not return anything is hard to catch and give information
+                # on.  Try having a method that takes a row_step decorator and does not return; it appears in errors
+                # merely as an AssertionError with no extra detail.
+                e_name = e.__class__.__name__
+                e_message = str(e)
+                message = f"{e_name} raised ({e})" if e_message else f"{e_name} raised"
+                logger.debug(f"Unknown exception handled in execute_row_steps ({message}")
+
+                if self.default_error_policy == Pipeline.ON_ERROR_COLLECT:
+                    self.context.add_error(step, row, message)
+                    new_data.append(row)
+                elif self.default_error_policy == Pipeline.ON_ERROR_WARN:
+                    self.context.add_warning(step, row, message)
+                    new_data.append(row)
+                elif self.default_error_policy == Pipeline.ON_ERROR_DROP_ROW:
+                    self.context.add_dropped_row(step, row, message)
+                elif self.default_error_policy == Pipeline.ON_ERROR_STOP_NOW:
+                    raise e
+                else:
+                    raise PipelineErrorException(f"Unknown error handling policy '{self.default_error_policy}'") from e
 
     def execute_batch_step(self, step):
-        new_row_values = step(list(self.row_data.values()), context=self.context)
+        # LMDTODO: This method needs the error handling too.
+        new_row_values = step(self.row_data, context=self.context)
         row_size_diff = len(self.row_data) - len(new_row_values)
         if row_size_diff > 0:
-            self.context.add_warning(f"{row_size_diff} rows were dropped by step {step}")
+            self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
         elif row_size_diff < 0:
-            self.context.add_warning(f"{abs(row_size_diff)} rows were ADDED by step {step} ")
-        self.row_data =  {row['__phaser_row_num__']: row for row in new_row_values}
+            self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
+        self.row_data = {row[Pipeline.ROW_NUM_FIELD]: row for row in new_row_values}
