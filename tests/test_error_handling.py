@@ -1,6 +1,6 @@
 import pytest
 from fixtures import reconcile_phase_class
-from phaser import Pipeline, Phase, row_step, WarningException
+from phaser import Pipeline, Phase, row_step, batch_step, WarningException
 
 
 @row_step
@@ -24,6 +24,34 @@ def check_room_is_hologram_room(row, context):
 def warn_if_lower_decks(row, context):
     if int(row['deck']) < 10:
         raise WarningException("Lower decks should not be in this dataset")
+
+
+@row_step
+def warn_if_lower_decks_and_return_row(row, context):
+    # LMDTODO add test that covers this
+    if int(row['deck']) < 10:
+        context.add_warning('warnif', row, "Lower decks should not be in this dataset")
+    return row
+
+
+def variance(array):
+    mean = sum(array) / len(array)
+    return sum((value - mean) ** 2 for value in array) / len(array)
+
+
+@batch_step
+def warn_tachyon_level_variance(batch, context):
+    tachyon_values = [row['tachyon_level'] for row in batch]
+    if variance(tachyon_values) > 10:
+        raise WarningException("Tachyon variance at high levels")
+    return batch
+
+
+@batch_step
+def error_tachyon_level_variance(batch, context):
+    tachyon_values = [row['tachyon_level'] for row in batch]
+    if variance(tachyon_values) > 10:
+        raise Exception("Tachyon variance at high levels")
 
 
 def test_error_provides_info(reconcile_phase_class):
@@ -82,3 +110,19 @@ def test_drop_row_info():
     phase.run_steps()
     assert len(phase.context.dropped_rows) == 1
     assert phase.context.dropped_rows[1]['step'] == 'check_deck_is_21'
+
+
+def test_batch_step_error():
+    phase = Phase(steps=[error_tachyon_level_variance])
+    phase.load_data([{'tachyon_level': 513}, {'tachyon_level': 532}])
+    phase.run_steps()
+    assert phase.context.errors['batch']['step'] == 'error_tachyon_level_variance'
+
+
+def test_batch_step_warning():
+    phase = Phase(steps=[warn_tachyon_level_variance])
+    phase.load_data([{'tachyon_level': 513}, {'tachyon_level': 532}])
+
+    phase.run_steps()
+    assert phase.context.warnings['batch'][0]['step'] == 'warn_tachyon_level_variance'
+    assert phase.context.warnings['batch'][0]['row'] is None

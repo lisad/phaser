@@ -15,7 +15,10 @@ def row_step(step_function):
         if __probe__ == PROBE_VALUE:
             return ROW_STEP  # Allows Phase to probe a step for how to call it
         result = step_function(row, context=context)
-        assert isinstance(result, dict)
+        if result is None:
+            raise PipelineErrorException("Step should return row.")
+        if not isinstance(result, dict):
+            raise PipelineErrorException(f"Step should return row in dict format, not {result}")
         return result
     return _row_step_wrapper
 

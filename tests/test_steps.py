@@ -1,7 +1,7 @@
 from pathlib import Path
 import pytest
 
-from phaser import check_unique, Phase, row_step, PipelineErrorException
+from phaser import check_unique, Phase, row_step, PipelineErrorException, Pipeline
 from fixtures import test_data_phase_class
 
 current_path = Path(__file__).parent
@@ -14,7 +14,7 @@ def test_builtin_step():
 
 
 def test_check_unique_fails(test_data_phase_class):
-    phase = test_data_phase_class()
+    phase = test_data_phase_class(error_policy=Pipeline.ON_ERROR_STOP_NOW)
     phase.row_data = [
         {'id': '1'},
         {'id': '1'}

@@ -178,49 +178,57 @@ class Phase:
                 self.context.current_row = row.get(Pipeline.ROW_NUM_FIELD)
 
             if self.context.current_row in self.context.errors.keys():
+                # LMDTODO: This is an O(n) operation.  If instead the fact of the row having an error was part of the
+                # row data, this would be O(1).  We should probably do that instead, and definitely if any row metadata
+                # is on the row besides the original row number.  The thing in the special field in row could be an obj.
                 continue    # Only trap the first error per row
 
             # NOw that we know the row number run the step and handle exceptions.
             try:
-                new_row = step(row, context=self.context)
-                if new_row is None or not isinstance(new_row, dict):
-                    raise PipelineErrorException(f"Step should return row in dict format, not {new_row}")
-                new_data.append(new_row)
-            except DropRowException as drop_row_exception:
-                self.context.add_dropped_row(step, row, drop_row_exception.message)
-            except WarningException as we:
-                self.context.add_warning(step, row, str(we))
-                new_data.append(row)  # Don't drop it.  LMDTODO but what about changing the row??
-            except Exception as e:
-                # Unknown exception type - can at least provide class name and if class casts to string with a
-                # message, include that too.
-                # LMDTODO: The case where a step does not return anything is hard to catch and give information
-                # on.  Try having a method that takes a row_step decorator and does not return; it appears in errors
-                # merely as an AssertionError with no extra detail.
-                e_name = e.__class__.__name__
-                e_message = str(e)
-                message = f"{e_name} raised ({e})" if e_message else f"{e_name} raised"
-                logger.debug(f"Unknown exception handled in execute_row_steps ({message}")
+                # LMDTODO: pass a deepcopy of row
+                new_data.append(step(row, context=self.context))
+            except Exception as exc:
+                self.process_exception(exc, step, row)
+                if not isinstance(exc, DropRowException):
+                    new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
+                    # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
 
-                if self.default_error_policy == Pipeline.ON_ERROR_COLLECT:
+    def process_exception(self, exc, step, row):
+        if isinstance(exc, DropRowException):
+            self.context.add_dropped_row(step, row, exc.message)
+        elif isinstance(exc, WarningException):
+            self.context.add_warning(step, row, exc.message)
+        else:
+            e_name = exc.__class__.__name__
+            e_message = str(exc)
+            message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
+            logger.debug(f"Unknown exception handled in executing steps ({message}")
+
+            match self.default_error_policy:
+                case Pipeline.ON_ERROR_COLLECT:
                     self.context.add_error(step, row, message)
-                    new_data.append(row)
-                elif self.default_error_policy == Pipeline.ON_ERROR_WARN:
+                case Pipeline.ON_ERROR_WARN:
                     self.context.add_warning(step, row, message)
-                    new_data.append(row)
-                elif self.default_error_policy == Pipeline.ON_ERROR_DROP_ROW:
+                case Pipeline.ON_ERROR_DROP_ROW:
                     self.context.add_dropped_row(step, row, message)
-                elif self.default_error_policy == Pipeline.ON_ERROR_STOP_NOW:
-                    raise e
-                else:
-                    raise PipelineErrorException(f"Unknown error handling policy '{self.default_error_policy}'") from e
+                case Pipeline.ON_ERROR_STOP_NOW:
+                    self.context.add_error(step, row, message)
+                    raise exc
+                case _:
+                    raise PipelineErrorException(f"Unknown error policy '{self.default_error_policy}'") from exc
 
     def execute_batch_step(self, step):
-        # LMDTODO: This method needs the error handling too.
-        new_row_values = step(self.row_data, context=self.context)
-        row_size_diff = len(self.row_data) - len(new_row_values)
-        if row_size_diff > 0:
-            self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
-        elif row_size_diff < 0:
-            self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
-        self.row_data = {row[Pipeline.ROW_NUM_FIELD]: row for row in new_row_values}
+        self.context.current_row = 'batch'
+        try:
+            new_row_values = step(self.row_data, context=self.context)
+            row_size_diff = len(self.row_data) - len(new_row_values)
+            if row_size_diff > 0:
+                self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
+            elif row_size_diff < 0:
+                self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
+            self.row_data = [row for row in new_row_values]
+        except Exception as exc:
+            self.process_exception(exc, step, None)
+
+
+# LMDTODO: add a test that makes sure that a batch step followed by a row step works fine
