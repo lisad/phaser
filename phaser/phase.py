@@ -99,6 +99,7 @@ class Phase:
         self.dataframe_data.to_csv(destination,
                                    na_rep="NULL",   # LMDTODO Reconsider: this makes checkpoints more readable
                                                     # but may make final import harder
+                                   index=False,     # Do not output the row index
                                    )
         logger.info(f"{self.name} saved output to {destination}")
 
@@ -110,7 +111,11 @@ class Phase:
             if step_type == ROW_STEP:
                 new_data = []
                 for row in self.row_data:
-                    new_data.append(step(row, context=self.context))
+                    new_row = step(row, context=self.context)
+                    # Allow for the step to evict rows from the dataset by
+                    # returning a None
+                    if new_row != None:
+                        new_data.append(new_row)
                 self.row_data = new_data
             elif step_type == BATCH_STEP:
                 self.row_data = step(self.row_data, context=self.context)

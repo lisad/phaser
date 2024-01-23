@@ -4,6 +4,7 @@ from decimal import Decimal
 import inspect
 import types
 from collections.abc import Iterable
+from pandas import isna
 
 
 class Column:
@@ -154,8 +155,11 @@ class IntColumn(Column):
     def cast(self, value):
         if value is None:
             return None
+        # Panda's NA value is not comparable directly, and we do not want it
+        # leaking out into the data.
+        if isna(value):
+            return None
         return int(Decimal(value))
-
 
 class DateTimeColumn(Column):
 

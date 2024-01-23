@@ -14,7 +14,8 @@ def row_step(step_function):
         if __probe__ == PROBE_VALUE:
             return ROW_STEP  # Allows Phase to probe a step for how to call it
         result = step_function(row, context=context)
-        assert isinstance(result, dict)
+        if result != None:
+            assert isinstance(result, dict)
         return result
     return _row_step_wrapper
 
