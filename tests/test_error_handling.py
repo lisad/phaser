@@ -126,3 +126,12 @@ def test_batch_step_warning():
     phase.run_steps()
     assert phase.context.warnings['batch'][0]['step'] == 'warn_tachyon_level_variance'
     assert phase.context.warnings['batch'][0]['row'] is None
+
+
+@pytest.mark.skip("Will test for error reporting format when we have output going to logger")
+def test_row_error_formatting():
+    phase = Phase(steps=[assert_false])
+    phase.load_data([{'deck': '21'}])
+
+    phase.run_steps()
+    phase.report_errors_and_warnings()

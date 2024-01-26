@@ -95,5 +95,5 @@ def test_column_error_adds_warning():
     warnings_for_row = list(phase.context.warnings.values())[0]
     assert len(warnings_for_row) == 1
     assert "level" in warnings_for_row[0]['message']
-    assert warnings_for_row[0]['step'] == 'level'
-    # LMDTODO This could be more informative - just the column name doesn't say what step
+    assert warnings_for_row[0]['step'] == 'cast_each_column_value'
+    # LMDTODO This could be more informative - just the cast method doesn't say what column.

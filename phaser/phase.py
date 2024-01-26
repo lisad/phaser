@@ -2,7 +2,7 @@ import pandas as pd
 import logging
 from .column import make_strict_name
 from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException
-from .steps import ROW_STEP, BATCH_STEP, DATAFRAME_STEP, PROBE_VALUE
+from .steps import ROW_STEP, BATCH_STEP, DATAFRAME_STEP, PROBE_VALUE, row_step
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -43,11 +43,17 @@ class Phase:
             self.save(destination)
 
     def report_errors_and_warnings(self):
-        # LMDTODO: ok this needs to be much better. save to file, also send to stdout or something...
-        for error in self.context.errors:
-            print(error)
-        for warning in self.context.warnings:
-            print(warning)
+        """ In next iteration, we should probably move the generation of error info to stdout to other locations.
+        For CLI operation we want to report errors to the CLI, but for unsupervised operation these should go
+        to logs.  Python logging does allow users of a library to send log messages to more than one place while
+        customizing log level desired, and we could have drop-row messages as info and warning as warn level so
+        these fit very nicely into the standard levels allowing familiar customization.  """
+        for row_num, info in self.context.dropped_rows.items():
+            print(f"DROPPED row: {row_num}, message: '{info['message']}'")
+        for row_num, warning in self.context.warnings.items():
+            print(f"WARNING row: {row_num}, message: '{warning['message']}'")
+        for row_num, error in self.context.errors.items():
+            print(f"ERROR row: {row_num}, message: '{error['message']}'")
 
     def load(self, source):
         """ When creating a Phase, it may be desirable to subclass it and override the load()
@@ -89,24 +95,30 @@ class Phase:
         self.row_data = data
 
     def do_column_stuff(self):
+        @row_step
+        def cast_each_column_value(row, context):
+            """ We run this as a row step to have consistent error handling and DRY.  It could be
+            a little better at reporting which column generated the error.  The fact that it quits after the first
+            raised error (within one row) is intentional especially so the row can be dropped after the first
+            error.  Columns are processed in declared order so that a fundamental check can be done before
+            columns that assume previous checks (e.g. a "type" column drops bad rows and subsequent columns
+            can assume the correct type). """
+            new_row = row
+            for col in self.columns:
+                new_row = col.check_and_cast_value(new_row)
+            return new_row
+
+        # Header work is done first
         self.rename_columns()
         for column in self.columns:
             column.check_required(self.headers)
-            new_data = []
-            for row in self.row_data:
-                self.context.current_row = row.get(Pipeline.ROW_NUM_FIELD, "unknown")
-                try:
-                    new_row = column.check_and_cast_value(row)
-                    new_data.append(new_row)
-                except DropRowException:
-                    self.context.add_warning(column.name, row, f"Column requirements for {column.name} not met")
-                except WarningException as we:
-                    self.context.add_warning(column.name, row, we.message)
-            self.row_data = new_data
+        # Then going row by row allows us to re-use row-based error/reporting work
+        self.execute_row_step(cast_each_column_value)
 
     def rename_columns(self):
         """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred
         label format, and using a list of additional alternative names provided in each column definition.
+        It would be cool if this could be done before converting everything to list-of-dicts format...
         """
         rename_list = {alt: col.name for col in self.columns for alt in col.rename}
         strict_name_list = {make_strict_name(col.name): col.name for col in self.columns}
@@ -166,8 +178,9 @@ class Phase:
                 raise Exception(f"Unknown step type {step_type}")
 
     def execute_row_step(self, step):
-        # LMDTODO: This is getting powerful enough that if and where possible, column operations should be done as
-        # steps and passed through this function. that would improve consistency of error handling, row numbering, etc.
+        """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
+        numbering and error reporting.
+        """
         new_data = []
         for row_index, row in enumerate(self.row_data):
             # In proper execution, row data has already been enriched with original row numbers.
@@ -182,7 +195,6 @@ class Phase:
                 # row data, this would be O(1).  We should probably do that instead, and definitely if any row metadata
                 # is on the row besides the original row number.  The thing in the special field in row could be an obj.
                 continue    # Only trap the first error per row
-
             # NOw that we know the row number run the step and handle exceptions.
             try:
                 # LMDTODO: pass a deepcopy of row
@@ -192,6 +204,7 @@ class Phase:
                 if not isinstance(exc, DropRowException):
                     new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
                     # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
+        self.row_data = new_data
 
     def process_exception(self, exc, step, row):
         if isinstance(exc, DropRowException):

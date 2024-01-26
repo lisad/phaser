@@ -2,10 +2,13 @@ from datetime import datetime
 from dateutil.parser import parse
 from decimal import Decimal
 import inspect
+import logging
 import types
 from collections.abc import Iterable
+from pandas import isna
 from .pipeline import DropRowException, PipelineErrorException, WarningException
 
+logger = logging.getLogger('phaser')
 
 class Column:
     """ Default Column class including for columns of Strings """
@@ -76,19 +79,23 @@ class Column:
         algorithm for converting a value to a specific datatype can just override the simpler 'cast' method.
         :param row: entire row is passed for simplicity elsewhere and in case this needs more scope
         """
-        value = row[self.name]
+        value = row.get(self.name)
         if self.null is False and value is None:
             raise self.use_exception(f"Null value found in column {self.name}")
 
         new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
 
         self.check_value(new_value)
-        new_value = self.fix_value(new_value)
+        fixed_value = self.fix_value(new_value)
+        if fixed_value is None and new_value is not None:
+            logger.debug(f"Column {self.name} set value to None while fixing value")
         row[self.name] = new_value
         return row
 
     def cast(self, value):
         """ Basic column does no casting. Override this method in a subclass to cast to other datatypes than strings """
+        if isna(value):
+            return None
         return value
 
     def check_value(self, value):
@@ -169,6 +176,8 @@ class IntColumn(Column):
     def cast(self, value):
         if value is None:
             return None
+        if isna(value):
+            return None
         return int(Decimal(value))
 
 
@@ -233,6 +242,8 @@ class DateTimeColumn(Column):
 
     def cast(self, value):
         if value is None:
+            return None
+        if isna(value):
             return None
         if self.date_format_code:
             value = datetime.strptime(value, self.date_format_code)

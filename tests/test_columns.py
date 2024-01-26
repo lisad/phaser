@@ -1,5 +1,6 @@
 from datetime import datetime, date
 
+import numpy as np
 import pytest
 from dateutil.tz import gettz
 
@@ -105,6 +106,19 @@ def test_int_column_null_value():
     assert col.cast(None) is None
 
 
+def test_cast_nan_when_null_ok():
+    col = IntColumn(name="Skill level")
+    assert col.cast(np.nan) is None
+
+
+def test_cast_when_not_present():
+    col = IntColumn(name="Shoe size", required=False)
+    phase = Phase(columns=[col])
+    phase.load_data([{'TShirt size': "medium"}, {'Hat size': 21}])
+    phase.do_column_stuff()
+    assert all([row["Shoe size"] is None for row in phase.row_data])
+
+
 def test_int_column_minmax():
     col = IntColumn(name="Age", min_value=0, max_value=130)
     with pytest.raises(PipelineErrorException):
@@ -142,17 +156,24 @@ def test_date_column_range():
     with pytest.raises(PipelineErrorException):
         col.check_and_cast_value({'start': "2012-01-01"})
 
+
 def test_column_error_selection():
     col = Column(name='room', allowed_values=['stateroom', 'cabin'], on_error='drop_row')
     row = {'room': 'single'}
     with pytest.raises(DropRowException):
         col.check_and_cast_value(row)
 
-# LMDTODO Add a test that if required=False, and the column is triggered to cast values, and its not there, it's OK
 
-# Add a test that rows are really dropped
+def test_column_can_drop_row():
+    def drop_if_no_shoe_size(value):
+        if value is None:
+            raise DropRowException("We can't order those cool boots for alien crew members with no feet")
+        return value
 
-# Add a test that a custom column "MyColumn" can override the 'cast' method and apply a custom error handling by
-# throwing an exception
+    col = IntColumn(name='Shoe size', fix_value_fn=drop_if_no_shoe_size)
+    phase = Phase(columns=[col])
+    phase.load_data([{'Shoe size': '42'}, {'Shoe size': None}])
+    phase.do_column_stuff()
+    assert len(phase.row_data) == 1
+    assert phase.row_data[0]['Shoe size'] == 42
 
-# Test the output of warnings
