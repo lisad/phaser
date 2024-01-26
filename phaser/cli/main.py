@@ -25,10 +25,10 @@ def load_command(name):
     module_name = f"phaser.cli.commands.{name}"
     module = import_module(module_name)
     # Use the module's explicit help text or its docstring for command help.
-    help_text = getattr(module, "__help__", None) or module.__doc__ or ''
+    help_desc = getattr(module, "__help__", None) or module.__doc__ or ''
     # Take the first line of the help text only, or if the result was an empty
     # string, then just use None so the default is used for the command help.
-    help_text = help_text.strip().split('\n')[0] or None
+    help_text = help_desc.strip().split('\n')[0] or None
 
     def is_command(m):
         return (isinstance(m, type) and
@@ -44,6 +44,7 @@ def load_command(name):
     return {
         "module": module,
         "help_text": help_text,
+        "help_desc": help_desc,
         "instance": command
     }
 
@@ -56,7 +57,14 @@ def main(argv):
     )
     for name in commands.keys():
         command = commands[name]
-        subparser = subparsers.add_parser(name, help=command["help_text"])
+        subparser = subparsers.add_parser(
+            name,
+            help=command["help_text"],
+            description=command["help_desc"],
+            # Use the raw formatter to keep whitespace from the help text, in
+            # case the developer did some nice indenting.
+            formatter_class=argparse.RawDescriptionHelpFormatter,
+        )
         command["instance"].add_arguments(subparser)
 
     args = parser.parse_args(argv)

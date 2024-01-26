@@ -1,5 +1,21 @@
 """
 Run a pipeline
+
+A pipeline must be declared as a subclass of `phaser.Pipeline` inside a module
+that lives in a package named `pipelines`. The name of the module should be
+given to this command as the first positional argument.
+
+For example, given the following directories and files:
+
+    app/
+        pipelines/
+            __init__.py
+            transportation.py
+            weather.py
+
+to run a pipeline, invoke
+
+    python -m phaser run weather <working_dir> <source>
 """
 
 from importlib import import_module
@@ -16,7 +32,7 @@ class RunPipelineCommand(Command):
         return isinstance(obj, type) and issubclass(obj, phaser.Pipeline)
 
     def add_arguments(self, parser):
-        parser.add_argument("pipeline_name", help="pipeline to run, must be a module located in a package named `pipelines`")
+        parser.add_argument("pipeline_name", help="pipeline to run")
         parser.add_argument("working_dir", help="directory to output phase results")
         parser.add_argument("source", help="file to use as initial source")
 
