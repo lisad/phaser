@@ -25,12 +25,6 @@ import phaser
 from phaser.cli import Command
 
 class RunPipelineCommand(Command):
-    def __is_pipeline_class(obj):
-        # isinstance(attr, type) is the way to check that the attr is a class
-        # This makes no sense to me, as I would think anything is a "type", not
-        # just a thing that is a "class."
-        return isinstance(obj, type) and issubclass(obj, phaser.Pipeline)
-
     def add_arguments(self, parser):
         parser.add_argument("pipeline_name", help="pipeline to run")
         parser.add_argument("working_dir", help="directory to output phase results")
@@ -43,11 +37,16 @@ class RunPipelineCommand(Command):
         # the sole subclass of phaser.Pipeline is located and invoked with
         # additional command line arguments.
         pipeline_module = import_module(f"pipelines.{self.pipeline_name}")
-        pipelines = [
-            p for p
-            in getmembers(pipeline_module, RunPipelineCommand.__is_pipeline_class)
-            if getmodule(p[1]) == pipeline_module
-            ]
+
+        def is_pipeline_class(m):
+            # isinstance(attr, type) is the way to check that the attr is
+            # a class This makes no sense to me, as I would think anything is
+            # a "type", not just a thing that is a "class."
+            return (isinstance(m, type) and
+                    issubclass(m, phaser.Pipeline) and
+                    getmodule(m) == pipeline_module)
+
+        pipelines = getmembers(pipeline_module, is_pipeline_class)
         if len(pipelines) != 1:
             raise Exception(f"Found {len(pipelines)} Pipelines declared in module '{pipeline_module}'. Need only 1.")
         # pipelines is a tuple of names and values. We want the value which is
