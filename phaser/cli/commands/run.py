@@ -5,7 +5,7 @@ A pipeline must be declared as a subclass of `phaser.Pipeline` inside a module
 that lives in a package named `pipelines`. The name of the module should be
 given to this command as the first positional argument.
 
-For example, given the following directories and files:
+For example, given the following directories and files
 
     app/
         pipelines/
@@ -13,7 +13,8 @@ For example, given the following directories and files:
             transportation.py
             weather.py
 
-to run a pipeline, invoke
+to run the "weather" pipeline, invoke the following with appropriate working
+directory and source arguments:
 
     python -m phaser run weather <working_dir> <source>
 """
