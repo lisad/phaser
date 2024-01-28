@@ -1,4 +1,5 @@
 from functools import wraps
+from .pipeline import PipelineErrorException
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
@@ -14,7 +15,10 @@ def row_step(step_function):
         if __probe__ == PROBE_VALUE:
             return ROW_STEP  # Allows Phase to probe a step for how to call it
         result = step_function(row, context=context)
-        assert isinstance(result, dict)
+        if result is None:
+            raise PipelineErrorException("Step should return row.")
+        if not isinstance(result, dict):
+            raise PipelineErrorException(f"Step should return row in dict format, not {result}")
         return result
     return _row_step_wrapper
 
@@ -28,7 +32,9 @@ def batch_step(step_function):
         if __probe__ == PROBE_VALUE:
             return BATCH_STEP
         result = step_function(batch, context=context)
-        assert isinstance(result, list)
+        if not isinstance(result, list):
+            raise PipelineErrorException(
+                f"Step {step_function} returned a {result.__class__} rather than a list of rows")
         return result
     return _batch_step_wrapper
 
@@ -50,7 +56,8 @@ def check_unique(column_name, strip=True, ignore_case=False):
             values = [value.strip() for value in values]
         if ignore_case:
             values = [value.lower() for value in values]
-        assert len(set(values)) == len(values)
+        if len(set(values)) != len(values):
+            raise PipelineErrorException(f"Some values in {column_name} were duplicated, so unique check failed")
         return batch
 
     return check_unique_step

@@ -2,9 +2,13 @@ from datetime import datetime
 from dateutil.parser import parse
 from decimal import Decimal
 import inspect
+import logging
 import types
 from collections.abc import Iterable
+from pandas import isna
+from .pipeline import DropRowException, PipelineErrorException, WarningException
 
+logger = logging.getLogger('phaser')
 
 class Column:
     """ Default Column class including for columns of Strings """
@@ -17,7 +21,8 @@ class Column:
                  default=None,
                  fix_value_fn=None,
                  rename=None,
-                 allowed_values=None):
+                 allowed_values=None,
+                 on_error=None):
         """
         Sets up a Column instance ready to do type, format, null and default checking on values, as well as
         renaming the column name itself to chosen version.
@@ -32,6 +37,8 @@ class Column:
             any alternate name in this set will have a column with the preferred name with the same data in
             it. In other words, any data in a column name in `rename` will end up in a column named `name`.
         :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
+        :param on_error: Choose from 'warn', 'drop_row', 'collect', 'stop_now' to pick how errors checking or
+            fixing this column affect the pipeline.
         """
         self.name = str(name).strip()
         assert all(character not in name for character in Column.FORBIDDEN_COL_NAME_CHARACTERS)
@@ -41,49 +48,64 @@ class Column:
         self.fix_value_fn = fix_value_fn
         self.rename = rename or []
         self.allowed_values = allowed_values
+        self.use_exception = PipelineErrorException
+        if on_error:
+            self.use_exception = {
+                'warn': WarningException,
+                'drop_row': DropRowException,
+                'collect': PipelineErrorException,
+                'stop_now': Exception
+            }.get(on_error, PipelineErrorException)
 
         if self.null is False and self.default is not None:
             raise Exception(f"Column {self.name} defined to error on null values, but also provides a non-null default")
 
-    def check_and_cast(self, headers, data):
+    def check_required(self, data_headers):
         """
         Checks a dataset to make sure the conditions put on this column are met, and casts to another data type if
         appropriate. Columns might need to do some checking, then some casting, then more checking,
         to complete their work.  However, users who want to subclass Column to do a special kind of column
         (e.g. ISBNNumberColumn) ought to need to only override check_value or cast.
-        :param headers: just the column headers found in data, for checking presence and fixing case
-        :param data: all of the batch data in list(dict) format
+        :param data_headers: just the column headers found in data, for checking presence and fixing case
         :return: None
         """
-        # LMDTODO: This may significantly change structure when we introduce error handling.  Also it may violate
-        # expectations that one column's logic not only casts its values, it also drops rows - so the next column
-        # receives fewer rows.  I still think that's right for a data cleaning library but need to check this lots.
         if self.required:
-            if self.name not in headers:
-                raise Exception(f"Header {self.name} not found in {headers}")
-        new_rows = []
-        for row in data:
-            value = row[self.name]
-            if self.null is False and value is None:
-                # Checking for null values comes before casting
-                raise ValueError(f"Null value found in column {self.name}")
+            if self.name not in data_headers:
+                raise self.use_exception(f"Header {self.name} not found in {data_headers}")
 
-            new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
-            self.check_value(new_value)    # More checking comes after casting
-            new_value = self.fix_value(new_value)
-            row[self.name] = new_value
-            new_rows.append(row)
-        return new_rows
+    def check_and_cast_value(self, row):
+        """ This checks to see if the value is there before attempting to cast it.  It does some checks before
+        casting the value to a datatype, and some other checks afterward. .  Most of the time, a custom
+        algorithm for converting a value to a specific datatype can just override the simpler 'cast' method.
+        :param row: entire row is passed for simplicity elsewhere and in case this needs more scope
+        """
+        value = row.get(self.name)
+        if self.null is False and value is None:
+            raise self.use_exception(f"Null value found in column {self.name}")
+
+        new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
+
+        self.check_value(new_value)
+        fixed_value = self.fix_value(new_value)
+        if fixed_value is None and new_value is not None:
+            logger.debug(f"Column {self.name} set value to None while fixing value")
+        row[self.name] = fixed_value
+        return row
 
     def cast(self, value):
-        """ Basic column does no casting. Override this method in a subclass to cast to other things besides strings """
+        """ Basic column only fixes 'na' values.
+        Override this method in a subclass to cast python data types or custom objects.
+        """
+        if isna(value):
+            return None
         return value
 
     def check_value(self, value):
-        """ Raises ValueError if something is wrong with a value in the column.  ValueError will be trapped by Phase
-        to try to apply the appropriate error handling.  Override this (don't forget to call super().check_value() """
+        """ Raises chosen exception type if something is wrong with a value in the column.
+            One can override this to use a different exception or check value in a different way
+            (don't forget to call super().check_value() """
         if self.allowed_values and not (value in self.allowed_values):
-            raise ValueError(f"Column {self.name} had value {value} not found in allowed values")
+            raise self.use_exception(f"Column '{self.name}' had value {value} not found in allowed values")
 
     def fix_value(self, value):
         """ Sets value to default if provided and appropriate, and calls any functions or
@@ -112,6 +134,7 @@ class IntColumn(Column):
                  fix_value_fn=None,
                  rename=None,
                  allowed_values=None,
+                 on_error=None,
                  min_value=None,
                  max_value=None):
         """
@@ -140,19 +163,22 @@ class IntColumn(Column):
                          default=default,
                          fix_value_fn=fix_value_fn,
                          rename=rename,
-                         allowed_values=allowed_values)
+                         allowed_values=allowed_values,
+                         on_error=on_error)
         self.min_value = min_value
         self.max_value = max_value
 
     def check_value(self, value):
         super().check_value(value)
         if self.min_value is not None and (value < self.min_value):
-            raise ValueError(f"Value for {self.name} is {value}, less than min {self.min_value}")
+            raise self.use_exception(f"Value for {self.name} is {value}, less than min {self.min_value}")
         if self.max_value is not None and (value > self.max_value):
-            raise ValueError(f"Value for {self.name} is {value}, more than max {self.max_value}")
+            raise self.use_exception(f"Value for {self.name} is {value}, more than max {self.max_value}")
 
     def cast(self, value):
         if value is None:
+            return None
+        if isna(value):
             return None
         return int(Decimal(value))
 
@@ -167,6 +193,7 @@ class DateTimeColumn(Column):
                  fix_value_fn=None,
                  rename=None,
                  allowed_values=None,
+                 on_error=None,
                  min_value=None,
                  max_value=None,
                  date_format_code=None,
@@ -198,21 +225,27 @@ class DateTimeColumn(Column):
                          default=default,
                          fix_value_fn=fix_value_fn,
                          rename=rename,
-                         allowed_values=allowed_values)
+                         allowed_values=allowed_values,
+                         on_error=on_error)
         self.min_value = min_value
         self.max_value = max_value
         self.date_format_code = date_format_code
         self.default_tz = default_tz
 
     def check_value(self, value):
+        """ Checks the value for every field
+        Override in order to have custom error handling for example
+        """
         super().check_value(value)
         if self.min_value is not None and (value < self.min_value):
-            raise ValueError(f"Value for {self.name} is {value}, less than min {self.min_value}")
+            raise self.use_exception(f"Value for {self.name} is {value}, less than min {self.min_value}")
         if self.max_value is not None and (value > self.max_value):
-            raise ValueError(f"Value for {self.name} is {value}, more than max {self.max_value}")
+            raise self.use_exception(f"Value for {self.name} is {value}, more than max {self.max_value}")
 
     def cast(self, value):
         if value is None:
+            return None
+        if isna(value):
             return None
         if self.date_format_code:
             value = datetime.strptime(value, self.date_format_code)
@@ -221,6 +254,7 @@ class DateTimeColumn(Column):
         if value.tzname() is None and self.default_tz is not None:
             value  = value.replace(tzinfo=self.default_tz)
         return value
+
 
 class DateColumn(DateTimeColumn):
     def cast(self, value):

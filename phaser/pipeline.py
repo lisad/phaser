@@ -7,12 +7,98 @@ logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
 
 
+class PhaserException(Exception):
+
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return self.message
+
+
+class PipelineErrorException(PhaserException):
+    """ Using this exception will cause the error to stop the pipeline, and this will be reported as an error.
+    If possible, the pipeline will keep going and collect more errors until it reaches the end of a phase.  """
+    pass
+
+
+class DropRowException(PhaserException):
+    """ Throwing this exception in a row_step will cause the current row to be dropped. """
+    pass
+
+
+class WarningException(PhaserException):
+    """ Throwing this exception will add warnings to the output of the pipeline.  While it can't be used
+    in methods where a return value is needed, it can be used in methods that check results without returning
+    fixed data.  """
+    pass
+
+
+def _stringify_step(step):
+    if isinstance(step, str):
+        return step
+    try:
+        return getattr(step, '__name__')
+    except Exception as e:
+        logger.error(f"Unknown case trying to turn {step} into a step name")
+        raise e
+
+
+class Context:
+    def __init__(self, variables=None):
+        self.errors = {}
+        self.warnings = {}
+        self.variables = variables or {}
+        self.current_row = None
+        self.dropped_rows = {}
+
+    def add_error(self, step, row, message):
+        # LMDTODO Am I passing row or getting row from context?
+        step_name = _stringify_step(step)
+        if self.current_row is None:
+            raise Exception("Code error: Pipeline Context should always know what row we're operating on")
+        self.errors[self.current_row] = {'step': step_name, 'message': message, 'row': row}
+
+    def add_warning(self, step, row, message):
+        step_name = _stringify_step(step)
+        if self.current_row is None:
+            raise Exception("Code error: Pipeline Context should always know what row we're operating on")
+
+        warning_data = {'step': step_name, 'message': message, 'row': row}
+        if self.current_row in self.warnings.keys():
+            self.warnings[self.current_row].append(warning_data)
+        else:
+            self.warnings[self.current_row] = [warning_data]
+
+    def add_dropped_row(self, step, row, message):
+        step_name = _stringify_step(step)
+        if self.current_row is None:
+            raise Exception("Code error: Pipeline Context should always know what row we're operating on")
+        self.dropped_rows[self.current_row] = {'step': step_name, 'message': message, 'row': row}
+
+    def add_variable(self, name, value):
+        """ Add variables that are global to the pipeline and accessible to steps and internal methods """
+        self.variables[name] = value
+
+    def get(self, name):
+        return self.variables.get(name)
+
+    def has_errors(self):
+        return self.errors != {}
+
+
 class Pipeline:
     # Subclasses can override here to set values for all instances, or override in instantiation
     working_dir = None
     source = None
     phases = []
 
+    ROW_NUM_FIELD = "__phaser_row_num__"
+
+    ON_ERROR_WARN = "ON_ERROR_WARN"
+    ON_ERROR_COLLECT = "ON_ERROR_COLLECT"
+    ON_ERROR_DROP_ROW = "ON_ERROR_DROP_ROW"
+    ON_ERROR_STOP_NOW = "ON_ERROR_STOP_NOW"
 
     def __init__(self, working_dir=None, source=None, phases=None):
         self.working_dir = working_dir or self.__class__.working_dir
