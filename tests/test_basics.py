@@ -33,6 +33,25 @@ def test_load_and_save(tmpdir):
     assert first_line.startswith("First name,")
     assert first_line.endswith(",pay per\n")
 
+
+def test_save_only_some_columns(tmpdir):
+    phase = Phase(name="transform",
+                  columns=[Column(name="ID", save=True), Column(name="Status", save=False)])
+    phase.load_data([{"ID": 1, "Status": "onboard"}])
+    phase.save(tmpdir / "test_drop_column.csv")
+    with open(tmpdir / "test_drop_column.csv") as f:
+        first_line = f.readline()
+        assert first_line == "ID\n"
+
+
+def test_drop_col_works_if_not_exist(tmpdir):
+    # Status column isn't in the data, yet it doesn't cause the save=False logic to have a KeyError.
+    phase = Phase(name="transform",
+                  columns=[Column(name="ID", save=True), Column(name="Status", save=False)])
+    phase.load_data([{"ID": 1, "Location": "onboard"}])
+    phase.save(tmpdir / "test_drop_column.csv")
+
+
 def test_subclassing(tmpdir):
     class Transformer(Phase):
         pass

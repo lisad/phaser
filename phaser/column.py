@@ -22,6 +22,7 @@ class Column:
                  fix_value_fn=None,
                  rename=None,
                  allowed_values=None,
+                 save=True,
                  on_error=None):
         """
         Sets up a Column instance ready to do type, format, null and default checking on values, as well as
@@ -37,6 +38,7 @@ class Column:
             any alternate name in this set will have a column with the preferred name with the same data in
             it. In other words, any data in a column name in `rename` will end up in a column named `name`.
         :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
+        :param save: if True, column is saved at the end of the phase; if not it is omitted.
         :param on_error: Choose from 'warn', 'drop_row', 'collect', 'stop_now' to pick how errors checking or
             fixing this column affect the pipeline.
         """
@@ -48,6 +50,7 @@ class Column:
         self.fix_value_fn = fix_value_fn
         self.rename = rename or []
         self.allowed_values = allowed_values
+        self.save = save
         self.use_exception = PipelineErrorException
         if on_error:
             self.use_exception = {
@@ -134,6 +137,7 @@ class IntColumn(Column):
                  fix_value_fn=None,
                  rename=None,
                  allowed_values=None,
+                 save=True,
                  on_error=None,
                  min_value=None,
                  max_value=None):
@@ -154,6 +158,7 @@ class IntColumn(Column):
             To supply a range, use min_value and max_value instead.  NOTE: this is checked after casting,
             so to check allowed values of a column specified to cast to int, such as IntColumn, check for
             values like [1, 2, 3] rather than ["1", "2", "3"]
+        :param save: if True, column is saved at the end of the phase; if not it is omitted.
         :param min_value: If data is below this value, column raises errors
         :param max_value: If data is above this value, column raises errors
         """
@@ -164,6 +169,7 @@ class IntColumn(Column):
                          fix_value_fn=fix_value_fn,
                          rename=rename,
                          allowed_values=allowed_values,
+                         save=save,
                          on_error=on_error)
         self.min_value = min_value
         self.max_value = max_value
@@ -193,6 +199,7 @@ class DateTimeColumn(Column):
                  fix_value_fn=None,
                  rename=None,
                  allowed_values=None,
+                 save=True,
                  on_error=None,
                  min_value=None,
                  max_value=None,
@@ -213,6 +220,7 @@ class DateTimeColumn(Column):
             it. In other words, any data in a column name in `rename` will end up in a column named `name`.
         :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
             To supply a range, use min_value and max_value instead.
+        :param save: if True, column is saved at the end of the phase; if not it is omitted.
         :param min_value: If data is below this value, column raises errors
         :param max_value: If data is above this value, column raises errors
         :param date_format_code:  Formatting string used by datetime.strptime to parse string to date,
@@ -226,6 +234,7 @@ class DateTimeColumn(Column):
                          fix_value_fn=fix_value_fn,
                          rename=rename,
                          allowed_values=allowed_values,
+                         save=save,
                          on_error=on_error)
         self.min_value = min_value
         self.max_value = max_value

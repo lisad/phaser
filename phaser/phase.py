@@ -150,7 +150,13 @@ class Phase:
 
         self.dataframe_data = pd.DataFrame(self.row_data)
         # LMDTODO: Should saving row numbers be an option?
-        self.dataframe_data.drop(Pipeline.ROW_NUM_FIELD, axis='columns', inplace=True)
+
+        # Drop columns declared to not save.  (Could be moved to a utility)
+        columns_to_drop = [col.name for col in self.columns if col.save is False]
+        columns_to_drop.append(Pipeline.ROW_NUM_FIELD)
+        columns_exist_to_drop = [col_name for col_name in columns_to_drop if col_name in self.dataframe_data.columns]
+        self.dataframe_data.drop(columns_exist_to_drop, axis=1, inplace=True)
+
         self.dataframe_data.to_csv(destination,
                                    index=False,
                                    na_rep="NULL",   # LMDTODO Reconsider: this makes checkpoints more readable
