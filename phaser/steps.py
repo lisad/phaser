@@ -1,5 +1,6 @@
 from functools import wraps
-from .pipeline import PipelineErrorException
+from .pipeline import PipelineErrorException, PhaserException
+from .column import Column
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
@@ -61,3 +62,23 @@ def check_unique(column_name, strip=True, ignore_case=False):
         return batch
 
     return check_unique_step
+
+
+def sort_by(column):
+    """
+    This is a step factory that will create a step that orders rows by the values in a give column.
+    :param column_name: The column that will be ordered by when the step is run
+    :return: The function that can be added to a phase's list of steps.
+    """
+    if isinstance(column, Column):
+        column_name = column.name
+    elif isinstance(column, str):
+        column_name = column
+    else:
+        raise PhaserException("Error declaring sort_by step - expecting column to be a Column or a column name string")
+
+    @batch_step
+    def sort_by_step(batch, **kwargs):
+        return sorted(batch, key=lambda row: row[column_name])
+
+    return sort_by_step
