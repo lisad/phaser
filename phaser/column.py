@@ -55,7 +55,7 @@ class Column:
                 'drop_row': DropRowException,
                 'collect': PipelineErrorException,
                 'stop_now': Exception
-            }[on_error]
+            }.get(on_error, PipelineErrorException)
 
         if self.null is False and self.default is not None:
             raise Exception(f"Column {self.name} defined to error on null values, but also provides a non-null default")
@@ -89,11 +89,13 @@ class Column:
         fixed_value = self.fix_value(new_value)
         if fixed_value is None and new_value is not None:
             logger.debug(f"Column {self.name} set value to None while fixing value")
-        row[self.name] = new_value
+        row[self.name] = fixed_value
         return row
 
     def cast(self, value):
-        """ Basic column does no casting. Override this method in a subclass to cast to other datatypes than strings """
+        """ Basic column only fixes 'na' values.
+        Override this method in a subclass to cast python data types or custom objects.
+        """
         if isna(value):
             return None
         return value

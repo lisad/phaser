@@ -7,10 +7,18 @@ from dateutil.tz import gettz
 from phaser import Phase, Column, IntColumn, DateColumn, DateTimeColumn, PipelineErrorException, DropRowException
 
 
+# Constructor tests
 def test_null_forbidden_but_null_default():
     with pytest.raises(Exception):
         Column(name='bogus', null=False, default='homer')
 
+
+def test_invalid_on_error():
+    col = Column(name="anything", on_error="Bogus")
+    assert col.use_exception == PipelineErrorException
+
+
+# Simple feature tests
 
 def test_required_values():
     mycol = Column('crew', allowed_values=["Kirk", "Riker", "Troi", "Crusher"])
@@ -36,9 +44,20 @@ def test_default_value():
             assert col.fix_value(row[col.name]) == row[col.name]
 
 
+# Tests of fix_value_fn
+
+
 def test_fix_value_fn_instance_method():
     col = Column('location', fix_value_fn='lstrip')
     assert col.fix_value('  Toronto') == 'Toronto'
+
+
+def test_fix_value_in_larger_context():
+    col = Column('log_message', fix_value_fn='lstrip')
+    phase = Phase(columns=col)
+    phase.load_data([{'log_message': '  Stardate 20240127.12569: Nothing happened today.  '}])
+    phase.do_column_stuff()
+    assert phase.row_data[0]['log_message'] == 'Stardate 20240127.12569: Nothing happened today.  '
 
 
 def test_abs_on_int_column():
@@ -62,6 +81,9 @@ def test_callable():
 def test_multiple_functions():
     col = Column('status', fix_value_fn=['lstrip', 'capitalize'])
     assert col.fix_value("  ACTIVE  ") == "Active  "
+
+
+# Test naming fetaures
 
 
 def test_rename():
@@ -92,6 +114,8 @@ def test_forbidden_column_name_characters():
     with pytest.raises(AssertionError):
         Column('a\tb\tc')
 
+
+# Testing IntColumn
 
 def test_int_column_casts():
     col = IntColumn(name="Age", min_value=0)
@@ -127,6 +151,8 @@ def test_int_column_minmax():
         col.check_value(2000)
 
 
+# Testing Datetime and date column
+
 def test_datetime_column_casts():
     col = DateTimeColumn(name="start")
     with pytest.raises(Exception):
@@ -155,6 +181,9 @@ def test_date_column_range():
     col.check_and_cast_value({'start': "2024-01-14"})
     with pytest.raises(PipelineErrorException):
         col.check_and_cast_value({'start': "2012-01-01"})
+
+
+# Tests of column error handling
 
 
 def test_column_error_selection():

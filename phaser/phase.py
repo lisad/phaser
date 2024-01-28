@@ -1,6 +1,6 @@
 import pandas as pd
 import logging
-from .column import make_strict_name
+from .column import make_strict_name, Column
 from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException
 from .steps import ROW_STEP, BATCH_STEP, DATAFRAME_STEP, PROBE_VALUE, row_step
 
@@ -21,6 +21,8 @@ class Phase:
         self.name = name or self.__class__.__name__
         self.steps = steps or self.__class__.steps
         self.columns = columns or self.__class__.columns
+        if isinstance(self.columns, Column):
+            self.columns = [self.columns]
         if not context:
             # If a phase is being run in isolation and without the pipeline context, create a new one
             self.context = Context()
@@ -160,7 +162,8 @@ class Phase:
         for row in self.row_data:
             for field_name in row.keys():
                 if field_name not in self.headers and field_name != '__phaser_row_num__':
-                    raise Exception(f"At some point, {field_name} was added to the row_data and not declared a header")
+                    raise PipelineErrorException(
+                        f"At some point, {field_name} was added to the row_data and not declared a header")
         # LMDTODO: We could also check for fields dropped in row_data steps and add them if they can be null?
 
     def run_steps(self):

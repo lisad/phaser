@@ -50,6 +50,15 @@ def full_name_step(row, **kwargs):
     return row
 
 
+# Phase tests
+
+def phase_accepts_single_col():
+    # Helpfully should wrap column in a list if only one is defined
+    col = Column(name="Test")
+    phase = Phase(name="Transform", columns=col)
+    assert phase.columns == [col]
+
+
 def test_have_and_run_steps(tmpdir):
     source = current_path / "fixture_files" / "crew.csv"
     transformer = Phase(steps=[full_name_step])
