@@ -32,12 +32,12 @@ class RunPipelineCommand(Command):
         parser.add_argument("source", help="file to use as initial source")
 
     def execute(self, args):
-        self.pipeline_name = args.pipeline_name
+        pipeline_name = args.pipeline_name
         # Pipelines are expected to be defined in a module in the `pipelines`
         # package. The module name is given as the command line argument, and
         # the sole subclass of phaser.Pipeline is located and invoked with
         # additional command line arguments.
-        pipeline_module = import_module(f"pipelines.{self.pipeline_name}")
+        pipeline_module = import_module(f"pipelines.{pipeline_name}")
 
         def is_pipeline_class(m):
             # isinstance(attr, type) is the way to check that the attr is
@@ -52,10 +52,10 @@ class RunPipelineCommand(Command):
             raise Exception(f"Found {len(pipelines)} Pipelines declared in module '{pipeline_module}'. Need only 1.")
         # pipelines is a tuple of names and values. We want the value which is
         # a class object.
-        self.Pipeline = pipelines[0][1]
-        self.working_dir = args.working_dir
-        self.source = args.source
+        Pipeline = pipelines[0][1]
+        working_dir = args.working_dir
+        source = args.source
 
-        print(f"Running pipeline '{self.Pipeline.__name__}'")
-        pipeline = self.Pipeline(self.working_dir, self.source)
+        print(f"Running pipeline '{Pipeline.__name__}'")
+        pipeline = Pipeline(working_dir, source)
         pipeline.run()

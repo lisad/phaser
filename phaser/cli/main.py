@@ -9,6 +9,7 @@ import os
 import pkgutil
 import inspect
 import phaser
+import shutil
 import sys
 
 def find_commands():
@@ -74,6 +75,7 @@ def main(argv):
             # case the developer did some nice indenting.
             formatter_class=argparse.RawDescriptionHelpFormatter,
         )
+        command["parser"] = subparser
         command["instance"].add_arguments(subparser)
 
     args = parser.parse_args(argv)
@@ -81,5 +83,11 @@ def main(argv):
         parser.print_help()
         sys.exit(2)
 
-    command = commands.get[args.command]
-    command["instance"].execute(args)
+    command = commands.get(args.command)
+    try:
+        command["instance"].execute(args)
+    except:
+        print(f"ERROR running '{args.command}': {sys.exception()}")
+        print("-" * shutil.get_terminal_size().columns + "\n")
+        command["parser"].print_help()
+        sys.exit(1)
