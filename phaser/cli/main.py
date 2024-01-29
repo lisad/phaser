@@ -1,9 +1,15 @@
+"""
+A utility for various tasks useful when building and running Phaser data
+integration pipelines
+"""
+
 import argparse
 from importlib import import_module
 import os
 import pkgutil
 import inspect
 import phaser
+import sys
 
 def find_commands():
     path = os.path.dirname(__file__)
@@ -51,7 +57,10 @@ def load_command(name):
 def main(argv):
     commands = find_commands()
 
-    parser = argparse.ArgumentParser(prog="phaser")
+    parser = argparse.ArgumentParser(
+        prog="phaser",
+        description=__doc__,
+    )
     subparsers = parser.add_subparsers(
         title="commands", dest="command"
     )
@@ -70,7 +79,7 @@ def main(argv):
     args = parser.parse_args(argv)
     if not args.command:
         parser.print_help()
-        exit()
+        sys.exit(2)
 
-    print(f"Running {args.command}")
-    commands[args.command]["instance"].execute(args)
+    command = commands.get[args.command]
+    command["instance"].execute(args)
