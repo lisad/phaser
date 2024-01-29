@@ -67,7 +67,7 @@ def check_unique(column_name, strip=True, ignore_case=False):
 def sort_by(column):
     """
     This is a step factory that will create a step that orders rows by the values in a give column.
-    :param column_name: The column that will be ordered by when the step is run
+    :param column: The column that will be ordered by when the step is run
     :return: The function that can be added to a phase's list of steps.
     """
     if isinstance(column, Column):
