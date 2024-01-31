@@ -10,6 +10,20 @@ from .pipeline import DropRowException, PipelineErrorException, WarningException
 
 logger = logging.getLogger('phaser')
 
+
+""" Contains definitions of columns that can apply certain rules and datatypes to values automatically.
+
+Column: Use for strings & general purpose
+IntColumn, FloatColumn: Cast to int/float datatypes and apply number logic like min_value, max_value
+DateColumn, DateTimeColumn: Cast to date/time datatypes and apply calendar logic like default timezone
+
+TODOs:
+* Probably the default column and the other columns should both inherit from a BaseColumn, so we can
+  have fields like 'blank' on Column but not on IntColumn
+
+"""
+
+
 class Column:
     """ Default Column class including for columns of Strings """
     FORBIDDEN_COL_NAME_CHARACTERS = ['\n', '\t']
@@ -18,6 +32,7 @@ class Column:
                  name,
                  required=True,
                  null=True,
+                 blank=True,
                  default=None,
                  fix_value_fn=None,
                  rename=None,
@@ -46,6 +61,7 @@ class Column:
         assert all(character not in name for character in Column.FORBIDDEN_COL_NAME_CHARACTERS)
         self.required = required
         self.null = null
+        self.blank = blank
         self.default = default
         self.fix_value_fn = fix_value_fn
         self.rename = rename or []
@@ -107,8 +123,11 @@ class Column:
         """ Raises chosen exception type if something is wrong with a value in the column.
             One can override this to use a different exception or check value in a different way
             (don't forget to call super().check_value() """
+        if not self.blank and not self.value:  # Python boolean casting returns false if string is empty
+            raise self.use_exception(f"Column `{self.name}' had blank value")
         if self.allowed_values and not (value in self.allowed_values):
             raise self.use_exception(f"Column '{self.name}' had value {value} not found in allowed values")
+        print('finished ok')
 
     def fix_value(self, value):
         """ Sets value to default if provided and appropriate, and calls any functions or
@@ -133,6 +152,7 @@ class IntColumn(Column):
                  name,
                  required=True,
                  null=True,
+                 blank=True,
                  default=None,
                  fix_value_fn=None,
                  rename=None,
@@ -165,6 +185,7 @@ class IntColumn(Column):
         super().__init__(name,
                          required=required,
                          null=null,
+                         blank=blank,
                          default=default,
                          fix_value_fn=fix_value_fn,
                          rename=rename,
@@ -189,12 +210,23 @@ class IntColumn(Column):
         return int(Decimal(value))
 
 
+class FloatColumn(IntColumn):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def cast(self, value):
+        if value is None or isna(value):
+            return None
+        return float(Decimal(value))
+
+
 class DateTimeColumn(Column):
 
     def __init__(self,
                  name,
                  required=True,
                  null=True,
+                 blank=True,
                  default=None,
                  fix_value_fn=None,
                  rename=None,
@@ -230,6 +262,7 @@ class DateTimeColumn(Column):
         super().__init__(name,
                          required=required,
                          null=null,
+                         blank=blank,
                          default=default,
                          fix_value_fn=fix_value_fn,
                          rename=rename,

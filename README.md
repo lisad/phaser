@@ -1,6 +1,8 @@
 # phaser
 
-A library to simplify automated batch-oriented complex data integration pipelines
+A library to simplify automated batch-oriented complex data integration pipelines, by 
+organizing steps and column definitions into phases, and offering utilities for 
+transforms, sorting, validating and viewing changes to data. 
 
 ## Goals and Scope
 
@@ -37,6 +39,17 @@ The mechanisms that we think will help phaser meet these goals:
 * make high-level code readable in one place, as when a Phase lists all of its steps declaratively
 * tools that support visibility and control over warnings and data changes
 
+
+## Simple Example
+
+```
+
+from phaser import Phase, Column, row_step
+
+
+
+```
+
 ## Contributing
 
 To set up project for contributing:
@@ -54,13 +67,13 @@ Then run:
 The construction of a Phase instance means that you can put a bunch of data transformation or
 data testing steps in a series, and the Phase does routine work for you in a robust way:
 * it will load your data from a source file or a previous phase
-* it will canonicalize field names to lowercase and strip dangerous characters (LMDTODO)
-* it will run all your steps row-by-row or across the whole dataset
+* it will canonicalize field names to lowercase and strip dangerous characters
+* it will run your steps row-by-row or across the whole dataset, in order
 * it will save your results to a different file, usable as a checkpoint
-* it will report errors or warnings as summaries (LMDTODO)
+* it will report errors or warnings as summaries 
 
 In addition, this library organizes a variety of kinds of steps :
-* Pre-baked steps to check uniqueness values and do common transforms (LMDTODO)
-* Step wrappers to control errors and warnings (LMDTODO)
+* Pre-baked steps to check uniqueness values and do common transforms
+* Step wrappers to control errors, dropping rows, and warnings 
 * Steps that operate on rows represented as Python dicts
 * Steps that operate on pandas DataFrames (LMDTODO)
