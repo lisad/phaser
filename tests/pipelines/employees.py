@@ -26,19 +26,10 @@ import employee data fixture  (change the other tests to use a 'crew' fixture)
 
 """
 
-EID = Column(name="Employee ID", rename="employeeNumber")  # Can be blank for now until we check Status field in custom step
-FIRSTNAME = Column(name="First name", rename="firstName")
-LASTNAME = Column(name="Last name", rename="lastName", blank=False)
-PAY_TYPE = Column(name="Pay type",
-                  allowed_values=["hourly", "salary", "exception hourly", "monthly", "weekly", "daily"],
-                  on_error=Pipeline.ON_ERROR_DROP_ROW)
-PAID_PER = Column(name="Paid per", rename="paidPer", save=False)
-PAY_RATE = FloatColumn(name="Pay rate", min_value=0.01, rename="payRate", required=True, save=False)
-
 
 @row_step
 def drop_rows_with_no_id_and_not_employed(row, **kwargs):
-    if not row[EID.name]:
+    if not row["Employee ID"]:
         if row['Status'] == "Active":
             raise PipelineErrorException("Missing employee ID for active employee, need to followup")
         elif row['Status'] == "Inactive":
@@ -50,14 +41,14 @@ def drop_rows_with_no_id_and_not_employed(row, **kwargs):
 
 @row_step
 def combine_full_name(row, **kwargs):
-    row["Full name"] = f"{row[FIRSTNAME.name]} {row[LASTNAME.name]}"
+    row["Full name"] = f"{row['First name']} {row['Last name']}"
     return row
 
 
 @row_step
 def calculate_annual_salary(row, **kwargs):
-    rate = row['payRate']
-    match row['paidPer']:
+    rate = row['Pay rate']
+    match row['Pay period']:
         case "Hour": row['salary'] = rate * 40*52
         case "Day": row['salary'] = rate * 5 * 52
         case "Week": row['salary'] = rate * 52
@@ -75,10 +66,21 @@ def calculate_bonus_percent(row, **kwargs):
 
 
 class Validator(Phase):
-    columns = [EID, FIRSTNAME, LASTNAME]
+    columns = [
+        Column(name="Employee ID", rename="employeeNumber"),
+        Column(name="First name", rename="firstName"),
+        Column(name="Last name", rename="lastName", blank=False),
+        FloatColumn(name="Pay rate", min_value=0.01, rename="payRate", required=True),
+        Column(name="Pay type",
+               rename="payType",
+               allowed_values=["hourly", "salary", "exception hourly", "monthly", "weekly", "daily"],
+               on_error=Pipeline.ON_ERROR_DROP_ROW,
+               save=False),
+        Column(name="Pay period", rename="paidPer")
+    ]
     steps = [
         drop_rows_with_no_id_and_not_employed,
-        check_unique(EID)
+        check_unique("Employee ID")
     ]
 
 

@@ -39,16 +39,52 @@ The mechanisms that we think will help phaser meet these goals:
 * make high-level code readable in one place, as when a Phase lists all of its steps declaratively
 * tools that support visibility and control over warnings and data changes
 
+## Simple example
 
-## Simple Example
+```
+class Validator(Phase):
+    columns = [
+        Column(name="Employee ID", rename="employeeNumber"),
+        Column(name="First name", rename="firstName"),
+        Column(name="Last name", rename="lastName", blank=False),
+        FloatColumn(name="Pay rate", min_value=0.01, rename="payRate", required=True),
+        Column(name="Pay type",
+               rename="payType",
+               allowed_values=["hourly", "salary", "exception hourly", "monthly", "weekly", "daily"],
+               on_error=Pipeline.ON_ERROR_DROP_ROW,
+               save=False),
+        Column(name="Pay period", rename="paidPer")
+    ]
+    steps = [
+        drop_rows_with_no_id_and_not_employed,
+        check_unique("Employee ID")
+    ]
+
+
+class Transformer(Phase):
+    columns = []
+    steps = [
+        combine_full_name,
+        calculate_annual_salary,
+        calculate_bonus_percent
+    ]
+
+
+class EmployeeReviewPipeline(Pipeline):
+
+    phases = [Validator, Transformer]
 
 ```
 
-from phaser import Phase, Column, row_step
+The example above defines a validation phase that renames a number of columns and defines their values, a 
+transformer phase that performs calculations, and a pipeline that combines both phases.  The full example 
+can be found in the tests directory of the project, including the sample data and the custom steps defined.
 
+The benefit of even such a simple pipeline expressed as two phases is that the phases can be debugged, tested and
+run separately. A developer can run the Validator phase once then work on adding features to the Transformer phase,
+or narrow down an error in production by comparing the checkpoint output of each phase.  In addition, the code
+is readable and supports team collaboration.
 
-
-```
 
 ## Contributing
 

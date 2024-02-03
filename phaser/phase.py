@@ -100,7 +100,7 @@ class Phase:
         self.run_steps()
         if self.context.has_errors():
             self.report_errors_and_warnings()
-            raise PipelineErrorException(f"Phase failed with {len(self.context.errors.keys())} errors.")
+            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
         else:
             self.report_errors_and_warnings()
             self.prepare_for_save()
