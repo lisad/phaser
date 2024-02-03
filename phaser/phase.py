@@ -226,8 +226,9 @@ class Phase:
     def check_headers_consistent(self):
         for row in self.row_data:
             for field_name in row.keys():
-                if field_name not in self.headers and field_name != '__phaser_row_num__':
-                    raise PipelineErrorException(
+                if field_name not in self.headers and field_name != Pipeline.ROW_NUM_FIELD:
+                    self.context.add_warning('consistency_check',
+                                             row.get(Pipeline.ROW_NUM_FIELD, 'unknown'),
                         f"At some point, {field_name} was added to the row_data and not declared a header")
         # LMDTODO: We could also check for fields dropped in row_data steps and add them if they can be null?
 

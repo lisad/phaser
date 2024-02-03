@@ -26,13 +26,14 @@ import employee data fixture  (change the other tests to use a 'crew' fixture)
 
 """
 
-EID = Column(name="Employee ID")  # Can be blank for now until we check Status field in custom step
+EID = Column(name="Employee ID", rename="employeeNumber")  # Can be blank for now until we check Status field in custom step
 FIRSTNAME = Column(name="First name", rename="firstName")
 LASTNAME = Column(name="Last name", rename="lastName", blank=False)
-PAYTYPE = Column(name="Pay type",
-                 allowed_values=["hourly", "salary", "exception hourly", "monthly", "weekly", "daily"],
-                 on_error=Pipeline.ON_ERROR_DROP_ROW)
-PAIDPER = FloatColumn(name="Paid per", min_value=0.01, rename="paidPer")
+PAY_TYPE = Column(name="Pay type",
+                  allowed_values=["hourly", "salary", "exception hourly", "monthly", "weekly", "daily"],
+                  on_error=Pipeline.ON_ERROR_DROP_ROW)
+PAID_PER = Column(name="Paid per", rename="paidPer", save=False)
+PAY_RATE = FloatColumn(name="Pay rate", min_value=0.01, rename="payRate", required=True, save=False)
 
 
 @row_step
@@ -62,12 +63,13 @@ def calculate_annual_salary(row, **kwargs):
         case "Week": row['salary'] = rate * 52
         case "Month": row['salary'] = rate * 12
         case "Year": row['salary'] = rate
+        case _: row['salary'] = 0
     return row
 
 
 @row_step
 def calculate_bonus_percent(row, **kwargs):
-    if row['bonusAmount']:
+    if row.get('bonusAmount') and row['salary'] > 0:
         row["Bonus percent"] = row['bonusAmount'] / row['salary']
     return row
 

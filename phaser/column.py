@@ -65,6 +65,8 @@ class Column:
         self.default = default
         self.fix_value_fn = fix_value_fn
         self.rename = rename or []
+        if isinstance(self.rename, str):
+            self.rename = [self.rename]
         self.allowed_values = allowed_values
         self.save = save
         self.use_exception = PipelineErrorException
@@ -81,11 +83,8 @@ class Column:
 
     def check_required(self, data_headers):
         """
-        Checks a dataset to make sure the conditions put on this column are met, and casts to another data type if
-        appropriate. Columns might need to do some checking, then some casting, then more checking,
-        to complete their work.  However, users who want to subclass Column to do a special kind of column
-        (e.g. ISBNNumberColumn) ought to need to only override check_value or cast.
-        :param data_headers: just the column headers found in data, for checking presence and fixing case
+        If this column is required, then checks the list of headers of the dataset to see if its name is there.
+        :param data_headers: just the column headers found in data
         :return: None
         """
         if self.required:
@@ -123,11 +122,10 @@ class Column:
         """ Raises chosen exception type if something is wrong with a value in the column.
             One can override this to use a different exception or check value in a different way
             (don't forget to call super().check_value() """
-        if not self.blank and not self.value:  # Python boolean casting returns false if string is empty
+        if not self.blank and not value:  # Python boolean casting returns false if string is empty
             raise self.use_exception(f"Column `{self.name}' had blank value")
         if self.allowed_values and not (value in self.allowed_values):
             raise self.use_exception(f"Column '{self.name}' had value {value} not found in allowed values")
-        print('finished ok')
 
     def fix_value(self, value):
         """ Sets value to default if provided and appropriate, and calls any functions or

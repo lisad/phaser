@@ -40,21 +40,28 @@ def batch_step(step_function):
     return _batch_step_wrapper
 
 
-def check_unique(column_name, strip=True, ignore_case=False):
+def check_unique(column, strip=True, ignore_case=False):
     """ This is a step factory that will create a step that tests that all the values in a column
     are unique with respect to each other.  It does not change any values permanently (strip spaces
     or lower-case letters).
     Params
-    column_name: the name of the column in which all values should be unique.
+    column: the column class or name of the column in which all values should be unique.
     strip(defaults to True): whether to strip spaces from all values
     ignore_case(defaults to False): whether to lower-case all values
     """
+    def safe_strip(value):
+        return value.strip() if isinstance(value, str) else value
+
+    column_name = column.name if isinstance(column, Column) else column
 
     @batch_step
-    def check_unique_step(batch, **kwargs):
-        values = [row.get(column_name) for row in batch]
+    def check_unique_step(batch, context):
+        try:
+            values = [row[column_name] for row in batch]
+        except KeyError:
+            raise PipelineErrorException(f"Check_unique: Some or all rows did not have '{column_name}' present")
         if strip:
-            values = [value.strip() for value in values]
+            values = [safe_strip(value) for value in values]
         if ignore_case:
             values = [value.lower() for value in values]
         if len(set(values)) != len(values):
