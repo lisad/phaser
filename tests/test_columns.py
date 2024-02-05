@@ -99,6 +99,14 @@ def test_rename():
     assert phase.headers == ['department', 'birth_date']
 
 
+def test_rename_passed_string():
+    col = Column(name='Crew ID', rename="crewNumber" )
+    phase = Phase(columns=[col])
+    phase.load_data([{'crewNumber': '1'}, {'crewNumber': '2'}])
+    phase.rename_columns()
+    assert phase.headers == [col.name]
+
+
 def test_canonicalize_names():
     col1 = Column("Country of Origin")
     phase = Phase(columns=[col1])
@@ -203,6 +211,7 @@ def test_column_can_drop_row():
     phase = Phase(columns=[col])
     phase.load_data([{'Shoe size': '42'}, {'Shoe size': None}])
     phase.do_column_stuff()
+    assert len(phase.context.errors) == 0
     assert len(phase.row_data) == 1
     assert phase.row_data[0]['Shoe size'] == 42
 

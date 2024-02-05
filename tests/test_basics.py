@@ -1,3 +1,5 @@
+import pandas as pd
+
 from phaser import Phase, row_step, Pipeline, Column, IntColumn
 import pytest  # noqa # pylint: disable=unused-import
 import os
@@ -35,9 +37,12 @@ def test_load_and_save(tmpdir):
 
 
 def test_save_only_some_columns(tmpdir):
+    # Possibly this test would be more robust if we call 'run' and ensure that prepare_for_save is called
+    # and drops columns before save, rather than explicitly call here.
     phase = Phase(name="transform",
                   columns=[Column(name="ID", save=True), Column(name="Status", save=False)])
     phase.load_data([{"ID": 1, "Status": "onboard"}])
+    phase.prepare_for_save()
     phase.save(tmpdir / "test_drop_column.csv")
     with open(tmpdir / "test_drop_column.csv") as f:
         first_line = f.readline()
@@ -49,7 +54,8 @@ def test_drop_col_works_if_not_exist(tmpdir):
     phase = Phase(name="transform",
                   columns=[Column(name="ID", save=True), Column(name="Status", save=False)])
     phase.load_data([{"ID": 1, "Location": "onboard"}])
-    phase.save(tmpdir / "test_drop_column.csv")
+    phase.prepare_for_save()
+    assert 'Status' not in pd.DataFrame(phase.row_data).columns
 
 
 def test_subclassing(tmpdir):

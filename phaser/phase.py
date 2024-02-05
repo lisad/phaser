@@ -7,9 +7,71 @@ from .steps import ROW_STEP, BATCH_STEP, DATAFRAME_STEP, PROBE_VALUE, row_step
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
 
+class ReshapePhase:
+    """ Operations that combine rows or split rows, and thus arrive at a different number of rows (beyond just
+    dropping bad data), don't work well in a regular Phase and are hard to do diffs for.  This class solves
+    just the problem of merging and splitting up rows.  Some reshape operations include
+    * group by a field (and sum, or average, or apply another operation to the numeric fields associated)
+    * 'spread' functions (like DPLYR 0 LMDTODO is there apandas equivalent)
+
+    Note that just dropping or filtering rows one-by-one, or adding or removing columns no matter how much
+    other column values are involved, can be done in a regular phase.
+    LMDTODO    https://github.com/rstudio/cheatsheets/blob/main/data-transformation.pdf
+    """
 
 class Phase:
-    # Subclasses can override to set source for all instances if appropriate
+    """ The organizing principle for data transformation steps and column definitions is the phase.  A phase can
+
+    * load a data file
+    * Apply a set of preferred column names and datatypes via 'columns'
+    * Apply a further list of transformations via 'steps'
+    * While applying steps, can drop invalid or unwanted rows, add columns
+    * Save only the desired columns
+    * Provide a detailed diff or a summary of what changed in the phase
+
+    Attributes
+    ----------
+    name : str
+        The name of the phase (for debugging and file name usage)
+    steps : list
+        A list of functions that will be run in order on data loaded into the phase
+    columns : list
+        A list of column definitions with declarations of how to handle the column name and data within
+        the column. Columns are also processed in order, so a column early in the list that instructs the
+        phase to drop rows without values will cause those rows never to be processed by columns later in the
+        list.
+    context : Context obj
+        Optional context information that can apply to multiple phases organized in a Pipeline.  If
+        no context is passed in, one will be created just for this Phase. The context will be passed to each step
+        in case that step needs outside context.
+    error_policy: str
+        The error handling policy to apply in this phase.  Default is Pipeline.ON_ERROR_COLLECT, which collects
+        errors, up to one per row, and reports all errors at the end of running the phase.  Other options
+        are Pipeline.ON_ERROR_WARN, which adds warnings that will all be reported at the end,
+        Pipeline.ON_ERROR_DROP_ROW which means that a row causing an error will be dropped, and
+        Pipeline.ON_ERROR_STOP_NOW which aborts the phase mid-step rather than continue and collect more errors.
+        Any step that needs to apply different error handling than the phase's default can throw its own
+        typed exception (see step documentation).
+
+
+    Methods
+    -------
+    run(source, destination)
+        Loads data from source, applies all the phase's column definitions and steps, and saves to destination.
+        If run inside a Pipeline, the pipeline will call this, but for debugging/developing or simpler data
+        transformations, this can be used to run the phase without a Pipeline.
+
+    load(source)
+        If creating a Phase that takes data in a custom way, subclass Phase and override the load method.
+        Besides overriding the load method, users of Phase should not need to run load directly as it is run
+        as part of 'run'. if overriding 'load', make sure that both phase.headers and phase.row_data are
+        set up before finishing the method.
+
+    save(source)
+        If creating a Phase that sends data to a custom destination, subclass Phase and override the save method.
+        If the method is not overridden, the phase will save the data in CSV format at the destination.
+
+    """
     source = None
     working_dir = None
     steps = []
@@ -29,7 +91,6 @@ class Phase:
 
         self.row_data = []
         self.headers = None
-        self.dataframe_data = None
         self.default_error_policy = error_policy or Pipeline.ON_ERROR_COLLECT
 
     def run(self, source, destination):
@@ -39,9 +100,10 @@ class Phase:
         self.run_steps()
         if self.context.has_errors():
             self.report_errors_and_warnings()
-            raise PipelineErrorException(f"Phase failed with {len(self.context.errors.keys())} errors.")
+            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
         else:
             self.report_errors_and_warnings()
+            self.prepare_for_save()
             self.save(destination)
 
     def report_errors_and_warnings(self):
@@ -85,7 +147,6 @@ class Phase:
             # this would preserve original row numbers across data.  can't be done in reshape phases.
         else:
             df[Pipeline.ROW_NUM_FIELD] = df.reset_index().index
-        self.dataframe_data = df
         self.row_data = df.to_dict('records')
 
     def load_data(self, data):
@@ -136,39 +197,38 @@ class Phase:
         self.row_data = [{rename_me(key): value for key, value in row.items()} for row in self.row_data]
         self.headers = [rename_me(name) for name in self.headers]
 
+    def prepare_for_save(self):
+        """ Checks consistency of data and drops unneeded columns
+        """
+        self.check_headers_consistent()
+        df = pd.DataFrame(self.row_data)
+        columns_to_drop = [col.name for col in self.columns if col.save is False]
+        # LMDTODO: Should saving row numbers be an option?
+        columns_to_drop.append(Pipeline.ROW_NUM_FIELD)
+        columns_exist_to_drop = [col_name for col_name in columns_to_drop if col_name in df.columns]
+        df.drop(columns_exist_to_drop, axis=1, inplace=True)
+        self.row_data = df.to_dict('records')
+
     def save(self, destination):
         """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
         It should be easy to override this method to save in a different way, using different
         parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
-        Defaults:
-        separator character is ','
-        encoding is UTF-8
-        compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
+
+        CSV defaults chosen:
+        * separator character is ','
+        * encoding is UTF-8
+        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
         """
-        # LMDTODO: Synch the dataframe version every step rather than just on save - issue 13
-        self.check_headers_consistent()
 
-        self.dataframe_data = pd.DataFrame(self.row_data)
-        # LMDTODO: Should saving row numbers be an option?
-
-        # Drop columns declared to not save.  (Could be moved to a utility)
-        columns_to_drop = [col.name for col in self.columns if col.save is False]
-        columns_to_drop.append(Pipeline.ROW_NUM_FIELD)
-        columns_exist_to_drop = [col_name for col_name in columns_to_drop if col_name in self.dataframe_data.columns]
-        self.dataframe_data.drop(columns_exist_to_drop, axis=1, inplace=True)
-
-        self.dataframe_data.to_csv(destination,
-                                   index=False,
-                                   na_rep="NULL",   # LMDTODO Reconsider: this makes checkpoints more readable
-                                                    # but may make final import harder
-                                   )
+        pd.DataFrame(self.row_data).to_csv(destination, index=False, na_rep="NULL")
         logger.info(f"{self.name} saved output to {destination}")
 
     def check_headers_consistent(self):
         for row in self.row_data:
             for field_name in row.keys():
-                if field_name not in self.headers and field_name != '__phaser_row_num__':
-                    raise PipelineErrorException(
+                if field_name not in self.headers and field_name != Pipeline.ROW_NUM_FIELD:
+                    self.context.add_warning('consistency_check',
+                                             row.get(Pipeline.ROW_NUM_FIELD, 'unknown'),
                         f"At some point, {field_name} was added to the row_data and not declared a header")
         # LMDTODO: We could also check for fields dropped in row_data steps and add them if they can be null?
 

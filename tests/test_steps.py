@@ -51,7 +51,7 @@ def test_check_unique_without_stripping():
 
 def test_check_unique_case_sensitive():
     fn = check_unique('dept')
-    fn([{'dept': "ENG"}, {'dept': 'Sales'}, {'dept': "eng"}])
+    fn([{'dept': "ENG"}, {'dept': 'Sales'}, {'dept': "eng"}, {'dept': None}])
 
 
 def test_check_unique_case_insensitive():
@@ -60,13 +60,40 @@ def test_check_unique_case_insensitive():
         fn([{'dept': "ENG"}, {'dept': 'Sales'}, {'dept': "Eng"}])
 
 
-# Testing builtin sort step
+def test_check_unique_null_values():
+    fn = check_unique('id')
+    fn([{'id': "1"}, {'id': "2"}, {'id': None}])
+
+
+def test_check_unique_int_values():
+    fn = check_unique('id')
+    fn([{'id': 1}, {'id': 2}, {'id': 3}])   # passes
+    with pytest.raises(PipelineErrorException):
+        fn([{'id': 1}, {'id': 2}, {'id': 2}])
+
+
+def test_check_unique_takes_column_instance():
+    col = IntColumn(name='id')
+    fn = check_unique(col)
+    fn([{'id': 1}, {'id': 2}, {'id': 3}])
+
+
+def test_check_unique_is_helpful_when_column_missing():
+    fn = check_unique('crew id')
+    with pytest.raises(PipelineErrorException) as error_info:
+        fn([{'id': 1}, {'id': 2}, {'id': 3}])
+    assert "Check_unique: Some or all rows did not have 'crew id' present" in error_info.value.message
+
+
+# Testing builtin sort_by step
+
 
 def test_with_col_name():
     phase = Phase(steps=[sort_by("id")])
     phase.load_data([{'id': 1}, {'id': 3}, {'id': 2}, {'id': 0}])
     phase.run_steps()
     assert all([phase.row_data[i]['id'] == i for i in range(4)])
+
 
 def test_with_col_obj():
     id_col = IntColumn(name='id')

@@ -1,6 +1,8 @@
 # phaser
 
-A library to simplify automated batch-oriented complex data integration pipelines
+A library to simplify automated batch-oriented complex data integration pipelines, by 
+organizing steps and column definitions into phases, and offering utilities for 
+transforms, sorting, validating and viewing changes to data. 
 
 ## Goals and Scope
 
@@ -37,6 +39,53 @@ The mechanisms that we think will help phaser meet these goals:
 * make high-level code readable in one place, as when a Phase lists all of its steps declaratively
 * tools that support visibility and control over warnings and data changes
 
+## Simple example
+
+```
+class Validator(Phase):
+    columns = [
+        Column(name="Employee ID", rename="employeeNumber"),
+        Column(name="First name", rename="firstName"),
+        Column(name="Last name", rename="lastName", blank=False),
+        FloatColumn(name="Pay rate", min_value=0.01, rename="payRate", required=True),
+        Column(name="Pay type",
+               rename="payType",
+               allowed_values=["hourly", "salary", "exception hourly", "monthly", "weekly", "daily"],
+               on_error=Pipeline.ON_ERROR_DROP_ROW,
+               save=False),
+        Column(name="Pay period", rename="paidPer")
+    ]
+    steps = [
+        drop_rows_with_no_id_and_not_employed,
+        check_unique("Employee ID")
+    ]
+
+
+class Transformer(Phase):
+    columns = []
+    steps = [
+        combine_full_name,
+        calculate_annual_salary,
+        calculate_bonus_percent
+    ]
+
+
+class EmployeeReviewPipeline(Pipeline):
+
+    phases = [Validator, Transformer]
+
+```
+
+The example above defines a validation phase that renames a number of columns and defines their values, a 
+transformer phase that performs calculations, and a pipeline that combines both phases.  The full example 
+can be found in the tests directory of the project, including the sample data and the custom steps defined.
+
+The benefit of even such a simple pipeline expressed as two phases is that the phases can be debugged, tested and
+run separately. A developer can run the Validator phase once then work on adding features to the Transformer phase,
+or narrow down an error in production by comparing the checkpoint output of each phase.  In addition, the code
+is readable and supports team collaboration.
+
+
 ## Contributing
 
 To set up project for contributing:
@@ -54,13 +103,13 @@ Then run:
 The construction of a Phase instance means that you can put a bunch of data transformation or
 data testing steps in a series, and the Phase does routine work for you in a robust way:
 * it will load your data from a source file or a previous phase
-* it will canonicalize field names to lowercase and strip dangerous characters (LMDTODO)
-* it will run all your steps row-by-row or across the whole dataset
+* it will canonicalize field names to lowercase and strip dangerous characters
+* it will run your steps row-by-row or across the whole dataset, in order
 * it will save your results to a different file, usable as a checkpoint
-* it will report errors or warnings as summaries (LMDTODO)
+* it will report errors or warnings as summaries 
 
 In addition, this library organizes a variety of kinds of steps :
-* Pre-baked steps to check uniqueness values and do common transforms (LMDTODO)
-* Step wrappers to control errors and warnings (LMDTODO)
+* Pre-baked steps to check uniqueness values and do common transforms
+* Step wrappers to control errors, dropping rows, and warnings 
 * Steps that operate on rows represented as Python dicts
 * Steps that operate on pandas DataFrames (LMDTODO)
