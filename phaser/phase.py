@@ -230,7 +230,6 @@ class Phase:
                     self.context.add_warning('consistency_check',
                                              row.get(Pipeline.ROW_NUM_FIELD, 'unknown'),
                         f"At some point, {field_name} was added to the row_data and not declared a header")
-        # LMDTODO: We could also check for fields dropped in row_data steps and add them if they can be null?
 
     def run_steps(self):
         if self.row_data is None or self.row_data == []:
