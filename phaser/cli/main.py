@@ -11,6 +11,7 @@ import inspect
 import phaser
 import shutil
 import sys
+import traceback
 
 def find_commands():
     path = os.path.dirname(__file__)
@@ -62,6 +63,11 @@ def main(argv):
         prog="phaser",
         description=__doc__,
     )
+    parser.add_argument(
+        "-v", "--verbose",
+        help="output more information during execution",
+        action="store_true",
+    )
     subparsers = parser.add_subparsers(
         title="commands", dest="command"
     )
@@ -88,6 +94,8 @@ def main(argv):
         command["instance"].execute(args)
     except:
         print(f"ERROR running '{args.command}': {sys.exception()}")
+        if args.verbose:
+            traceback.print_exc()
         print("-" * shutil.get_terminal_size().columns + "\n")
         command["parser"].print_help()
         sys.exit(1)
