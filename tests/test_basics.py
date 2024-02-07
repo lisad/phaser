@@ -1,3 +1,4 @@
+import pandas
 import pandas as pd
 
 from phaser import Phase, row_step, Pipeline, Column, IntColumn
@@ -130,4 +131,20 @@ def test_column_error_adds_warning():
     assert len(warnings_for_row) == 1
     assert "level" in warnings_for_row[0]['message']
     assert warnings_for_row[0]['step'] == 'cast_each_column_value'
-    # LMDTODO This could be more informative - just the cast method doesn't say what column.
+
+
+@pytest.mark.skip("User can write steps that violate the column contracts, and save the output. we should fix that.")
+def test_drop_field_during_step(tmpdir):
+    @row_step
+    def drop_step(the_row, **kwargs):
+        if the_row["crew id"] == 1:
+            del the_row["crew id"]
+        return the_row
+
+    col = IntColumn(name='crew id', min_value=1)
+    phase = Phase('test', columns=[col], steps=[drop_step])
+    phase.run(source=current_path / 'fixture_files' / 'crew.csv',
+              destination=tmpdir / 'tmp.csv')
+    output = pandas.read_csv(tmpdir / 'tmp.csv').to_dict('records')
+    for row in output:
+        assert row['crew id'] in ["1", "2"]
