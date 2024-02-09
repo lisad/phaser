@@ -1,13 +1,159 @@
+from abc import ABC, abstractmethod
+
 import pandas as pd
 import logging
 from .column import make_strict_name, Column
-from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException
-from .steps import ROW_STEP, BATCH_STEP, DATAFRAME_STEP, PROBE_VALUE, row_step
+from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException
+from .steps import ROW_STEP, BATCH_STEP, PROBE_VALUE, row_step
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
 
-class ReshapePhase:
+
+class PhaseBase(ABC):
+
+    def __init__(self, name, context=None, error_policy=None):
+        self.name = name or self.__class__.__name__
+        self.context = context or Context()
+        self.error_policy = error_policy or Pipeline.ON_ERROR_COLLECT
+        self.headers = None
+        self.row_data = None
+
+    @abstractmethod
+    def run(self):
+        pass
+
+    def read_csv(self, source):
+        """ Includes the settings phaser normally uses with pandas read_csv """
+        return pd.read_csv(source,
+                         dtype='str',
+                         sep=',',
+                         skip_blank_lines=True,
+                         index_col=False,
+                         comment='#')
+
+    def load(self, source):
+        """ When creating a Phase, it may be desirable to subclass it and override the load()
+        function to do a different kind of loading.  Be sure to load the row_data into the
+        instance's row_data attribute as an iterable (list) containing dicts.
+        Defaults:
+        * assume all column values are strings, so leading zeros or trailing zeros don't get destroyed.
+        * assume ',' value-delimiter
+        * skip_blank_lines=True: allows blank AND '#'-led rows to be skipped and still find header row
+        * doesn't use indexing
+        * does attempt to decompress common compression formats if file uses them
+        * assume UTF-8 encoding
+        * uses '#' as the leading character to assume a row is comment
+        * Raises errors loading 'bad lines', rather than skip
+        """
+        logger.info(f"{self.name} loading input from {source}")
+        df = self.read_csv(source)
+        self.headers = df.columns.values.tolist()
+        if Pipeline.ROW_NUM_FIELD in df.columns.values.tolist():
+            raise Exception("phaser does not currently expect __phaser_row_num__ to be saved and loaded")
+            # LMDTODO: Or could check that the rows are correctly numbered or can be ordered by number and unique?
+            # this would preserve original row numbers across data.  can't be done in reshape phases.
+        else:
+            df[Pipeline.ROW_NUM_FIELD] = df.reset_index().index
+        self.row_data = df.to_dict('records')
+
+    def save(self, destination):
+        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
+        It should be easy to override this method to save in a different way, using different
+        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
+
+        CSV defaults chosen:
+        * separator character is ','
+        * encoding is UTF-8
+        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
+        """
+
+        pd.DataFrame(self.row_data).to_csv(destination, index=False, na_rep="NULL")
+        logger.info(f"{self.name} saved output to {destination}")
+
+    def process_exception(self, exc, step, row):
+        """
+        A method to delegate exception handling to.  This is not called within PhaseBase directly,
+        but it is called in the subclasses when they run steps or methods.
+        :param exc: The exception or error thrown
+        :param step: What step this occurred in
+        :param row: What row of the data this occurred in
+        :return: Nothing
+        """
+        if isinstance(exc, DropRowException):
+            self.context.add_dropped_row(step, row, exc.message)
+        elif isinstance(exc, WarningException):
+            self.context.add_warning(step, row, exc.message)
+        else:
+            e_name = exc.__class__.__name__
+            e_message = str(exc)
+            message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
+            logger.debug(f"Unknown exception handled in executing steps ({message}")
+
+            match self.error_policy:
+                case Pipeline.ON_ERROR_COLLECT:
+                    self.context.add_error(step, row, message)
+                case Pipeline.ON_ERROR_WARN:
+                    self.context.add_warning(step, row, message)
+                case Pipeline.ON_ERROR_DROP_ROW:
+                    self.context.add_dropped_row(step, row, message)
+                case Pipeline.ON_ERROR_STOP_NOW:
+                    self.context.add_error(step, row, message)
+                    raise exc
+                case _:
+                    raise PipelineErrorException(f"Unknown error policy '{self.error_policy}'") from exc
+
+    def report_errors_and_warnings(self):
+        """ In next iteration, we should probably move the generation of error info to stdout to other locations.
+        For CLI operation we want to report errors to the CLI, but for unsupervised operation these should go
+        to logs.  Python logging does allow users of a library to send log messages to more than one place while
+        customizing log level desired, and we could have drop-row messages as info and warning as warn level so
+        these fit very nicely into the standard levels allowing familiar customization.  """
+        # LMDTODO: How are one phases's errors and warnings kept separate from another phase's?
+        for row_num, info in self.context.dropped_rows.items():
+            print(f"DROPPED row: {row_num}, message: '{info['message']}'")
+        # Unlike errors and dropped rows, there can be multiple warnings per row
+        for row_num, warnings in self.context.warnings.items():
+            for warning in warnings:
+                print(f"WARNING row: {row_num}, message: '{warning['message']}'")
+        for row_num, error in self.context.errors.items():
+            print(f"ERROR row: {row_num}, message: '{error['message']}'")
+
+
+class DataFramePhase(PhaseBase):
+    def __init__(self, name, dataframe_fn=None, context=None, error_policy=None):
+        super().__init__(name, context=context, error_policy=error_policy)
+        self.df_data = None
+        if dataframe_fn is not None:
+            self.dataframe_fn = dataframe_fn
+        elif self.__class__.dataframe_fn is not None:
+            self.dataframe_fn = self.__class__.dataframe_fn
+        else:
+            raise PhaserException("Need to define the function to pass a dataframe to")
+
+    def run(self, source, destination):
+        self.load(source)
+        self.df_data = self.dataframe_fn(self, self.df_data)
+        self.row_data = self.df_data.to_dict('records')
+        if self.context.has_errors():
+            self.report_errors_and_warnings()
+            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
+        else:
+            self.report_errors_and_warnings()
+            self.save(destination)
+
+    def df_transform(self):
+        raise PhaserException("Subclass DataFramePhase and define what to do in this method")
+
+    def load(self, source):
+        self.df_data = self.read_csv(source)
+
+    def save(self, destination):
+        self.df_data.to_csv(destination, index=False, na_rep="NULL")
+        logger.info(f"{self.name} saved output to {destination}")
+
+
+class ReshapePhase(PhaseBase):
     """ Operations that combine rows or split rows, and thus arrive at a different number of rows (beyond just
     dropping bad data), don't work well in a regular Phase and are hard to do diffs for.  This class solves
     just the problem of merging and splitting up rows.  Some reshape operations include
@@ -19,7 +165,24 @@ class ReshapePhase:
     LMDTODO    https://github.com/rstudio/cheatsheets/blob/main/data-transformation.pdf
     """
 
-class Phase:
+    def __init__(self, name, context=None, error_policy=None):
+        super().__init__(name, context=context, error_policy=error_policy)
+
+    def reshape(self):
+        raise PhaserException("Subclass ReshapePhase and define what to do in the reshape method")
+
+    def run(self, source, destination):
+        self.load(source)
+        self.row_data = self.reshape()
+        if self.context.has_errors():
+            self.report_errors_and_warnings()
+            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
+        else:
+            self.report_errors_and_warnings()
+            self.save(destination)
+
+
+class Phase(PhaseBase):
     """ The organizing principle for data transformation steps and column definitions is the phase.  A phase can
 
     * load a data file
@@ -80,18 +243,14 @@ class Phase:
     def __init__(self, name=None, steps=None, columns=None, context=None, error_policy=None):
         """ Instantiate (or subclass) a Phase with an ordered list of steps (they will be called in this order) and
         with an ordered list of columns (they will do their checks and type casting in this order).  """
-        self.name = name or self.__class__.__name__
+        super().__init__(name, context=context, error_policy=error_policy)
         self.steps = steps or self.__class__.steps
         self.columns = columns or self.__class__.columns
         if isinstance(self.columns, Column):
             self.columns = [self.columns]
-        if not context:
-            # If a phase is being run in isolation and without the pipeline context, create a new one
-            self.context = Context()
 
         self.row_data = []
         self.headers = None
-        self.default_error_policy = error_policy or Pipeline.ON_ERROR_COLLECT
 
     def run(self, source, destination):
         # Break down run into load, steps, error handling, save and delegate
@@ -105,51 +264,6 @@ class Phase:
             self.report_errors_and_warnings()
             self.prepare_for_save()
             self.save(destination)
-
-    def report_errors_and_warnings(self):
-        """ In next iteration, we should probably move the generation of error info to stdout to other locations.
-        For CLI operation we want to report errors to the CLI, but for unsupervised operation these should go
-        to logs.  Python logging does allow users of a library to send log messages to more than one place while
-        customizing log level desired, and we could have drop-row messages as info and warning as warn level so
-        these fit very nicely into the standard levels allowing familiar customization.  """
-        for row_num, info in self.context.dropped_rows.items():
-            print(f"DROPPED row: {row_num}, message: '{info['message']}'")
-        # Unlike errors and dropped rows, there can be multiple warnings per row
-        for row_num, warnings in self.context.warnings.items():
-            for warning in warnings:
-                print(f"WARNING row: {row_num}, message: '{warning['message']}'")
-        for row_num, error in self.context.errors.items():
-            print(f"ERROR row: {row_num}, message: '{error['message']}'")
-
-    def load(self, source):
-        """ When creating a Phase, it may be desirable to subclass it and override the load()
-        function to do a different kind of loading.  Be sure to load the row_data into the
-        instance's row_data attribute as an iterable (list) containing dicts.
-        Defaults:
-        * assume all column values are strings, so leading zeros or trailing zeros don't get destroyed.
-        * assume ',' value-delimiter
-        * skip_blank_lines=True: allows blank AND '#'-led rows to be skipped and still find header row
-        * doesn't use indexing
-        * does attempt to decompress common compression formats if file uses them
-        * assume UTF-8 encoding
-        * uses '#' as the leading character to assume a row is comment
-        * Raises errors loading 'bad lines', rather than skip
-        """
-        logger.info(f"{self.name} loading input from {source}")
-        df = pd.read_csv(source,
-                         dtype='str',
-                         sep=',',
-                         skip_blank_lines=True,
-                         index_col=False,
-                         comment='#')
-        self.headers = df.columns.values.tolist()
-        if Pipeline.ROW_NUM_FIELD in df.columns.values.tolist():
-            raise Exception("phaser does not currently expect __phaser_row_num__ to be saved and loaded")
-            # LMDTODO: Or could check that the rows are correctly numbered or can be ordered by number and unique?
-            # this would preserve original row numbers across data.  can't be done in reshape phases.
-        else:
-            df[Pipeline.ROW_NUM_FIELD] = df.reset_index().index
-        self.row_data = df.to_dict('records')
 
     def load_data(self, data):
         """ Alternate load method is useful in tests or in scripting Phase class where the data is not in a file.
@@ -211,20 +325,6 @@ class Phase:
         df.drop(columns_exist_to_drop, axis=1, inplace=True)
         self.row_data = df.to_dict('records')
 
-    def save(self, destination):
-        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
-        It should be easy to override this method to save in a different way, using different
-        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
-
-        CSV defaults chosen:
-        * separator character is ','
-        * encoding is UTF-8
-        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
-        """
-
-        pd.DataFrame(self.row_data).to_csv(destination, index=False, na_rep="NULL")
-        logger.info(f"{self.name} saved output to {destination}")
-
     def check_headers_consistent(self):
         for row in self.row_data:
             for field_name in row.keys():
@@ -242,8 +342,6 @@ class Phase:
                 self.execute_row_step(step)
             elif step_type == BATCH_STEP:
                 self.execute_batch_step(step)
-            elif step_type == DATAFRAME_STEP:
-                raise Exception("Not implemented yet")
             else:
                 raise Exception(f"Unknown step type {step_type}")
 
@@ -275,30 +373,6 @@ class Phase:
                     new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
                     # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
         self.row_data = new_data
-
-    def process_exception(self, exc, step, row):
-        if isinstance(exc, DropRowException):
-            self.context.add_dropped_row(step, row, exc.message)
-        elif isinstance(exc, WarningException):
-            self.context.add_warning(step, row, exc.message)
-        else:
-            e_name = exc.__class__.__name__
-            e_message = str(exc)
-            message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
-            logger.debug(f"Unknown exception handled in executing steps ({message}")
-
-            match self.default_error_policy:
-                case Pipeline.ON_ERROR_COLLECT:
-                    self.context.add_error(step, row, message)
-                case Pipeline.ON_ERROR_WARN:
-                    self.context.add_warning(step, row, message)
-                case Pipeline.ON_ERROR_DROP_ROW:
-                    self.context.add_dropped_row(step, row, message)
-                case Pipeline.ON_ERROR_STOP_NOW:
-                    self.context.add_error(step, row, message)
-                    raise exc
-                case _:
-                    raise PipelineErrorException(f"Unknown error policy '{self.default_error_policy}'") from exc
 
     def execute_batch_step(self, step):
         self.context.current_row = 'batch'

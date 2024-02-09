@@ -1,0 +1,5 @@
+location,measure,value
+hangar deck,temperature,16
+hangar deck,gamma radiation,9.8 μR/h
+main engineering,temperature,22
+main engineering,gamma radiation,10.9 μR/h
