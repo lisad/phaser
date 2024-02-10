@@ -121,19 +121,13 @@ class PhaseBase(ABC):
 
 
 class DataFramePhase(PhaseBase):
-    def __init__(self, name, dataframe_fn=None, context=None, error_policy=None):
+    def __init__(self, name, context=None, error_policy=None):
         super().__init__(name, context=context, error_policy=error_policy)
         self.df_data = None
-        if dataframe_fn is not None:
-            self.dataframe_fn = dataframe_fn
-        elif self.__class__.dataframe_fn is not None:
-            self.dataframe_fn = self.__class__.dataframe_fn
-        else:
-            raise PhaserException("Need to define the function to pass a dataframe to")
 
     def run(self, source, destination):
         self.load(source)
-        self.df_data = self.dataframe_fn(self, self.df_data)
+        self.df_data = self.df_transform(self.df_data)
         self.row_data = self.df_data.to_dict('records')
         if self.context.has_errors():
             self.report_errors_and_warnings()
@@ -142,7 +136,7 @@ class DataFramePhase(PhaseBase):
             self.report_errors_and_warnings()
             self.save(destination)
 
-    def df_transform(self):
+    def df_transform(self, df_data):
         raise PhaserException("Subclass DataFramePhase and define what to do in this method")
 
     def load(self, source):
@@ -162,18 +156,17 @@ class ReshapePhase(PhaseBase):
 
     Note that just dropping or filtering rows one-by-one, or adding or removing columns no matter how much
     other column values are involved, can be done in a regular phase.
-    LMDTODO    https://github.com/rstudio/cheatsheets/blob/main/data-transformation.pdf
     """
 
     def __init__(self, name, context=None, error_policy=None):
         super().__init__(name, context=context, error_policy=error_policy)
 
-    def reshape(self):
+    def reshape(self, row_data):
         raise PhaserException("Subclass ReshapePhase and define what to do in the reshape method")
 
     def run(self, source, destination):
         self.load(source)
-        self.row_data = self.reshape()
+        self.row_data = self.reshape(self.row_data)
         if self.context.has_errors():
             self.report_errors_and_warnings()
             raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
