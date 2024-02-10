@@ -100,7 +100,7 @@ class Pipeline:
     ON_ERROR_DROP_ROW = "ON_ERROR_DROP_ROW"
     ON_ERROR_STOP_NOW = "ON_ERROR_STOP_NOW"
 
-    def __init__(self, working_dir=None, source=None, phases=None):
+    def __init__(self, working_dir=None, source=None, phases=None, diff=False):
         self.working_dir = working_dir or self.__class__.working_dir
         if self.working_dir and not os.path.exists(self.working_dir):
             raise ValueError(f"Working dir {self.working_dir} does not exist.")
@@ -108,6 +108,7 @@ class Pipeline:
         assert self.source is not None and self.working_dir is not None
         self.phases = phases or self.__class__.phases
         self.phase_instances = []
+        self.diff = diff
 
     def setup_phases(self):
         """ Instantiates phases passed as classes, and assigns unique names to phases"""
@@ -116,6 +117,11 @@ class Pipeline:
             phase_instance = phase
             if inspect.isclass(phase):
                 phase_instance = phase()
+            if self.diff:
+                # Only import DiffingPhase if we need it. This helps to prevent
+                # circular dependencies of imports during initialization.
+                from .differ import DiffingPhase
+                phase_instance = DiffingPhase(phase_instance)
             name = phase_instance.name
             i = 1
             while name in phase_names:

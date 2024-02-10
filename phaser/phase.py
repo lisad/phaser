@@ -85,9 +85,8 @@ class Phase:
         self.columns = columns or self.__class__.columns
         if isinstance(self.columns, Column):
             self.columns = [self.columns]
-        if not context:
-            # If a phase is being run in isolation and without the pipeline context, create a new one
-            self.context = Context()
+        # If a phase is being run in isolation and without the pipeline context, create a new one
+        self.context = context or Context()
 
         self.row_data = []
         self.headers = None
