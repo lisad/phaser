@@ -1,3 +1,4 @@
+from collections.abc import Mapping, Sequence
 from functools import wraps
 from .pipeline import PipelineErrorException, PhaserException
 from .column import Column
@@ -18,7 +19,7 @@ def row_step(step_function):
         result = step_function(row, context=context)
         if result is None:
             raise PipelineErrorException("Step should return row.")
-        if not isinstance(result, dict):
+        if not isinstance(result, Mapping):
             raise PipelineErrorException(f"Step should return row in dict format, not {result}")
         return result
     return _row_step_wrapper
@@ -33,7 +34,7 @@ def batch_step(step_function):
         if __probe__ == PROBE_VALUE:
             return BATCH_STEP
         result = step_function(batch, context=context)
-        if not isinstance(result, list):
+        if not isinstance(result, Sequence):
             raise PipelineErrorException(
                 f"Step {step_function} returned a {result.__class__} rather than a list of rows")
         return result

@@ -25,7 +25,6 @@ def test_pipeline_source_none(tmpdir, reconcile_phase_class):
         p = Pipeline(phases=[reconcile_phase_class], working_dir=tmpdir)
         p.run()
 
-
 def test_load_and_save(tmpdir):
     source = current_path / "fixture_files" / "crew.csv"
     dest = os.path.join(tmpdir, "Transformed-crew.csv")
