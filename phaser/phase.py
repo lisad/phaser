@@ -1,3 +1,4 @@
+from collections import UserDict, UserList
 import pandas as pd
 import logging
 from .column import make_strict_name, Column
@@ -89,7 +90,7 @@ class Phase:
             # If a phase is being run in isolation and without the pipeline context, create a new one
             self.context = Context()
 
-        self.row_data = []
+        self.row_data = PhaseRecords()
         self.headers = None
         self.default_error_policy = error_policy or Pipeline.ON_ERROR_COLLECT
 
@@ -149,7 +150,7 @@ class Phase:
             # this would preserve original row numbers across data.  can't be done in reshape phases.
         else:
             df[Pipeline.ROW_NUM_FIELD] = df.reset_index().index
-        self.row_data = df.to_dict('records')
+        self.row_data = PhaseRecords(df.to_dict('records'))
 
     def load_data(self, data):
         """ Alternate load method is useful in tests or in scripting Phase class where the data is not in a file.
@@ -157,7 +158,7 @@ class Phase:
         format) """
         if len(data) > 0:
             self.headers = data[0].keys()
-        self.row_data = data
+        self.row_data = PhaseRecords(data)
 
     def do_column_stuff(self):
         @row_step
@@ -196,20 +197,23 @@ class Phase:
                 name = rename_list[name]  # Do declared renames
             return name
 
-        self.row_data = [{rename_me(key): value for key, value in row.items()} for row in self.row_data]
+        self.row_data = PhaseRecords([{rename_me(key): value for key, value in row.items()} for row in self.row_data])
         self.headers = [rename_me(name) for name in self.headers]
 
     def prepare_for_save(self):
         """ Checks consistency of data and drops unneeded columns
         """
         self.check_headers_consistent()
-        df = pd.DataFrame(self.row_data)
+        # Use the raw list(dict) form of the data, because DataFrame
+        # construction does something different with a subclass of Sequence and
+        # Mapping that results in the columns being re-ordered.
+        df = pd.DataFrame(self.row_data.to_records())
         columns_to_drop = [col.name for col in self.columns if col.save is False]
         # LMDTODO: Should saving row numbers be an option?
         columns_to_drop.append(Pipeline.ROW_NUM_FIELD)
         columns_exist_to_drop = [col_name for col_name in columns_to_drop if col_name in df.columns]
         df.drop(columns_exist_to_drop, axis=1, inplace=True)
-        self.row_data = df.to_dict('records')
+        self.row_data = PhaseRecords(df.to_dict('records'))
 
     def save(self, destination):
         """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
@@ -222,7 +226,10 @@ class Phase:
         * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
         """
 
-        pd.DataFrame(self.row_data).to_csv(destination, index=False, na_rep="NULL")
+        # Use the raw list(dict) form of the data, because DataFrame
+        # construction does something different with a subclass of Sequence and
+        # Mapping that results in the columns being re-ordered.
+        pd.DataFrame(self.row_data.to_records()).to_csv(destination, index=False, na_rep="NULL")
         logger.info(f"{self.name} saved output to {destination}")
 
     def check_headers_consistent(self):
@@ -274,7 +281,9 @@ class Phase:
                 if not isinstance(exc, DropRowException):
                     new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
                     # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
-        self.row_data = new_data
+        # TODO: Make sure the row number is correctly captured and is the same
+        # as it was before the step.
+        self.row_data = PhaseRecords(new_data)
 
     def process_exception(self, exc, step, row):
         if isinstance(exc, DropRowException):
@@ -309,9 +318,26 @@ class Phase:
                 self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
-            self.row_data = [row for row in new_row_values]
+            self.row_data = PhaseRecords([row for row in new_row_values])
         except Exception as exc:
             self.process_exception(exc, step, None)
 
 
 # LMDTODO: add a test that makes sure that a batch step followed by a row step works fine
+
+class PhaseRecords(UserList):
+    def __init__(self, *args):
+        super().__init__(*args)
+        self.data = [
+            PhaseRecord(index, record)
+            for index, record in enumerate(self.data)
+        ]
+
+    # Transform back into native list(dict)
+    def to_records(self):
+        return [ r.data for r in self.data ]
+
+class PhaseRecord(UserDict):
+    def __init__(self, row_num, record):
+        super().__init__(record)
+        self.row_num = row_num
