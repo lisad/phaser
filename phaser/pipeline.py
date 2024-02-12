@@ -93,8 +93,6 @@ class Pipeline:
     source = None
     phases = []
 
-    ROW_NUM_FIELD = "__phaser_row_num__"
-
     ON_ERROR_WARN = "ON_ERROR_WARN"
     ON_ERROR_COLLECT = "ON_ERROR_COLLECT"
     ON_ERROR_DROP_ROW = "ON_ERROR_DROP_ROW"

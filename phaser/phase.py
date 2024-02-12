@@ -144,12 +144,6 @@ class Phase:
                          index_col=False,
                          comment='#')
         self.headers = df.columns.values.tolist()
-        if Pipeline.ROW_NUM_FIELD in df.columns.values.tolist():
-            raise Exception("phaser does not currently expect __phaser_row_num__ to be saved and loaded")
-            # LMDTODO: Or could check that the rows are correctly numbered or can be ordered by number and unique?
-            # this would preserve original row numbers across data.  can't be done in reshape phases.
-        else:
-            df[Pipeline.ROW_NUM_FIELD] = df.reset_index().index
         self.row_data = PhaseRecords(df.to_dict('records'))
 
     def load_data(self, data):
@@ -209,8 +203,6 @@ class Phase:
         # Mapping that results in the columns being re-ordered.
         df = pd.DataFrame(self.row_data.to_records())
         columns_to_drop = [col.name for col in self.columns if col.save is False]
-        # LMDTODO: Should saving row numbers be an option?
-        columns_to_drop.append(Pipeline.ROW_NUM_FIELD)
         columns_exist_to_drop = [col_name for col_name in columns_to_drop if col_name in df.columns]
         df.drop(columns_exist_to_drop, axis=1, inplace=True)
         self.row_data = PhaseRecords(df.to_dict('records'))
@@ -235,9 +227,8 @@ class Phase:
     def check_headers_consistent(self):
         for row in self.row_data:
             for field_name in row.keys():
-                if field_name not in self.headers and field_name != Pipeline.ROW_NUM_FIELD:
-                    self.context.add_warning('consistency_check',
-                                             row.get(Pipeline.ROW_NUM_FIELD, 'unknown'),
+                if field_name not in self.headers:
+                    self.context.add_warning('consistency_check', row.row_num,
                         f"At some point, {field_name} was added to the row_data and not declared a header")
 
     def run_steps(self):
@@ -258,14 +249,9 @@ class Phase:
         """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
         numbering and error reporting.
         """
-        new_data = []
+        new_data = PhaseRecords()
         for row_index, row in enumerate(self.row_data):
-            # In proper execution, row data has already been enriched with original row numbers.
-            # In tests or under scripting, row numbers may not have been set so include now for future steps.
-            self.context.current_row = row.get(Pipeline.ROW_NUM_FIELD)
-            if self.context.current_row is None:
-                row[Pipeline.ROW_NUM_FIELD] = row_index
-                self.context.current_row = row.get(Pipeline.ROW_NUM_FIELD)
+            self.context.current_row = row.row_num
 
             if self.context.current_row in self.context.errors.keys():
                 # LMDTODO: This is an O(n) operation.  If instead the fact of the row having an error was part of the
@@ -275,15 +261,20 @@ class Phase:
             # NOw that we know the row number run the step and handle exceptions.
             try:
                 # LMDTODO: pass a deepcopy of row
-                new_data.append(step(row, context=self.context))
+                new_row = step(row, context=self.context)
+                # Ensure the original row_num is preserved with the new row
+                # returned from the step
+                if isinstance(new_row, PhaseRecord):
+                    new_row.row_num = self.context.current_row
+                    new_data.append(new_row)
+                else:
+                    new_data.append(PhaseRecord(self.context.current_row, new_row))
             except Exception as exc:
                 self.process_exception(exc, step, row)
                 if not isinstance(exc, DropRowException):
                     new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
                     # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
-        # TODO: Make sure the row number is correctly captured and is the same
-        # as it was before the step.
-        self.row_data = PhaseRecords(new_data)
+        self.row_data = new_data
 
     def process_exception(self, exc, step, row):
         if isinstance(exc, DropRowException):
