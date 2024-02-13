@@ -27,6 +27,7 @@ from phaser.cli import Command
 
 class RunPipelineCommand(Command):
     def add_arguments(self, parser):
+        parser.add_argument("--diff", help="diff step output", action="store_true")
         parser.add_argument("pipeline_name", help="pipeline to run")
         parser.add_argument("working_dir", help="directory to output phase results")
         parser.add_argument("source", help="file to use as initial source")
@@ -57,5 +58,5 @@ class RunPipelineCommand(Command):
         source = args.source
 
         print(f"Running pipeline '{Pipeline.__name__}'")
-        pipeline = Pipeline(working_dir, source)
+        pipeline = Pipeline(working_dir, source, diff=args.diff)
         pipeline.run()
