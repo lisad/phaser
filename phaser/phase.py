@@ -319,10 +319,21 @@ class Phase:
 class PhaseRecords(UserList):
     def __init__(self, *args):
         super().__init__(*args)
+        # Slicing a UserList results in constructing a brand new list, which
+        # would reset the row_num for our records if we were to recreated them
+        # from scratch. But if the elements of the incoming list are already
+        # `PhaseRecord`s, then just leave them alone.
+        # This is also generally helpful in steps where the record is mutated
+        # and returned rather than being constructed new.
         self.data = [
-            PhaseRecord(index, record)
+            PhaseRecords._recordize(index, record)
             for index, record in enumerate(self.data)
         ]
+
+    def _recordize(index, record):
+        if isinstance(record, PhaseRecord):
+            return record
+        return PhaseRecord(index, record)
 
     # Transform back into native list(dict)
     def to_records(self):
@@ -332,3 +343,6 @@ class PhaseRecord(UserDict):
     def __init__(self, row_num, record):
         super().__init__(record)
         self.row_num = row_num
+
+    def __repr__(self):
+        return f"(row_num={self.row_num}, data={super().__repr__()})"
