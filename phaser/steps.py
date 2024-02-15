@@ -5,7 +5,6 @@ from .column import Column
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
-DATAFRAME_STEP = "DATAFRAME_STEP"
 PROBE_VALUE = "__PROBE__"
 
 def row_step(step_function):

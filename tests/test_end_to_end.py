@@ -13,7 +13,7 @@ def test_employee_pipeline(tmpdir):
 @pytest.mark.skip("work in progress")
 def test_employee_pipeline_calculates_bonus():
     assert False
-    # LMDTODO: Make sure bonsues are calculated correctly! etc!
+    # LMDTODO: Make sure bonuses are calculated correctly! etc!
 
 
     # ALso add tests that introduce errors to employee data & run pipeline or phases?
