@@ -62,7 +62,7 @@ def test_error_provides_info(reconcile_phase_class):
 
     phase.run_steps()
     error = phase.context.errors[0]
-    assert error['row'][Pipeline.ROW_NUM_FIELD] == 0
+    assert error['row'].row_num == 0
     assert error['row']['deck'] == '21'
     assert error['step'] == 'assert_false'
     assert error['message'] == "AssertionError raised (assert False)"
