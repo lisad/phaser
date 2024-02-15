@@ -102,14 +102,28 @@ Then run:
 
 The construction of a Phase instance means that you can put a bunch of data transformation or
 data testing steps in a series, and the Phase does routine work for you in a robust way:
+
 * it will load your data from a source file or a previous phase
 * it will canonicalize field names to lowercase and strip dangerous characters
-* it will run your steps row-by-row or across the whole dataset, in order
+* it will run your steps row-by-row in order
 * it will save your results to a different file, usable as a checkpoint
 * it will report errors or warnings as summaries 
 
-In addition, this library organizes a variety of kinds of steps :
-* Pre-baked steps to check uniqueness values and do common transforms
-* Step wrappers to control errors, dropping rows, and warnings 
-* Steps that operate on rows represented as Python dicts
-* Steps that operate on pandas DataFrames (LMDTODO)
+Columns can be passed and formats and limits enforced at the beginning and at the end of Phases.
+Many steps that might otherwise have been programmed functionally are therefore available to
+declare.  Columns available so far:
+
+* IntColumn
+* FloatColumn
+* DateColumn
+* DateTimeColumn
+
+Then, any remaining work can be done in granular steps, which operate row by row (rows are Python dicts).
+
+* Pre-baked steps are available to check uniqueness values and do common transforms
+* Steps can drop rows with bad data
+* Steps can access context information
+* Steps can create warnings or errors
+
+Phases that reshape the entire dataset or operate on the entire dataset are
+handled separately because the error reporting, error handling and diffs are different.
