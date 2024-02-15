@@ -51,7 +51,7 @@ class PhaseBase(ABC):
         logger.info(f"{self.name} loading input from {source}")
         df = self.read_csv(source)
         self.headers = df.columns.values.tolist()
-        self.row_data = df.to_dict('records')
+        self.row_data = PhaseRecords(df.to_dict('records'))
 
     def save(self, destination):
         """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
@@ -64,7 +64,10 @@ class PhaseBase(ABC):
         * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
         """
 
-        pd.DataFrame(self.row_data).to_csv(destination, index=False, na_rep="NULL")
+        # Use the raw list(dict) form of the data, because DataFrame
+        # construction does something different with a subclass of Sequence and
+        # Mapping that results in the columns being re-ordered.
+        pd.DataFrame(self.row_data.to_records()).to_csv(destination, index=False, na_rep="NULL")
         logger.info(f"{self.name} saved output to {destination}")
 
     def process_exception(self, exc, step, row):
@@ -124,16 +127,17 @@ class DataFramePhase(PhaseBase):
     def run(self, source, destination):
         self.load(source)
         self.df_data = self.df_transform(self.df_data)
-        self.row_data = self.df_data.to_dict('records')
+        self.report_errors_and_warnings()
         if self.context.has_errors():
-            self.report_errors_and_warnings()
             raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
-        else:
-            self.report_errors_and_warnings()
-            self.save(destination)
+        self.save(destination)
 
+    @abstractmethod
     def df_transform(self, df_data):
-        raise PhaserException("Subclass DataFramePhase and define what to do in this method")
+        """ The df_transform method is implemented in subclasses of DataFramePhase.  Significant reshaping can be
+
+        """
+        raise PhaserException("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
 
     def load(self, source):
         self.df_data = self.read_csv(source)
@@ -148,28 +152,48 @@ class ReshapePhase(PhaseBase):
     dropping bad data), don't work well in a regular Phase and are hard to do diffs for.  This class solves
     just the problem of merging and splitting up rows.  Some reshape operations include
     * group by a field (and sum, or average, or apply another operation to the numeric fields associated)
-    * 'spread' functions (like DPLYR 0 LMDTODO is there apandas equivalent)
+    * 'spread' functions
 
     Note that just dropping or filtering rows one-by-one, or adding or removing columns no matter how much
-    other column values are involved, can be done in a regular phase.
+    other column values are involved, can be done in a regular phase, with the additional features like 'diff'
+    that a regular phase provides.
     """
 
     def __init__(self, name, context=None, error_policy=None):
         super().__init__(name, context=context, error_policy=error_policy)
 
+    @abstractmethod
     def reshape(self, row_data):
-        raise PhaserException("Subclass ReshapePhase and define what to do in the reshape method")
+        """ When ReshapePhase is implemented for a pipeline, this method takes a list of rows (as dicts) and returns
+        a new list of rows (as dicts), which could have a very different number of rows and/or columns.  The
+        rest of the class takes care of loading, saving, and reporting errors and warnings.
+        """
+        raise PhaserException("Subclass ReshapePhase and return new data version in this reshape method")
 
     def run(self, source, destination):
         self.load(source)
         self.row_data = self.reshape(self.row_data)
+        self.report_errors_and_warnings()
         if self.context.has_errors():
-            self.report_errors_and_warnings()
             raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
-        else:
-            self.report_errors_and_warnings()
-            self.save(destination)
+        self.save(destination)
 
+    def save(self, destination):
+        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
+        It should be easy to override this method to save in a different way, using different
+        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
+
+        CSV defaults chosen:
+        * separator character is ','
+        * encoding is UTF-8
+        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
+        """
+
+        # Use the raw list(dict) form of the data, because DataFrame
+        # construction does something different with a subclass of Sequence and
+        # Mapping that results in the columns being re-ordered.
+        pd.DataFrame(self.row_data).to_csv(destination, index=False, na_rep="NULL")
+        logger.info(f"{self.name} saved output to {destination}")
 
 class Phase(PhaseBase):
     """ The organizing principle for data transformation steps and column definitions is the phase.  A phase can

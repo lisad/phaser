@@ -29,15 +29,16 @@ def test_reshape(tmpdir):
     ]
 
 
-def test_reshape_pandas(tmpdir):
+def test_dataframe_phase(tmpdir):
     class MyPandasPhase(DataFramePhase):
         def df_transform(self, df):
             return df.pivot(index='location', columns='measure', values='value').reset_index()
 
     phase = MyPandasPhase("MyPandasPhase")
     phase.run(current_path / 'fixture_files' / 'locations.csv', tmpdir / 'output.csv')
-    assert len(phase.row_data) == 2
-    assert phase.row_data == [
+    row_data = phase.df_data.to_dict('records')
+    assert len(row_data) == 2
+    assert row_data == [
         {'location': 'hangar deck', 'temperature': '16', 'gamma radiation': '9.8 μR/h'},
         {'location': 'main engineering', 'temperature': '22', 'gamma radiation': '10.9 μR/h'}
     ]
@@ -63,5 +64,6 @@ def test_reshape_explode(tmpdir):
         csv.write('3,"Standard,Klingon"\n')
 
     phase.run(source=tmpdir/'languages.csv', destination=tmpdir/'language_list.csv')
-    assert len(phase.row_data) == 6
-    assert phase.row_data[5]['language'] == "Klingon"
+    row_data = phase.df_data.to_dict('records')
+    assert len(row_data) == 6
+    assert row_data[5]['language'] == "Klingon"
