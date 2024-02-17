@@ -6,8 +6,8 @@ build-backend = "hatchling.build"
 name = "phaser"
 version = "0.1"
 authors = [
-    {name="Jeff Kolesky", email="jeffkole@gmail.com"},
-    {name="Lisa Dusseault", email="lisa@rtfm.com"}
+    {name="Lisa Dusseault", email="lisa@rtfm.com"},
+    {name="Jeff Kolesky", email="jeff.kolesky@gmail.com"},
 ]
 requires-python = ">=3.11"
 readme = "README.md"
