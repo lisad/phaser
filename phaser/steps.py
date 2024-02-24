@@ -5,6 +5,7 @@ from .column import Column
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
+CONTEXT_STEP = "CONTEXT_STEP"
 PROBE_VALUE = "__PROBE__"
 
 def row_step(step_function):
@@ -38,6 +39,15 @@ def batch_step(step_function):
                 f"Step {step_function} returned a {result.__class__} rather than a list of rows")
         return result
     return _batch_step_wrapper
+
+
+def context_step(step_function):
+    @wraps(step_function)
+    def _context_step_wrapper(context, __probe__=None):
+        if __probe__ == PROBE_VALUE:
+            return CONTEXT_STEP
+        result = step_function(context)
+    return _context_step_wrapper
 
 
 def check_unique(column, strip=True, ignore_case=False):

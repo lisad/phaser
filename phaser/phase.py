@@ -4,7 +4,7 @@ import pandas as pd
 import logging
 from .column import make_strict_name, Column
 from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException
-from .steps import ROW_STEP, BATCH_STEP, PROBE_VALUE, row_step
+from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -339,7 +339,6 @@ class Phase(PhaseBase):
         df.drop(columns_exist_to_drop, axis=1, inplace=True)
         self.row_data = PhaseRecords(df.to_dict('records'))
 
-
     def check_headers_consistent(self):
         for row in self.row_data:
             for field_name in row.keys():
@@ -356,6 +355,8 @@ class Phase(PhaseBase):
                 self.execute_row_step(step)
             elif step_type == BATCH_STEP:
                 self.execute_batch_step(step)
+            elif step_type == CONTEXT_STEP:
+                self.execute_context_step(step)
             else:
                 raise Exception(f"Unknown step type {step_type}")
 
@@ -400,6 +401,15 @@ class Phase(PhaseBase):
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
             self.row_data = PhaseRecords([row for row in new_row_values])
+        except Exception as exc:
+            self.process_exception(exc, step, None)
+
+    def execute_context_step(self, step):
+        self.context.current_row = 'context'
+        try:
+            step(self.context)
+        except DropRowException as dre:
+            raise PhaserException("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:
             self.process_exception(exc, step, None)
 

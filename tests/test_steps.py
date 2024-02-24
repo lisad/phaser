@@ -1,7 +1,8 @@
 from pathlib import Path
 import pytest
 
-from phaser import check_unique, Phase, row_step, PipelineErrorException, Pipeline, sort_by, IntColumn
+from phaser import (check_unique, Phase, row_step, context_step, Pipeline, sort_by, IntColumn,
+                    PipelineErrorException, DropRowException, PhaserException)
 from fixtures import test_data_phase_class
 
 current_path = Path(__file__).parent
@@ -101,3 +102,26 @@ def test_with_col_obj():
     phase.load_data([{'id': 1}, {'id': 3}, {'id': 2}, {'id': 0}])
     phase.run_steps()
     assert all([phase.row_data[i]['id'] == i for i in range(4)])
+
+
+def test_context_step():
+    @context_step
+    def use_context(context):
+        context.add_variable("ship_name", "USS Enterprise")
+
+    phase = Phase(steps=[use_context])
+    phase.load_data([{}])
+    phase.run_steps()
+    assert phase.context.get("ship_name") == "USS Enterprise"
+
+
+def test_context_step_cant_raise_drop_row():
+    @context_step
+    def raise_inappropriate_exception(context):
+        raise DropRowException("Can we drop a row here? No we cannot.")
+
+    phase = Phase(steps=[raise_inappropriate_exception])
+    phase.load_data([{}])
+    with pytest.raises(PhaserException) as exc_info:
+        phase.run_steps()
+    assert "DropRowException can't" in exc_info.value.message
