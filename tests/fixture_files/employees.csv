@@ -1,3 +1,3 @@
 employeeNumber,firstName,lastName,payType,paidPer,payRate,bonusAmount
-1,Benjamin,Sisko,"salary", "Year","188625","30000"
-2,Kira,Nerys,"salary", "Year","118625","20000"
+1,Benjamin,Sisko,"salary","Year","188625","30000"
+2,Kira,Nerys,"salary","Year","118625","20000"
