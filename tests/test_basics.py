@@ -25,6 +25,7 @@ def test_pipeline_source_none(tmpdir, reconcile_phase_class):
         p = Pipeline(phases=[reconcile_phase_class], working_dir=tmpdir)
         p.run()
 
+
 def test_load_and_save(tmpdir):
     source = current_path / "fixture_files" / "crew.csv"
     dest = os.path.join(tmpdir, "Transformed-crew.csv")
@@ -34,6 +35,18 @@ def test_load_and_save(tmpdir):
         first_line = f.readline()
     assert first_line.startswith("First name,")
     assert first_line.endswith(",pay per\n")
+
+
+@pytest.mark.skip("This is annoying.  it's easy for CSVs to have quotes and spaces, but the combination is bad.")
+def test_load_quoted_values(tmpdir):
+    source = tmpdir / 'quoted_values.csv'
+    with open(source, 'w') as f:
+        # Importantly, Active is quoted AND has a space before it.
+        f.write("""id,name,status\n1,"Jean-Luc Picard", "Active"\n""")
+    phase= Phase()
+    phase.load(source)
+    # If values are not stripped of space and converted, status = ' "Active"'
+    assert phase.row_data[0]['status'] == "Active"
 
 
 def test_save_only_some_columns(tmpdir):

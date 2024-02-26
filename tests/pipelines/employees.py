@@ -85,7 +85,10 @@ class Validator(Phase):
 
 
 class Transformer(Phase):
-    columns = []
+    columns = [
+        FloatColumn(name='Pay rate'),
+        FloatColumn(name="bonusAmount")
+    ]
     steps = [
         combine_full_name,
         calculate_annual_salary,
