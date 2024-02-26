@@ -1,7 +1,8 @@
 import inspect
 import logging
 import os
-from pathlib import PosixPath
+import pandas as pd
+from pathlib import Path, PosixPath
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -45,12 +46,14 @@ def _stringify_step(step):
 
 
 class Context:
-    def __init__(self, variables=None):
+    def __init__(self, variables=None, working_dir=None):
         self.errors = {}
         self.warnings = {}
         self.variables = variables or {}
         self.current_row = None
         self.dropped_rows = {}
+        self.outputs = []
+        self.working_dir = working_dir
 
     def add_error(self, step, row, message):
         # LMDTODO Am I passing row or getting row from context?
@@ -86,6 +89,29 @@ class Context:
     def has_errors(self):
         return self.errors != {}
 
+    def add_output(self, name, data):
+        # At present outputs must be in record format and save to CSV, but this should be expanded.
+        self.outputs.append(ReadWriteObject(name, data, to_save=True))
+
+    def save_your_outputs(self, directory):
+        for item in self.outputs:
+            # Since context is passed from Phase to Phase, only save the new ones with to_save=True
+            if item.to_save:
+                filename = directory / f"{item.name}.csv"
+                if os.path.exists(filename):
+                    raise PhaserException(f"Output with name '{filename}' exists.  Aborting before overwrite.")
+                pd.DataFrame(item.data).to_csv(filename, index=False, na_rep="NULL")
+                logger.info(f"Extra output {item.name} saved to {directory}")
+                item.to_save = False
+
+
+class ReadWriteObject:
+    def __init__(self, name, data=None, to_save=True):
+        self.name = name
+        self.format = 'csv'
+        self.data = data
+        self.to_save = to_save
+
 
 class Pipeline:
     # Subclasses can override here to set values for all instances, or override in instantiation
@@ -106,6 +132,7 @@ class Pipeline:
         assert self.source is not None and self.working_dir is not None
         self.phases = phases or self.__class__.phases
         self.phase_instances = []
+        self.context = Context(working_dir = self.working_dir)
 
     def setup_phases(self):
         """ Instantiates phases passed as classes, and assigns unique names to phases"""
@@ -113,7 +140,9 @@ class Pipeline:
         for phase in self.phases:
             phase_instance = phase
             if inspect.isclass(phase):
-                phase_instance = phase()
+                phase_instance = phase(context=self.context)
+            else:
+                phase.context = self.context
             name = phase_instance.name
             i = 1
             while name in phase_names:
@@ -130,6 +159,7 @@ class Pipeline:
         for phase in self.phase_instances:
             destination = self.get_destination(phase)
             phase.run(source=next_source, destination=destination)
+            self.context.save_your_outputs(self.working_dir)
             next_source = destination  # for next phase in chain
 
     def get_destination(self, phase):

@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from collections import UserDict, UserList
 import pandas as pd
+from pathlib import Path
 import logging
 from .column import make_strict_name, Column
 from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException
@@ -37,11 +38,11 @@ class PhaseBase(ABC):
         * Raises errors loading 'bad lines', rather than skip
         """
         return pd.read_csv(source,
-                         dtype='str',
-                         sep=',',
-                         skip_blank_lines=True,
-                         index_col=False,
-                         comment='#')
+                           dtype='str',
+                           sep=',',
+                           skip_blank_lines=True,
+                           index_col=False,
+                           comment='#')
 
     def load(self, source):
         """ When creating a Phase, it may be desirable to subclass it and override the load()
@@ -67,6 +68,9 @@ class PhaseBase(ABC):
         # Use the raw list(dict) form of the data, because DataFrame
         # construction does something different with a subclass of Sequence and
         # Mapping that results in the columns being re-ordered.
+        if not isinstance(destination, str):
+            if Path(destination).is_dir():
+                destination = destination / self.name
         pd.DataFrame(self.row_data.to_records()).to_csv(destination, index=False, na_rep="NULL")
         logger.info(f"{self.name} saved output to {destination}")
 
