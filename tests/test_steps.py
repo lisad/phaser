@@ -2,7 +2,7 @@ from pathlib import Path
 import pytest
 
 from phaser import (check_unique, Phase, row_step, context_step, Pipeline, sort_by, IntColumn,
-                    PipelineErrorException, DropRowException, PhaserException)
+                    PipelineErrorException, DropRowException, PhaserException, read_csv)
 from fixtures import test_data_phase_class
 
 current_path = Path(__file__).parent
@@ -28,7 +28,7 @@ def test_context_available_to_step():
 
 def test_builtin_step():
     phase = Phase(steps=[check_unique('crew id')])
-    phase.load(current_path / 'fixture_files' / 'crew.csv')
+    phase.load_data(read_csv(current_path / 'fixture_files' / 'crew.csv'))
     phase.run_steps()
 
 

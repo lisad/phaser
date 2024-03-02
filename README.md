@@ -100,30 +100,42 @@ Then run:
 
 ## Features
 
-The construction of a Phase instance means that you can put a bunch of data transformation or
-data testing steps in a series, and the Phase does routine work for you in a robust way:
+A phaser Pipeline organizes one or more Phases and does I/O, marshalling source data and
+checkpoint data between Phases.  It will
 
-* it will load your data from a source file or a previous phase
-* it will canonicalize field names to lowercase and strip dangerous characters
-* it will run your steps row-by-row in order
-* it will save your results to a different file, usable as a checkpoint
-* it will report errors or warnings as summaries 
+* load source data from files or a previous phase
+* save checkpoint data between phases
+* save outputs
+* marshall inputs and outputs between phases
+
+Each Phase runs one or more steps with individual data transformation or validation
+logic, and the Phase does routine work in a robust way:
+
+* transform column headers to preferred name/case
+* routine parsing and data typing
+* report errors or warnings as summaries
+
+Different kinds of Phases operate slightly differently:
+
+* regular Phase operates row-by-row and reports errors/warnings by row
+* regular Phase offer access to diffs to examine results or debug steps
+* reshaping Phases have fewer restrictions to allow data sources to be combined, split or reshaped
 
 Columns can be passed and formats and limits enforced at the beginning and at the end of Phases.
 Many steps that might otherwise have been programmed functionally are therefore available to
-declare.  Columns available so far:
+declare.  Columns and features available so far:
 
-* IntColumn
-* FloatColumn
-* DateColumn
-* DateTimeColumn
+* IntColumn, FloatColumn
+* DateColumn, DateTimeColumn
+* Range validation, list of allowed values
+* Checking for nulls/blanks, assigning default values
 
-Then, any remaining work can be done in granular steps, which operate row by row (rows are Python dicts).
+For your data pipeline project, most of the work unique to that project can be done within steps
+that operate in a Phase to give structure and debuggability:
 
-* Pre-baked steps are available to check uniqueness values and do common transforms
+* Steps are individually testable with simple pythonic ways to pass row data and verify results
 * Steps can drop rows with bad data
 * Steps can access context information
 * Steps can create warnings or errors
+* Pre-baked steps are available to check uniqueness values and do common transforms
 
-Phases that reshape the entire dataset or operate on the entire dataset are
-handled separately because the error reporting, error handling and diffs are different.

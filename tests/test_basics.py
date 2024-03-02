@@ -1,7 +1,7 @@
 import pandas
 import pandas as pd
 
-from phaser import Phase, row_step, Pipeline, Column, IntColumn
+from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv
 import pytest  # noqa # pylint: disable=unused-import
 import os
 from pathlib import Path
@@ -9,6 +9,13 @@ from fixtures import reconcile_phase_class, test_data_phase_class, null_step_pha
 
 current_path = Path(__file__).parent
 
+
+def test_phase_load_data():
+    phase = Phase()
+    data = [{'id': 1, 'location': 'bridge'}, {'id': 2, 'location': 'engineering'}]
+    phase.load_data(data)
+    assert list(phase.headers) == ['id', 'location']
+    assert phase.row_data == data
 
 def test_pipeline(tmpdir, null_step_phase, reconcile_phase_class):
     # This pipeline should run two phases (one an instance, one a class) and have both outputs
@@ -24,17 +31,6 @@ def test_pipeline_source_none(tmpdir, reconcile_phase_class):
     with pytest.raises(AssertionError):
         p = Pipeline(phases=[reconcile_phase_class], working_dir=tmpdir)
         p.run()
-
-def test_load_and_save(tmpdir):
-    source = current_path / "fixture_files" / "crew.csv"
-    dest = os.path.join(tmpdir, "Transformed-crew.csv")
-    Phase().run(source, dest)
-    assert os.path.exists(dest)
-    with open(dest) as f:
-        first_line = f.readline()
-    assert first_line.startswith("First name,")
-    assert first_line.endswith(",pay per\n")
-
 
 def test_save_only_some_columns(tmpdir):
     # Possibly this test would be more robust if we call 'run' and ensure that prepare_for_save is called
@@ -62,10 +58,9 @@ def test_subclassing(tmpdir):
     class Transformer(Phase):
         pass
 
-    source = current_path / "fixture_files" / "crew.csv"
-
     t = Transformer()
-    t.run(source, tmpdir / "test_output.csv")
+    t.load_data(read_csv(current_path / "fixture_files" / "crew.csv"))
+    t.run(tmpdir / "test_output.csv")
     assert os.path.exists(os.path.join(tmpdir, "test_output.csv"))
 
 
@@ -85,10 +80,9 @@ def phase_accepts_single_col():
 
 
 def test_have_and_run_steps(tmpdir):
-    source = current_path / "fixture_files" / "crew.csv"
     transformer = Phase(steps=[full_name_step])
 
-    transformer.load(source)
+    transformer.load_data(read_csv(current_path / "fixture_files" / "crew.csv"))
     transformer.run_steps()
     assert "full name" in transformer.row_data[1]
 
@@ -105,11 +99,9 @@ def test_duplicate_column_names(tmpdir):
 
 
 def test_do_column_stuff(tmpdir):
-    source = current_path / "fixture_files" / "crew.csv"
-    Phase(columns=[
-            Column("First name"),
-            Column("Last name")
-        ]).run(source, tmpdir / "Transformed-employees-columns.csv")
+    phase = Phase(columns=[Column("First name"), Column("Last name")])
+    phase.load_data(read_csv(current_path / "fixture_files" / "crew.csv"))
+    phase.run(tmpdir / "Transformed-employees-columns.csv")
     assert os.path.exists(os.path.join(tmpdir, "Transformed-employees-columns.csv"))
 
 

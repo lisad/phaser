@@ -1,8 +1,8 @@
 import pytest
 from pathlib import Path
 from collections import defaultdict
-from pandas import DataFrame, pivot, read_csv
-from phaser import ReshapePhase, DataFramePhase
+import pandas as pd
+from phaser import ReshapePhase, DataFramePhase, read_csv
 
 current_path = Path(__file__).parent
 
@@ -21,7 +21,8 @@ def test_reshape(tmpdir):
             return location_list
 
     phase = MyReshape("myreshape")
-    phase.run(current_path / 'fixture_files' / 'locations.csv', tmpdir/'output.csv')
+    phase.load_data(read_csv(current_path / 'fixture_files' / 'locations.csv'))
+    phase.run(tmpdir/'output.csv')
     assert len(phase.row_data) == 2
     assert phase.row_data == [
         {'location': 'hangar deck', 'temperature': '16', 'gamma radiation': '9.8 μR/h'},
@@ -35,7 +36,8 @@ def test_dataframe_phase(tmpdir):
             return df.pivot(index='location', columns='measure', values='value').reset_index()
 
     phase = MyPandasPhase("MyPandasPhase")
-    phase.run(current_path / 'fixture_files' / 'locations.csv', tmpdir / 'output.csv')
+    phase.load_data(read_csv(current_path / 'fixture_files' / 'locations.csv'))
+    phase.run( tmpdir / 'output.csv')
     row_data = phase.df_data.to_dict('records')
     assert len(row_data) == 2
     assert row_data == [
@@ -63,7 +65,8 @@ def test_reshape_explode(tmpdir):
         csv.write('2,"Standard,Vulcan,Romulan"\n')
         csv.write('3,"Standard,Klingon"\n')
 
-    phase.run(source=tmpdir/'languages.csv', destination=tmpdir/'language_list.csv')
+    phase.load_data(read_csv(tmpdir / 'languages.csv'))
+    phase.run(destination=tmpdir/'language_list.csv')
     row_data = phase.df_data.to_dict('records')
     assert len(row_data) == 6
     assert row_data[5]['language'] == "Klingon"

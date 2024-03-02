@@ -24,35 +24,17 @@ class PhaseBase(ABC):
     def run(self):
         pass
 
-    def read_csv(self, source):
-        """ Includes the default settings phaser uses with panda's read_csv. Can be overridden to provide
-        different read_csv settings.
-        Defaults:
-        * assume all column values are strings, so leading zeros or trailing zeros don't get destroyed.
-        * assume ',' value-delimiter
-        * skip_blank_lines=True: allows blank AND '#'-led rows to be skipped and still find header row
-        * doesn't use indexing
-        * does attempt to decompress common compression formats if file uses them
-        * assume UTF-8 encoding
-        * uses '#' as the leading character to assume a row is comment
-        * Raises errors loading 'bad lines', rather than skip
-        """
-        return pd.read_csv(source,
-                           dtype='str',
-                           sep=',',
-                           skip_blank_lines=True,
-                           index_col=False,
-                           comment='#')
-
-    def load(self, source):
-        """ When creating a Phase, it may be desirable to subclass it and override the load()
-        function to do a different kind of loading entirely.  Be sure to load the row_data into the
-        instance's row_data attribute as an iterable (list) containing dicts.
-        """
-        logger.info(f"{self.name} loading input from {source}")
-        df = self.read_csv(source)
-        self.headers = df.columns.values.tolist()
-        self.row_data = PhaseRecords(df.to_dict('records'))
+    def load_data(self, data):
+        """ Call this method to pass record-oriented data to the Phase before calling 'run' """
+        if isinstance(data, pd.DataFrame):
+            self.headers = data.columns.values.tolist()
+            data = data.to_dict('records')
+        if isinstance(data, list):
+            if len(data) > 0 and self.headers is None:
+                self.headers = data[0].keys()
+            self.row_data = PhaseRecords(data)
+        else:
+            raise PhaserException("Phase load_data called with unsupported data format")
 
     def save(self, destination):
         """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
@@ -128,8 +110,7 @@ class DataFramePhase(PhaseBase):
         super().__init__(name, context=context, error_policy=error_policy)
         self.df_data = None
 
-    def run(self, source, destination):
-        self.load(source)
+    def run(self, destination):
         self.df_data = self.df_transform(self.df_data)
         self.report_errors_and_warnings()
         if self.context.has_errors():
@@ -143,8 +124,8 @@ class DataFramePhase(PhaseBase):
         """
         raise PhaserException("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
 
-    def load(self, source):
-        self.df_data = self.read_csv(source)
+    def load_data(self, data):
+        self.df_data = data
 
     def save(self, destination):
         self.df_data.to_csv(destination, index=False, na_rep="NULL")
@@ -174,8 +155,7 @@ class ReshapePhase(PhaseBase):
         """
         raise PhaserException("Subclass ReshapePhase and return new data version in this reshape method")
 
-    def run(self, source, destination):
-        self.load(source)
+    def run(self, destination):
         self.row_data = self.reshape(self.row_data)
         self.report_errors_and_warnings()
         if self.context.has_errors():
@@ -269,9 +249,8 @@ class Phase(PhaseBase):
         self.row_data = PhaseRecords()
         self.headers = None
 
-    def run(self, source, destination):
+    def run(self, destination):
         # Break down run into load, steps, error handling, save and delegate
-        self.load(source)
         self.do_column_stuff()
         self.run_steps()
         if self.context.has_errors():
@@ -281,14 +260,6 @@ class Phase(PhaseBase):
             self.report_errors_and_warnings()
             self.prepare_for_save()
             self.save(destination)
-
-    def load_data(self, data):
-        """ Alternate load method is useful in tests or in scripting Phase class where the data is not in a file.
-        This assumes data is in the form of a list of dicts where dicts have consistent keys (e.g. pandas 'record'
-        format) """
-        if len(data) > 0:
-            self.headers = data[0].keys()
-        self.row_data = PhaseRecords(data)
 
     def do_column_stuff(self):
         @row_step

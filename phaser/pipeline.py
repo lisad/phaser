@@ -2,6 +2,7 @@ import inspect
 import logging
 import os
 import pandas as pd
+from phaser.util import read_csv
 from pathlib import Path, PosixPath
 
 logger = logging.getLogger('phaser')
@@ -113,6 +114,9 @@ class ReadWriteObject:
         self.to_save = to_save
 
 
+
+
+
 class Pipeline:
     # Subclasses can override here to set values for all instances, or override in instantiation
     working_dir = None
@@ -158,7 +162,10 @@ class Pipeline:
         next_source = self.source
         for phase in self.phase_instances:
             destination = self.get_destination(phase)
-            phase.run(source=next_source, destination=destination)
+            logger.info(f"Loading input from {next_source} for {phase.name}")
+            df = read_csv(next_source)
+            phase.load_data(df)
+            phase.run(destination=destination)
             self.context.save_your_outputs(self.working_dir)
             next_source = destination  # for next phase in chain
 
