@@ -3,7 +3,7 @@ import logging
 import os
 import pandas as pd
 from phaser.util import read_csv
-from pathlib import Path, PosixPath
+from pathlib import PosixPath
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -47,6 +47,9 @@ def _stringify_step(step):
 
 
 class Context:
+    """ Context is created by the pipeline, and passed to each phase.  Thus, it can be used
+    to carry extra data or variable values between phases if necessary. """
+
     def __init__(self, variables=None, working_dir=None):
         self.errors = {}
         self.warnings = {}
@@ -94,17 +97,6 @@ class Context:
         # At present outputs must be in record format and save to CSV, but this should be expanded.
         self.outputs.append(ReadWriteObject(name, data, to_save=True))
 
-    def save_your_outputs(self, directory):
-        for item in self.outputs:
-            # Since context is passed from Phase to Phase, only save the new ones with to_save=True
-            if item.to_save:
-                filename = directory / f"{item.name}.csv"
-                if os.path.exists(filename):
-                    raise PhaserException(f"Output with name '{filename}' exists.  Aborting before overwrite.")
-                pd.DataFrame(item.data).to_csv(filename, index=False, na_rep="NULL")
-                logger.info(f"Extra output {item.name} saved to {directory}")
-                item.to_save = False
-
 
 class ReadWriteObject:
     def __init__(self, name, data=None, to_save=True):
@@ -114,11 +106,9 @@ class ReadWriteObject:
         self.to_save = to_save
 
 
-
-
-
 class Pipeline:
-    # Subclasses can override here to set values for all instances, or override in instantiation
+    """ Pipeline handles running phases in order.  It also handles I/O and marshalling what
+    outputs from phases get used as inputs in later phases.  """
     working_dir = None
     source = None
     phases = []
@@ -136,10 +126,11 @@ class Pipeline:
         assert self.source is not None and self.working_dir is not None
         self.phases = phases or self.__class__.phases
         self.phase_instances = []
-        self.context = Context(working_dir = self.working_dir)
+        self.context = Context(working_dir=self.working_dir)
 
     def setup_phases(self):
-        """ Instantiates phases passed as classes, and assigns unique names to phases"""
+        """ Instantiates phases passed as classes, assigns unique names to phases, and passes
+         Context in also. """
         phase_names = []
         for phase in self.phases:
             phase_instance = phase
@@ -167,15 +158,25 @@ class Pipeline:
 
     def run_phase(self, phase, source, destination):
         logger.info(f"Loading input from {source} for {phase.name}")
-        input = self.load(source)
-        phase.load_data(input)
+        data = self.load(source)
+        phase.load_data(data)
         results = phase.run()
         self.save(results, destination)
-        self.context.save_your_outputs(self.working_dir)
+        self.save_extra_outputs()
         logger.info(f"{phase.name} saved output to {destination}")
         if self.context.has_errors():
             raise PipelineErrorException(f"Phase '{phase.name}' failed with {len(self.context.errors.keys())} errors.")
 
+    def save_extra_outputs(self):
+        for item in self.context.outputs:
+            # Since context is passed from Phase to Phase, only save the new ones with to_save=True
+            if item.to_save:
+                filename = self.working_dir / f"{item.name}.csv"
+                if os.path.exists(filename):
+                    raise PhaserException(f"Output with name '{filename}' exists.  Aborting before overwrite.")
+                pd.DataFrame(item.data).to_csv(filename, index=False, na_rep="NULL")
+                logger.info(f"Extra output {item.name} saved to {self.working_dir}")
+                item.to_save = False
 
     def load(self, next_source):
         """ The load method can be overridden to apply a pipeline-specific way of loading data.
@@ -183,7 +184,7 @@ class Pipeline:
         return read_csv(next_source).to_dict('records')
 
     def save(self, results, destination):
-        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
+        """ This method saves the result of the Phase operating on the batch, in phaser's preferred format.
         It should be easy to override this method to save in a different way, using different
         parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
 
@@ -196,9 +197,6 @@ class Pipeline:
         # Use the raw list(dict) form of the data, because DataFrame
         # construction does something different with a subclass of Sequence and
         # Mapping that results in the columns being re-ordered.
-        if not isinstance(destination, str):
-            if Path(destination).is_dir():
-                destination = destination / self.name
         pd.DataFrame(results).to_csv(destination, index=False, na_rep="NULL")
 
     def get_destination(self, phase):

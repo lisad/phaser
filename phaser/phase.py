@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from collections import UserDict, UserList
 import pandas as pd
-from pathlib import Path
 import logging
 from .column import make_strict_name, Column
 from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException
@@ -20,12 +19,10 @@ class PhaseBase(ABC):
         self.headers = None
         self.row_data = None
 
-    @abstractmethod
-    def run(self):
-        pass
-
     def load_data(self, data):
-        """ Call this method to pass record-oriented data to the Phase before calling 'run' """
+        """ Call this method to pass record-oriented data to the Phase before calling 'run'
+        Can be overridden to load data in a different structure.
+        Used in phaser's builtin phases - by regular Phase and ReshapePhase. """
         if isinstance(data, pd.DataFrame):
             self.headers = data.columns.values.tolist()
             data = data.to_dict('records')
@@ -35,6 +32,12 @@ class PhaseBase(ABC):
             self.row_data = PhaseRecords(data)
         else:
             raise PhaserException("Phase load_data called with unsupported data format")
+
+    @abstractmethod
+    def run(self):
+        """ Each kind of phase has a different process for doing its work, so this method must
+        be overridden.  """
+        pass
 
     def process_exception(self, exc, step, row):
         """
@@ -90,7 +93,7 @@ class DataFramePhase(PhaseBase):
         super().__init__(name, context=context, error_policy=error_policy)
         self.df_data = None
 
-    def run(self, destination):
+    def run(self):
         self.df_data = self.df_transform(self.df_data)
         self.report_errors_and_warnings()
         return self.df_data.to_dict('records')
@@ -103,6 +106,7 @@ class DataFramePhase(PhaseBase):
         raise PhaserException("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
 
     def load_data(self, data):
+        # Overrides the regular load_data because we just want to accept dataframe and keep it in df format.
         self.df_data = data
 
 
@@ -134,22 +138,6 @@ class ReshapePhase(PhaseBase):
         self.report_errors_and_warnings()
         return self.row_data
 
-    def save(self, destination):
-        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
-        It should be easy to override this method to save in a different way, using different
-        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
-
-        CSV defaults chosen:
-        * separator character is ','
-        * encoding is UTF-8
-        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
-        """
-
-        # Use the raw list(dict) form of the data, because DataFrame
-        # construction does something different with a subclass of Sequence and
-        # Mapping that results in the columns being re-ordered.
-        pd.DataFrame(self.row_data).to_csv(destination, index=False, na_rep="NULL")
-        logger.info(f"{self.name} saved output to {destination}")
 
 class Phase(PhaseBase):
     """ The organizing principle for data transformation steps and column definitions is the phase.  A phase can
@@ -371,6 +359,7 @@ class PhaseRecords(UserList):
     # Transform back into native list(dict)
     def to_records(self):
         return [ r.data for r in self.data ]
+
 
 class PhaseRecord(UserDict):
     def __init__(self, row_num, record):

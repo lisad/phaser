@@ -1,11 +1,10 @@
-import pandas
 import pandas as pd
 
 from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, PipelineErrorException
 import pytest  # noqa # pylint: disable=unused-import
 import os
 from pathlib import Path
-from fixtures import reconcile_phase_class, test_data_phase_class, null_step_phase
+from fixtures import reconcile_phase_class, null_step_phase
 
 current_path = Path(__file__).parent
 
@@ -16,6 +15,7 @@ def test_phase_load_data():
     phase.load_data(data)
     assert list(phase.headers) == ['id', 'location']
     assert phase.row_data == data
+
 
 def test_pipeline(tmpdir, null_step_phase, reconcile_phase_class):
     # This pipeline should run two phases (one an instance, one a class) and have both outputs
@@ -32,9 +32,9 @@ def test_pipeline_source_none(tmpdir, reconcile_phase_class):
         p = Pipeline(phases=[reconcile_phase_class], working_dir=tmpdir)
         p.run()
 
-def test_save_only_some_columns():
-    # Possibly this test would be more robust if we call 'run' and ensure that prepare_for_save is called
-    # and drops columns before save, rather than explicitly call here.
+
+def test_return_only_some_columns():
+    # If a column is marked for NOT saving, it shouldn't be returned to the Pipeline to save.
     phase = Phase(name="transform",
                   columns=[Column(name="ID", save=True), Column(name="Status", save=False)])
     phase.load_data([{"ID": 1, "Status": "onboard"}])
@@ -57,10 +57,11 @@ def test_subclassing(tmpdir):
         pass
 
     t = Transformer()
-    input = read_csv(current_path / "fixture_files" / "crew.csv").to_dict('records')
-    t.load_data(input)
+    data = read_csv(current_path / "fixture_files" / "crew.csv").to_dict('records')
+    t.load_data(data)
     results = t.run()
-    assert len(results) == len(input)
+    assert len(results) == len(data)
+
 
 @row_step
 def full_name_step(row, **kwargs):
@@ -93,6 +94,7 @@ def test_duplicate_column_names(tmpdir):
     # TODO - finish this test when we are able to - now that read_csv is a util that wraps
     # pandas.read_csv maybe we can look at the column names and look for duplicates without the #
 
+
 def test_column_error_drops_row():
     col = IntColumn(name='level', min_value=0, on_error='drop_row')
     phase = Phase("test", columns=[col])
@@ -122,18 +124,18 @@ def test_drop_field_during_step(tmpdir):
 
     col = IntColumn(name='crew id', min_value=1)
     phase = Phase('test', columns=[col], steps=[drop_step])
-    phase.run(source=current_path / 'fixture_files' / 'crew.csv',
-              destination=tmpdir / 'tmp.csv')
-    output = pandas.read_csv(tmpdir / 'tmp.csv').to_dict('records')
+    phase.load_data(read_csv(current_path / 'fixture_files' / 'crew.csv').to_dict('records'))
+    output = phase.run()
     for row in output:
         assert row['crew id'] in ["1", "2"]
+
 
 def test_phase_saved_even_if_error(tmpdir):
     col = IntColumn(name='level', min_value=0)
     phase = Phase("test", columns=[col])
     with open(tmpdir / 'negative-level.csv', 'w') as f:
         f.write('crew member,level\n"B\'Elanna Torres",-1\n')
-    pipeline = Pipeline(tmpdir, tmpdir / 'negative-level.csv', phases = [phase])
+    pipeline = Pipeline(tmpdir, tmpdir / 'negative-level.csv', phases=[phase])
     pipeline.setup_phases()
     with pytest.raises(PipelineErrorException):
         pipeline.run_phase(phase, tmpdir / 'negative-level.csv', tmpdir / 'test-saved-despite-error.csv')
