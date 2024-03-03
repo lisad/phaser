@@ -173,6 +173,9 @@ class Pipeline:
         self.save(results, destination)
         self.context.save_your_outputs(self.working_dir)
         logger.info(f"{phase.name} saved output to {destination}")
+        if self.context.has_errors():
+            raise PipelineErrorException(f"Phase '{phase.name}' failed with {len(self.context.errors.keys())} errors.")
+
 
     def load(self, next_source):
         """ The load method can be overridden to apply a pipeline-specific way of loading data.

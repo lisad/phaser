@@ -93,14 +93,12 @@ class DataFramePhase(PhaseBase):
     def run(self, destination):
         self.df_data = self.df_transform(self.df_data)
         self.report_errors_and_warnings()
-        if self.context.has_errors():
-            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
         return self.df_data.to_dict('records')
 
     @abstractmethod
     def df_transform(self, df_data):
         """ The df_transform method is implemented in subclasses of DataFramePhase.  Significant reshaping can be
-
+        done because data is not processed row-by-row, and row numbers are not reported on in error reporting.
         """
         raise PhaserException("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
 
@@ -134,8 +132,6 @@ class ReshapePhase(PhaseBase):
     def run(self):
         self.row_data = self.reshape(self.row_data)
         self.report_errors_and_warnings()
-        if self.context.has_errors():
-            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
         return self.row_data
 
     def save(self, destination):
@@ -229,12 +225,8 @@ class Phase(PhaseBase):
         # Break down run into load, steps, error handling, save and delegate
         self.do_column_stuff()
         self.run_steps()
-        if self.context.has_errors():
-            self.report_errors_and_warnings()
-            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
-        else:
-            self.report_errors_and_warnings()
-            self.prepare_for_save()
+        self.report_errors_and_warnings()
+        self.prepare_for_save()
         return self.row_data.to_records()
 
     def do_column_stuff(self):
