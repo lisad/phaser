@@ -162,12 +162,41 @@ class Pipeline:
         next_source = self.source
         for phase in self.phase_instances:
             destination = self.get_destination(phase)
-            logger.info(f"Loading input from {next_source} for {phase.name}")
-            df = read_csv(next_source)
-            phase.load_data(df)
-            phase.run(destination=destination)
-            self.context.save_your_outputs(self.working_dir)
-            next_source = destination  # for next phase in chain
+            self.run_phase(phase, next_source, destination)
+            next_source = destination
+
+    def run_phase(self, phase, source, destination):
+        logger.info(f"Loading input from {source} for {phase.name}")
+        input = self.load(source)
+        phase.load_data(input)
+        results = phase.run()
+        self.save(results, destination)
+        self.context.save_your_outputs(self.working_dir)
+        logger.info(f"{phase.name} saved output to {destination}")
+
+    def load(self, next_source):
+        """ The load method can be overridden to apply a pipeline-specific way of loading data.
+        Phaser default is to read data from a CSV file. """
+        return read_csv(next_source).to_dict('records')
+
+    def save(self, results, destination):
+        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
+        It should be easy to override this method to save in a different way, using different
+        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
+
+        CSV defaults chosen:
+        * separator character is ','
+        * encoding is UTF-8
+        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
+        """
+
+        # Use the raw list(dict) form of the data, because DataFrame
+        # construction does something different with a subclass of Sequence and
+        # Mapping that results in the columns being re-ordered.
+        if not isinstance(destination, str):
+            if Path(destination).is_dir():
+                destination = destination / self.name
+        pd.DataFrame(results).to_csv(destination, index=False, na_rep="NULL")
 
     def get_destination(self, phase):
         source_filename = None

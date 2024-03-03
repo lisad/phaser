@@ -32,17 +32,15 @@ def test_pipeline_source_none(tmpdir, reconcile_phase_class):
         p = Pipeline(phases=[reconcile_phase_class], working_dir=tmpdir)
         p.run()
 
-def test_save_only_some_columns(tmpdir):
+def test_save_only_some_columns():
     # Possibly this test would be more robust if we call 'run' and ensure that prepare_for_save is called
     # and drops columns before save, rather than explicitly call here.
     phase = Phase(name="transform",
                   columns=[Column(name="ID", save=True), Column(name="Status", save=False)])
     phase.load_data([{"ID": 1, "Status": "onboard"}])
-    phase.prepare_for_save()
-    phase.save(tmpdir / "test_drop_column.csv")
-    with open(tmpdir / "test_drop_column.csv") as f:
-        first_line = f.readline()
-        assert first_line == "ID\n"
+    results = phase.run()
+    assert "ID" in results[0].keys()
+    assert "Status" not in results[0].keys()
 
 
 def test_drop_col_works_if_not_exist(tmpdir):
@@ -59,10 +57,10 @@ def test_subclassing(tmpdir):
         pass
 
     t = Transformer()
-    t.load_data(read_csv(current_path / "fixture_files" / "crew.csv"))
-    t.run(tmpdir / "test_output.csv")
-    assert os.path.exists(os.path.join(tmpdir, "test_output.csv"))
-
+    input = read_csv(current_path / "fixture_files" / "crew.csv").to_dict('records')
+    t.load_data(input)
+    results = t.run()
+    assert len(results) == len(input)
 
 @row_step
 def full_name_step(row, **kwargs):
@@ -92,18 +90,8 @@ def test_duplicate_column_names(tmpdir):
     # See https://github.com/pandas-dev/pandas/issues/13262 - another reason to write our own CSV reader
     with open(tmpdir / 'dupe-column-name.csv', 'w') as f:
         f.write("id,name,name\n1,Percy,Jackson\n")
-    phase = Phase()
-    with pytest.raises(Exception):
-        phase.load(tmpdir / 'dupe-column-name.csv')
-        print(phase.row_data)
-
-
-def test_do_column_stuff(tmpdir):
-    phase = Phase(columns=[Column("First name"), Column("Last name")])
-    phase.load_data(read_csv(current_path / "fixture_files" / "crew.csv"))
-    phase.run(tmpdir / "Transformed-employees-columns.csv")
-    assert os.path.exists(os.path.join(tmpdir, "Transformed-employees-columns.csv"))
-
+    # TODO - finish this test when we are able to - now that read_csv is a util that wraps
+    # pandas.read_csv maybe we can look at the column names and look for duplicates without the #
 
 def test_column_error_drops_row():
     col = IntColumn(name='level', min_value=0, on_error='drop_row')
@@ -139,3 +127,5 @@ def test_drop_field_during_step(tmpdir):
     output = pandas.read_csv(tmpdir / 'tmp.csv').to_dict('records')
     for row in output:
         assert row['crew id'] in ["1", "2"]
+
+def test_phase_saved_even_if_error(tmpdir):

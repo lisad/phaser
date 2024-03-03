@@ -6,7 +6,7 @@ from phaser import ReshapePhase, DataFramePhase, read_csv
 
 current_path = Path(__file__).parent
 
-def test_reshape(tmpdir):
+def test_reshape():
 
     class MyReshape(ReshapePhase):
         def reshape(self, row_data):
@@ -22,7 +22,7 @@ def test_reshape(tmpdir):
 
     phase = MyReshape("myreshape")
     phase.load_data(read_csv(current_path / 'fixture_files' / 'locations.csv'))
-    phase.run(tmpdir/'output.csv')
+    phase.run()
     assert len(phase.row_data) == 2
     assert phase.row_data == [
         {'location': 'hangar deck', 'temperature': '16', 'gamma radiation': '9.8 μR/h'},

@@ -36,26 +36,6 @@ class PhaseBase(ABC):
         else:
             raise PhaserException("Phase load_data called with unsupported data format")
 
-    def save(self, destination):
-        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
-        It should be easy to override this method to save in a different way, using different
-        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
-
-        CSV defaults chosen:
-        * separator character is ','
-        * encoding is UTF-8
-        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
-        """
-
-        # Use the raw list(dict) form of the data, because DataFrame
-        # construction does something different with a subclass of Sequence and
-        # Mapping that results in the columns being re-ordered.
-        if not isinstance(destination, str):
-            if Path(destination).is_dir():
-                destination = destination / self.name
-        pd.DataFrame(self.row_data.to_records()).to_csv(destination, index=False, na_rep="NULL")
-        logger.info(f"{self.name} saved output to {destination}")
-
     def process_exception(self, exc, step, row):
         """
         A method to delegate exception handling to.  This is not called within PhaseBase directly,
@@ -115,7 +95,7 @@ class DataFramePhase(PhaseBase):
         self.report_errors_and_warnings()
         if self.context.has_errors():
             raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
-        self.save(destination)
+        return self.df_data.to_dict('records')
 
     @abstractmethod
     def df_transform(self, df_data):
@@ -126,10 +106,6 @@ class DataFramePhase(PhaseBase):
 
     def load_data(self, data):
         self.df_data = data
-
-    def save(self, destination):
-        self.df_data.to_csv(destination, index=False, na_rep="NULL")
-        logger.info(f"{self.name} saved output to {destination}")
 
 
 class ReshapePhase(PhaseBase):
@@ -155,12 +131,12 @@ class ReshapePhase(PhaseBase):
         """
         raise PhaserException("Subclass ReshapePhase and return new data version in this reshape method")
 
-    def run(self, destination):
+    def run(self):
         self.row_data = self.reshape(self.row_data)
         self.report_errors_and_warnings()
         if self.context.has_errors():
             raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
-        self.save(destination)
+        return self.row_data
 
     def save(self, destination):
         """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
@@ -249,7 +225,7 @@ class Phase(PhaseBase):
         self.row_data = PhaseRecords()
         self.headers = None
 
-    def run(self, destination):
+    def run(self):
         # Break down run into load, steps, error handling, save and delegate
         self.do_column_stuff()
         self.run_steps()
@@ -259,7 +235,7 @@ class Phase(PhaseBase):
         else:
             self.report_errors_and_warnings()
             self.prepare_for_save()
-            self.save(destination)
+        return self.row_data.to_records()
 
     def do_column_stuff(self):
         @row_step
