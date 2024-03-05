@@ -2,7 +2,7 @@ import pytest
 from pathlib import Path
 from collections import defaultdict
 import pandas as pd
-from phaser import ReshapePhase, DataFramePhase, read_csv
+from phaser import ReshapePhase, DataFramePhase, read_csv, Pipeline
 
 current_path = Path(__file__).parent
 
@@ -44,6 +44,24 @@ def test_dataframe_phase(tmpdir):
         {'location': 'main engineering', 'temperature': '22', 'gamma radiation': '10.9 μR/h'}
     ]
 
+def test_dataframe_phase_in_pipeline(tmpdir):
+    class MyPandasPhase(DataFramePhase):
+        def df_transform(self, df):
+            return df.pivot(index='location', columns='measure', values='value').reset_index()
+
+    class MyPandasPipeline(Pipeline):
+        source = current_path / 'fixture_files' / 'locations.csv'
+        phases = [ MyPandasPhase('reshape') ]
+
+    pipeline = MyPandasPipeline(working_dir = tmpdir)
+    pipeline.run()
+    with open(tmpdir / 'reshape_output_locations.csv') as f:
+        line = f.readline()
+        assert line == "location,gamma radiation,temperature\n"
+        line = f.readline()
+        assert line == "hangar deck,9.8 μR/h,16\n"
+        line = f.readline()
+        assert line == "main engineering,10.9 μR/h,22\n"
 
 def test_reshape_explode(tmpdir):
     """ This test illustrates pandas explode, which is fun.  Also note it would be useful to have a multi-value
