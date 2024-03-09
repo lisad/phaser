@@ -33,7 +33,7 @@ def drop_rows_with_no_id_and_not_employed(row, **kwargs):
         if row['Status'] == "Active":
             raise PipelineErrorException("Missing employee ID for active employee, need to followup")
         elif row['Status'] == "Inactive":
-            raise DropRowException
+            raise DropRowException(f"Employee {row['Last name']} has no ID and inactive, dropping row")
         else:
             raise PipelineErrorException(f"Unknown employee status {row['Status']}")
     return row
