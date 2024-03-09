@@ -23,3 +23,4 @@ def test_results(tmpdir):
     assert all([row['Bonus percent'] > 0.1 and row['Bonus percent'] < 0.2 for row in new_data])
 
     assert len(pipeline.context.dropped_rows) == 1
+    assert "Garak" in pipeline.context.dropped_rows[2]['message']
