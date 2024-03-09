@@ -4,7 +4,8 @@ import numpy as np
 import pytest
 from dateutil.tz import gettz
 
-from phaser import Phase, Column, IntColumn, DateColumn, DateTimeColumn, PipelineErrorException, DropRowException
+from phaser import (Phase, Column, IntColumn, FloatColumn, DateColumn, DateTimeColumn,
+                    PipelineErrorException, DropRowException)
 
 
 # Constructor tests
@@ -158,6 +159,14 @@ def test_int_column_minmax():
     with pytest.raises(PipelineErrorException):
         col.check_value(2000)
 
+
+def test_float_column():
+    pay = FloatColumn(name="pay", min_value=0.01, rename="payRate", required=True)
+    phase = Phase(columns=[pay])
+    phase.load_data([{'payRate':'12345.0'} ])
+    phase.do_column_stuff()
+    assert phase.row_data[0]['pay'] == 12345.0
+    assert isinstance(phase.row_data[0]['pay'], float)
 
 # Testing Datetime and date column
 

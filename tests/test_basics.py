@@ -32,7 +32,6 @@ def test_pipeline_source_none(tmpdir, reconcile_phase_class):
         p = Pipeline(phases=[reconcile_phase_class], working_dir=tmpdir)
         p.run()
 
-
 def test_return_only_some_columns():
     # If a column is marked for NOT saving, it shouldn't be returned to the Pipeline to save.
     phase = Phase(name="transform",
