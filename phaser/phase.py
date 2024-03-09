@@ -4,7 +4,7 @@ import pandas as pd
 import logging
 from .column import make_strict_name, Column
 from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException
-from .steps import ROW_STEP, BATCH_STEP, PROBE_VALUE, row_step
+from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -19,56 +19,25 @@ class PhaseBase(ABC):
         self.headers = None
         self.row_data = None
 
+    def load_data(self, data):
+        """ Call this method to pass record-oriented data to the Phase before calling 'run'
+        Can be overridden to load data in a different structure.
+        Used in phaser's builtin phases - by regular Phase and ReshapePhase. """
+        if isinstance(data, pd.DataFrame):
+            self.headers = data.columns.values.tolist()
+            data = data.to_dict('records')
+        if isinstance(data, list):
+            if len(data) > 0 and self.headers is None:
+                self.headers = data[0].keys()
+            self.row_data = PhaseRecords(data)
+        else:
+            raise PhaserException("Phase load_data called with unsupported data format")
+
     @abstractmethod
     def run(self):
+        """ Each kind of phase has a different process for doing its work, so this method must
+        be overridden.  """
         pass
-
-    def read_csv(self, source):
-        """ Includes the default settings phaser uses with panda's read_csv. Can be overridden to provide
-        different read_csv settings.
-        Defaults:
-        * assume all column values are strings, so leading zeros or trailing zeros don't get destroyed.
-        * assume ',' value-delimiter
-        * skip_blank_lines=True: allows blank AND '#'-led rows to be skipped and still find header row
-        * doesn't use indexing
-        * does attempt to decompress common compression formats if file uses them
-        * assume UTF-8 encoding
-        * uses '#' as the leading character to assume a row is comment
-        * Raises errors loading 'bad lines', rather than skip
-        """
-        return pd.read_csv(source,
-                         dtype='str',
-                         sep=',',
-                         skip_blank_lines=True,
-                         index_col=False,
-                         comment='#')
-
-    def load(self, source):
-        """ When creating a Phase, it may be desirable to subclass it and override the load()
-        function to do a different kind of loading entirely.  Be sure to load the row_data into the
-        instance's row_data attribute as an iterable (list) containing dicts.
-        """
-        logger.info(f"{self.name} loading input from {source}")
-        df = self.read_csv(source)
-        self.headers = df.columns.values.tolist()
-        self.row_data = PhaseRecords(df.to_dict('records'))
-
-    def save(self, destination):
-        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
-        It should be easy to override this method to save in a different way, using different
-        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
-
-        CSV defaults chosen:
-        * separator character is ','
-        * encoding is UTF-8
-        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
-        """
-
-        # Use the raw list(dict) form of the data, because DataFrame
-        # construction does something different with a subclass of Sequence and
-        # Mapping that results in the columns being re-ordered.
-        pd.DataFrame(self.row_data.to_records()).to_csv(destination, index=False, na_rep="NULL")
-        logger.info(f"{self.name} saved output to {destination}")
 
     def process_exception(self, exc, step, row):
         """
@@ -124,27 +93,21 @@ class DataFramePhase(PhaseBase):
         super().__init__(name, context=context, error_policy=error_policy)
         self.df_data = None
 
-    def run(self, source, destination):
-        self.load(source)
+    def run(self):
         self.df_data = self.df_transform(self.df_data)
         self.report_errors_and_warnings()
-        if self.context.has_errors():
-            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
-        self.save(destination)
+        return self.df_data.to_dict('records')
 
     @abstractmethod
     def df_transform(self, df_data):
         """ The df_transform method is implemented in subclasses of DataFramePhase.  Significant reshaping can be
-
+        done because data is not processed row-by-row, and row numbers are not reported on in error reporting.
         """
         raise PhaserException("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
 
-    def load(self, source):
-        self.df_data = self.read_csv(source)
-
-    def save(self, destination):
-        self.df_data.to_csv(destination, index=False, na_rep="NULL")
-        logger.info(f"{self.name} saved output to {destination}")
+    def load_data(self, data):
+        # Overrides the regular load_data because we just want to accept dataframe and keep it in df format.
+        self.df_data = data
 
 
 class ReshapePhase(PhaseBase):
@@ -170,30 +133,11 @@ class ReshapePhase(PhaseBase):
         """
         raise PhaserException("Subclass ReshapePhase and return new data version in this reshape method")
 
-    def run(self, source, destination):
-        self.load(source)
+    def run(self):
         self.row_data = self.reshape(self.row_data)
         self.report_errors_and_warnings()
-        if self.context.has_errors():
-            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
-        self.save(destination)
+        return self.row_data
 
-    def save(self, destination):
-        """ This method saves the result of the Phase operating on the batch in phaser's preferred approach.
-        It should be easy to override this method to save in a different way, using different
-        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
-
-        CSV defaults chosen:
-        * separator character is ','
-        * encoding is UTF-8
-        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
-        """
-
-        # Use the raw list(dict) form of the data, because DataFrame
-        # construction does something different with a subclass of Sequence and
-        # Mapping that results in the columns being re-ordered.
-        pd.DataFrame(self.row_data).to_csv(destination, index=False, na_rep="NULL")
-        logger.info(f"{self.name} saved output to {destination}")
 
 class Phase(PhaseBase):
     """ The organizing principle for data transformation steps and column definitions is the phase.  A phase can
@@ -265,26 +209,13 @@ class Phase(PhaseBase):
         self.row_data = PhaseRecords()
         self.headers = None
 
-    def run(self, source, destination):
+    def run(self):
         # Break down run into load, steps, error handling, save and delegate
-        self.load(source)
         self.do_column_stuff()
         self.run_steps()
-        if self.context.has_errors():
-            self.report_errors_and_warnings()
-            raise PipelineErrorException(f"Phase '{self.name}' failed with {len(self.context.errors.keys())} errors.")
-        else:
-            self.report_errors_and_warnings()
-            self.prepare_for_save()
-            self.save(destination)
-
-    def load_data(self, data):
-        """ Alternate load method is useful in tests or in scripting Phase class where the data is not in a file.
-        This assumes data is in the form of a list of dicts where dicts have consistent keys (e.g. pandas 'record'
-        format) """
-        if len(data) > 0:
-            self.headers = data[0].keys()
-        self.row_data = PhaseRecords(data)
+        self.report_errors_and_warnings()
+        self.prepare_for_save()
+        return self.row_data.to_records()
 
     def do_column_stuff(self):
         @row_step
@@ -339,7 +270,6 @@ class Phase(PhaseBase):
         df.drop(columns_exist_to_drop, axis=1, inplace=True)
         self.row_data = PhaseRecords(df.to_dict('records'))
 
-
     def check_headers_consistent(self):
         for row in self.row_data:
             for field_name in row.keys():
@@ -356,6 +286,8 @@ class Phase(PhaseBase):
                 self.execute_row_step(step)
             elif step_type == BATCH_STEP:
                 self.execute_batch_step(step)
+            elif step_type == CONTEXT_STEP:
+                self.execute_context_step(step)
             else:
                 raise Exception(f"Unknown step type {step_type}")
 
@@ -403,6 +335,15 @@ class Phase(PhaseBase):
         except Exception as exc:
             self.process_exception(exc, step, None)
 
+    def execute_context_step(self, step):
+        self.context.current_row = 'context'
+        try:
+            step(self.context)
+        except DropRowException as dre:
+            raise PhaserException("DropRowException can't be handled in a context_step") from dre
+        except Exception as exc:
+            self.process_exception(exc, step, None)
+
 
 # LMDTODO: add a test that makes sure that a batch step followed by a row step works fine
 
@@ -429,6 +370,7 @@ class PhaseRecords(UserList):
     # Transform back into native list(dict)
     def to_records(self):
         return [ r.data for r in self.data ]
+
 
 class PhaseRecord(UserDict):
     def __init__(self, row_num, record):

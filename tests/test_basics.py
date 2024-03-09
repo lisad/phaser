@@ -1,13 +1,20 @@
-import pandas
 import pandas as pd
 
-from phaser import Phase, row_step, Pipeline, Column, IntColumn
+from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, PipelineErrorException
 import pytest  # noqa # pylint: disable=unused-import
 import os
 from pathlib import Path
-from fixtures import reconcile_phase_class, test_data_phase_class, null_step_phase
+from fixtures import reconcile_phase_class, null_step_phase
 
 current_path = Path(__file__).parent
+
+
+def test_phase_load_data():
+    phase = Phase()
+    data = [{'id': 1, 'location': 'bridge'}, {'id': 2, 'location': 'engineering'}]
+    phase.load_data(data)
+    assert list(phase.headers) == ['id', 'location']
+    assert phase.row_data == data
 
 
 def test_pipeline(tmpdir, null_step_phase, reconcile_phase_class):
@@ -25,41 +32,14 @@ def test_pipeline_source_none(tmpdir, reconcile_phase_class):
         p = Pipeline(phases=[reconcile_phase_class], working_dir=tmpdir)
         p.run()
 
-
-def test_load_and_save(tmpdir):
-    source = current_path / "fixture_files" / "crew.csv"
-    dest = os.path.join(tmpdir, "Transformed-crew.csv")
-    Phase().run(source, dest)
-    assert os.path.exists(dest)
-    with open(dest) as f:
-        first_line = f.readline()
-    assert first_line.startswith("First name,")
-    assert first_line.endswith(",pay per\n")
-
-
-@pytest.mark.skip("This is annoying.  it's easy for CSVs to have quotes and spaces, but the combination is bad.")
-def test_load_quoted_values(tmpdir):
-    source = tmpdir / 'quoted_values.csv'
-    with open(source, 'w') as f:
-        # Importantly, Active is quoted AND has a space before it.
-        f.write("""id,name,status\n1,"Jean-Luc Picard", "Active"\n""")
-    phase= Phase()
-    phase.load(source)
-    # If values are not stripped of space and converted, status = ' "Active"'
-    assert phase.row_data[0]['status'] == "Active"
-
-
-def test_save_only_some_columns(tmpdir):
-    # Possibly this test would be more robust if we call 'run' and ensure that prepare_for_save is called
-    # and drops columns before save, rather than explicitly call here.
+def test_return_only_some_columns():
+    # If a column is marked for NOT saving, it shouldn't be returned to the Pipeline to save.
     phase = Phase(name="transform",
                   columns=[Column(name="ID", save=True), Column(name="Status", save=False)])
     phase.load_data([{"ID": 1, "Status": "onboard"}])
-    phase.prepare_for_save()
-    phase.save(tmpdir / "test_drop_column.csv")
-    with open(tmpdir / "test_drop_column.csv") as f:
-        first_line = f.readline()
-        assert first_line == "ID\n"
+    results = phase.run()
+    assert "ID" in results[0].keys()
+    assert "Status" not in results[0].keys()
 
 
 def test_drop_col_works_if_not_exist(tmpdir):
@@ -75,11 +55,11 @@ def test_subclassing(tmpdir):
     class Transformer(Phase):
         pass
 
-    source = current_path / "fixture_files" / "crew.csv"
-
     t = Transformer()
-    t.run(source, tmpdir / "test_output.csv")
-    assert os.path.exists(os.path.join(tmpdir, "test_output.csv"))
+    data = read_csv(current_path / "fixture_files" / "crew.csv").to_dict('records')
+    t.load_data(data)
+    results = t.run()
+    assert len(results) == len(data)
 
 
 @row_step
@@ -98,10 +78,9 @@ def phase_accepts_single_col():
 
 
 def test_have_and_run_steps(tmpdir):
-    source = current_path / "fixture_files" / "crew.csv"
     transformer = Phase(steps=[full_name_step])
 
-    transformer.load(source)
+    transformer.load_data(read_csv(current_path / "fixture_files" / "crew.csv"))
     transformer.run_steps()
     assert "full name" in transformer.row_data[1]
 
@@ -111,19 +90,8 @@ def test_duplicate_column_names(tmpdir):
     # See https://github.com/pandas-dev/pandas/issues/13262 - another reason to write our own CSV reader
     with open(tmpdir / 'dupe-column-name.csv', 'w') as f:
         f.write("id,name,name\n1,Percy,Jackson\n")
-    phase = Phase()
-    with pytest.raises(Exception):
-        phase.load(tmpdir / 'dupe-column-name.csv')
-        print(phase.row_data)
-
-
-def test_do_column_stuff(tmpdir):
-    source = current_path / "fixture_files" / "crew.csv"
-    Phase(columns=[
-            Column("First name"),
-            Column("Last name")
-        ]).run(source, tmpdir / "Transformed-employees-columns.csv")
-    assert os.path.exists(os.path.join(tmpdir, "Transformed-employees-columns.csv"))
+    # TODO - finish this test when we are able to - now that read_csv is a util that wraps
+    # pandas.read_csv maybe we can look at the column names and look for duplicates without the #
 
 
 def test_column_error_drops_row():
@@ -155,8 +123,19 @@ def test_drop_field_during_step(tmpdir):
 
     col = IntColumn(name='crew id', min_value=1)
     phase = Phase('test', columns=[col], steps=[drop_step])
-    phase.run(source=current_path / 'fixture_files' / 'crew.csv',
-              destination=tmpdir / 'tmp.csv')
-    output = pandas.read_csv(tmpdir / 'tmp.csv').to_dict('records')
+    phase.load_data(read_csv(current_path / 'fixture_files' / 'crew.csv').to_dict('records'))
+    output = phase.run()
     for row in output:
         assert row['crew id'] in ["1", "2"]
+
+
+def test_phase_saved_even_if_error(tmpdir):
+    col = IntColumn(name='level', min_value=0)
+    phase = Phase("test", columns=[col])
+    with open(tmpdir / 'negative-level.csv', 'w') as f:
+        f.write('crew member,level\n"B\'Elanna Torres",-1\n')
+    pipeline = Pipeline(tmpdir, tmpdir / 'negative-level.csv', phases=[phase])
+    pipeline.setup_phases()
+    with pytest.raises(PipelineErrorException):
+        pipeline.run_phase(phase, tmpdir / 'negative-level.csv', tmpdir / 'test-saved-despite-error.csv')
+    assert os.path.exists(os.path.join(tmpdir, 'test-saved-despite-error.csv'))

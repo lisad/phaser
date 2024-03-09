@@ -1,6 +1,9 @@
 import inspect
 import logging
 import os
+import pandas as pd
+import phaser
+from phaser.util import read_csv
 from pathlib import PosixPath
 
 logger = logging.getLogger('phaser')
@@ -45,12 +48,17 @@ def _stringify_step(step):
 
 
 class Context:
-    def __init__(self, variables=None):
+    """ Context is created by the pipeline, and passed to each phase.  Thus, it can be used
+    to carry extra data or variable values between phases if necessary. """
+
+    def __init__(self, variables=None, working_dir=None):
         self.errors = {}
         self.warnings = {}
         self.variables = variables or {}
         self.current_row = None
         self.dropped_rows = {}
+        self.outputs = []
+        self.working_dir = working_dir
 
     def add_error(self, step, row, message):
         # LMDTODO Am I passing row or getting row from context?
@@ -86,9 +94,22 @@ class Context:
     def has_errors(self):
         return self.errors != {}
 
+    def add_output(self, name, data):
+        # At present outputs must be in record format and save to CSV, but this should be expanded.
+        self.outputs.append(ReadWriteObject(name, data, to_save=True))
+
+
+class ReadWriteObject:
+    def __init__(self, name, data=None, to_save=True):
+        self.name = name
+        self.format = 'csv'
+        self.data = data
+        self.to_save = to_save
+
 
 class Pipeline:
-    # Subclasses can override here to set values for all instances, or override in instantiation
+    """ Pipeline handles running phases in order.  It also handles I/O and marshalling what
+    outputs from phases get used as inputs in later phases.  """
     working_dir = None
     source = None
     phases = []
@@ -106,14 +127,20 @@ class Pipeline:
         assert self.source is not None and self.working_dir is not None
         self.phases = phases or self.__class__.phases
         self.phase_instances = []
+        self.context = Context(working_dir=self.working_dir)
 
     def setup_phases(self):
-        """ Instantiates phases passed as classes, and assigns unique names to phases"""
+        """ Instantiates phases passed as classes, assigns unique names to phases, and passes
+         Context in also. """
         phase_names = []
         for phase in self.phases:
             phase_instance = phase
             if inspect.isclass(phase):
-                phase_instance = phase()
+                # TODO: Fix: Phase.__init__() missing required positional
+                # argument: 'name'
+                phase_instance = phase(context=self.context)
+            else:
+                phase.context = self.context
             name = phase_instance.name
             i = 1
             while name in phase_names:
@@ -129,8 +156,56 @@ class Pipeline:
         next_source = self.source
         for phase in self.phase_instances:
             destination = self.get_destination(phase)
-            phase.run(source=next_source, destination=destination)
-            next_source = destination  # for next phase in chain
+            self.run_phase(phase, next_source, destination)
+            next_source = destination
+
+    def run_phase(self, phase, source, destination):
+        logger.info(f"Loading input from {source} for {phase.name}")
+        data = self.load(phase, source)
+        phase.load_data(data)
+        results = phase.run()
+        self.save(results, destination)
+        self.save_extra_outputs()
+        logger.info(f"{phase.name} saved output to {destination}")
+        if self.context.has_errors():
+            raise PipelineErrorException(f"Phase '{phase.name}' failed with {len(self.context.errors.keys())} errors.")
+
+    def save_extra_outputs(self):
+        for item in self.context.outputs:
+            # Since context is passed from Phase to Phase, only save the new ones with to_save=True
+            if item.to_save:
+                filename = self.working_dir / f"{item.name}.csv"
+                if os.path.exists(filename):
+                    raise PhaserException(f"Output with name '{filename}' exists.  Aborting before overwrite.")
+                pd.DataFrame(item.data).to_csv(filename, index=False, na_rep="NULL")
+                logger.info(f"Extra output {item.name} saved to {self.working_dir}")
+                item.to_save = False
+
+    def load(self, phase, next_source):
+        """ The load method can be overridden to apply a pipeline-specific way of loading data.
+        Phaser default is to read data from a CSV file. """
+        df = read_csv(next_source)
+        # This is a hacky way to handle a phase we know needs a DataFrame as its
+        # data, rather than a list of dicts.
+        if isinstance(phase, phaser.DataFramePhase):
+            return df
+        return df.to_dict('records')
+
+    def save(self, results, destination):
+        """ This method saves the result of the Phase operating on the batch, in phaser's preferred format.
+        It should be easy to override this method to save in a different way, using different
+        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
+
+        CSV defaults chosen:
+        * separator character is ','
+        * encoding is UTF-8
+        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
+        """
+
+        # Use the raw list(dict) form of the data, because DataFrame
+        # construction does something different with a subclass of Sequence and
+        # Mapping that results in the columns being re-ordered.
+        pd.DataFrame(results).to_csv(destination, index=False, na_rep="NULL")
 
     def get_destination(self, phase):
         source_filename = None
