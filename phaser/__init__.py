@@ -27,7 +27,8 @@ have datatype casting and name canonicalization done automatically.
 # commitment to build for that.
 
 
-from phaser.pipeline import Pipeline, PipelineErrorException, PhaserException, DropRowException, WarningException
+from phaser.pipeline import (Pipeline, PhaserError,
+                             PipelineErrorException, PhaserException, DropRowException, WarningException)
 from phaser.phase import Phase, ReshapePhase, DataFramePhase
 from phaser.steps import row_step, batch_step, context_step, check_unique, sort_by
 from phaser.column import Column, IntColumn, DateColumn, DateTimeColumn, FloatColumn

@@ -1,14 +1,24 @@
 from pathlib import Path
 import pytest
 
-from phaser import (check_unique, Phase, row_step, context_step, Pipeline, sort_by, IntColumn,
-                    PipelineErrorException, DropRowException, PhaserException, read_csv)
+from phaser import (check_unique, Phase, row_step, batch_step, context_step, Pipeline, sort_by, IntColumn,
+                    PipelineErrorException, DropRowException, PhaserError, read_csv)
 from fixtures import test_data_phase_class
 
 current_path = Path(__file__).parent
 
 
 # Tests of the operation of steps
+
+def test_batch_step_cant_drop_row():
+    @batch_step
+    def try_something_nonsensical(batch, context):
+        raise DropRowException("How could this even work")
+
+    phase = Phase(steps=[try_something_nonsensical])
+    phase.load_data([{'a': 'b'}])
+    with pytest.raises(PhaserError) as e:
+        phase.run_steps()
 
 def test_context_available_to_step():
     @row_step
@@ -122,6 +132,6 @@ def test_context_step_cant_raise_drop_row():
 
     phase = Phase(steps=[raise_inappropriate_exception])
     phase.load_data([{}])
-    with pytest.raises(PhaserException) as exc_info:
+    with pytest.raises(PhaserError) as exc_info:
         phase.run_steps()
     assert "DropRowException can't" in exc_info.value.message

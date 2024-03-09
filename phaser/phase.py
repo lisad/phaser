@@ -3,7 +3,8 @@ from collections import UserDict, UserList
 import pandas as pd
 import logging
 from .column import make_strict_name, Column
-from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException
+from .pipeline import (Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException,
+                       PhaserError)
 from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step
 
 logger = logging.getLogger('phaser')
@@ -332,6 +333,9 @@ class Phase(PhaseBase):
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
             self.row_data = PhaseRecords([row for row in new_row_values])
+        except PhaserError as e:
+            # A coding error should bypass the data exception handling
+            raise e
         except Exception as exc:
             self.process_exception(exc, step, None)
 
@@ -340,7 +344,7 @@ class Phase(PhaseBase):
         try:
             step(self.context)
         except DropRowException as dre:
-            raise PhaserException("DropRowException can't be handled in a context_step") from dre
+            raise PhaserError("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:
             self.process_exception(exc, step, None)
 
