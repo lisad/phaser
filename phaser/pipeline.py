@@ -11,6 +11,8 @@ logger.addHandler(logging.NullHandler())
 
 
 class PhaserException(Exception):
+    """ PhaserException is thrown when processing data, and to trigger the library code to do something
+    about that data."""
 
     def __init__(self, message):
         self.message = message
@@ -35,6 +37,18 @@ class WarningException(PhaserException):
     in methods where a return value is needed, it can be used in methods that check results without returning
     fixed data.  """
     pass
+
+
+class PhaserError(Exception):
+    """ PhaserError indicates not a data issue to handle in processing, but a coding error in phaser
+    or in client code that does not meet the interface contract.  Example: in order to avoid
+    accidentally dropping rows, a row step must return a row or throw an exception.  If a row
+    step returns none, the phaser library raises PhaserError to report this to the developer."""
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return self.message
 
 
 def _stringify_step(step):

@@ -1,6 +1,6 @@
 from collections.abc import Mapping, Sequence
 from functools import wraps
-from .pipeline import PipelineErrorException, PhaserException
+from .pipeline import PipelineErrorException, PhaserException, DropRowException, PhaserError
 from .column import Column
 
 ROW_STEP = "ROW_STEP"
@@ -33,9 +33,12 @@ def batch_step(step_function):
     def _batch_step_wrapper(batch, context=None, __probe__=None):
         if __probe__ == PROBE_VALUE:
             return BATCH_STEP
-        result = step_function(batch, context=context)
+        try:
+            result = step_function(batch, context=context)
+        except DropRowException as exc:
+            raise PhaserError("DropRowException can't be handled in batch steps ") from exc
         if not isinstance(result, Sequence):
-            raise PipelineErrorException(
+            raise PhaserError(
                 f"Step {step_function} returned a {result.__class__} rather than a list of rows")
         return result
     return _batch_step_wrapper
@@ -47,6 +50,9 @@ def context_step(step_function):
         if __probe__ == PROBE_VALUE:
             return CONTEXT_STEP
         result = step_function(context)
+        if result is not None:
+            raise PhaserError(f"Context steps are not expected to return a value (step is {step_function})")
+
     return _context_step_wrapper
 
 
@@ -65,7 +71,7 @@ def check_unique(column, strip=True, ignore_case=False):
     column_name = column.name if isinstance(column, Column) else column
 
     @batch_step
-    def check_unique_step(batch, context):
+    def check_unique_step(batch, *args):
         try:
             values = [row[column_name] for row in batch]
         except KeyError:

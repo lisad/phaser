@@ -3,7 +3,8 @@ from collections import UserDict, UserList
 import pandas as pd
 import logging
 from .column import make_strict_name, Column
-from .pipeline import Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException
+from .pipeline import (Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException,
+                       PhaserError)
 from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step
 
 logger = logging.getLogger('phaser')
@@ -48,7 +49,10 @@ class PhaseBase(ABC):
         :param row: What row of the data this occurred in
         :return: Nothing
         """
-        if isinstance(exc, DropRowException):
+        if isinstance(exc, PhaserError):
+            # PhaserError is raised in case of coding contract issues, so should bypass data exception handling.
+            raise exc
+        elif isinstance(exc, DropRowException):
             self.context.add_dropped_row(step, row, exc.message)
         elif isinstance(exc, WarningException):
             self.context.add_warning(step, row, exc.message)
@@ -340,7 +344,7 @@ class Phase(PhaseBase):
         try:
             step(self.context)
         except DropRowException as dre:
-            raise PhaserException("DropRowException can't be handled in a context_step") from dre
+            raise PhaserError("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:
             self.process_exception(exc, step, None)
 

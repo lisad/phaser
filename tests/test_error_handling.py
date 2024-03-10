@@ -24,6 +24,7 @@ def check_room_is_hologram_room(row, context):
 def warn_if_lower_decks(row, context):
     if int(row['deck']) < 10:
         raise WarningException("Lower decks should not be in this dataset")
+    return row
 
 
 @row_step
