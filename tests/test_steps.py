@@ -135,3 +135,14 @@ def test_context_step_cant_raise_drop_row():
     with pytest.raises(PhaserError) as exc_info:
         phase.run_steps()
     assert "DropRowException can't" in exc_info.value.message
+
+def test_context_step_cant_return_random_stuff():
+    @context_step
+    def return_inappropriate_stuff(context):
+        return {'message': 'what is the pipeline even supposed to do with this'}
+
+    phase = Phase(steps=[return_inappropriate_stuff])
+    phase.load_data([{}])
+    with pytest.raises(PhaserError) as exc_info:
+        phase.run_steps()
+    assert "return a value" in exc_info.value.message

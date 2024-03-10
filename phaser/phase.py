@@ -49,7 +49,10 @@ class PhaseBase(ABC):
         :param row: What row of the data this occurred in
         :return: Nothing
         """
-        if isinstance(exc, DropRowException):
+        if isinstance(exc, PhaserError):
+            # PhaserError is raised in case of coding contract issues, so should bypass data exception handling.
+            raise exc
+        elif isinstance(exc, DropRowException):
             self.context.add_dropped_row(step, row, exc.message)
         elif isinstance(exc, WarningException):
             self.context.add_warning(step, row, exc.message)
@@ -333,9 +336,6 @@ class Phase(PhaseBase):
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
             self.row_data = PhaseRecords([row for row in new_row_values])
-        except PhaserError as e:
-            # A coding error should bypass the data exception handling
-            raise e
         except Exception as exc:
             self.process_exception(exc, step, None)
 

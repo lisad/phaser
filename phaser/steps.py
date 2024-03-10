@@ -50,6 +50,9 @@ def context_step(step_function):
         if __probe__ == PROBE_VALUE:
             return CONTEXT_STEP
         result = step_function(context)
+        if result is not None:
+            raise PhaserError(f"Context steps are not expected to return a value (step is {step_function})")
+
     return _context_step_wrapper
 
 
@@ -68,7 +71,7 @@ def check_unique(column, strip=True, ignore_case=False):
     column_name = column.name if isinstance(column, Column) else column
 
     @batch_step
-    def check_unique_step(batch, context):
+    def check_unique_step(batch, *args):
         try:
             values = [row[column_name] for row in batch]
         except KeyError:
