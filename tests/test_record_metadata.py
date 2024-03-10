@@ -8,14 +8,14 @@ def futz_with_row_num(row, **kwargs):
     return row
 
 @row_step
-def error_on_row_three(row, **kwargs):
-    if row.row_num == 3:
+def error_on_row_four(row, **kwargs):
+    if row.row_num == 4:
         raise WarningException("Row three warning!")
     return row
 
 @row_step
-def drop_row_four(row, **kwargs):
-    if row.row_num == 4:
+def drop_row_five(row, **kwargs):
+    if row.row_num == 5:
         raise DropRowException("Row four dropped!")
     return row
 
@@ -25,21 +25,21 @@ def return_native_dict(row, **kwargs):
 
 @pytest.mark.parametrize("steps, expected_row_nums",
     [
-        ([futz_with_row_num], [0, 1, 2, 3, 4, 5]),
-        ([error_on_row_three], [0, 1, 2, 3, 4, 5]),
-        ([drop_row_four], [0, 1, 2, 3, 5]),
-        ([error_on_row_three, drop_row_four], [0, 1, 2, 3, 5]),
-        ([return_native_dict], [0, 1, 2, 3, 4, 5]),
+        ([futz_with_row_num], [1, 2, 3, 4, 5, 6]),
+        ([error_on_row_four], [1, 2, 3, 4, 5, 6]),
+        ([drop_row_five], [1, 2, 3, 4, 6]),
+        ([error_on_row_four, drop_row_five], [1, 2, 3, 4, 6]),
+        ([return_native_dict], [1, 2, 3, 4, 5, 6]),
     ]
 )
 def test_row_step_preserves_row_nums(steps, expected_row_nums):
     data = [
-        { 'row': 0, 'num': 'zero'},
-        { 'row': 1, 'num': 'one'},
-        { 'row': 2, 'num': 'two'},
-        { 'row': 3, 'num': 'three'},
-        { 'row': 4, 'num': 'four'},
-        { 'row': 5, 'num': 'five'},
+        { 'row': 1, 'num': 'zero'},
+        { 'row': 2, 'num': 'one'},
+        { 'row': 3, 'num': 'two'},
+        { 'row': 4, 'num': 'three'},
+        { 'row': 5, 'num': 'four'},
+        { 'row': 6, 'num': 'five'},
     ]
     phase = Phase(steps=steps)
     phase.load_data(data)
@@ -50,7 +50,7 @@ def test_row_step_preserves_row_nums(steps, expected_row_nums):
     assert row_nums == expected_row_nums
 
 @batch_step
-def remove_odd_rows(batch, **kwargs):
+def remove_even_rows(batch, **kwargs):
     return [ row for index, row in enumerate(batch) if index % 2 == 0 ]
 
 @batch_step
@@ -76,19 +76,19 @@ def accidentally_resets_row_nums(batch, **kwargs):
 
 @pytest.mark.parametrize("steps, expected_row_nums",
     [
-        ([remove_odd_rows], [0, 2, 4]),
-        ([sum_a_column], [0, 3, 4]),
-        ([accidentally_resets_row_nums], [0, 1, 2]),
+        ([remove_even_rows], [1, 3, 5]),
+        ([sum_a_column], [1, 4, 5]),
+        ([accidentally_resets_row_nums], [1, 2, 3]),
     ]
 )
 def test_batch_step_preserves_row_num(steps, expected_row_nums):
     data = [
-        { 'row': 0, 'id': 10, 'num': 'zero', 'n': 10 },
-        { 'row': 1, 'id': 10, 'num': 'one', 'n': 15 },
-        { 'row': 2, 'id': 10, 'num': 'two', 'n': 20 },
-        { 'row': 3, 'id': 11, 'num': 'three', 'n': 10 },
-        { 'row': 4, 'id': 12, 'num': 'four', 'n': 10 },
-        { 'row': 5, 'id': 12, 'num': 'five', 'n': 15 },
+        { 'row': 1, 'id': 10, 'num': 'zero', 'n': 10 },
+        { 'row': 2, 'id': 10, 'num': 'one', 'n': 15 },
+        { 'row': 3, 'id': 10, 'num': 'two', 'n': 20 },
+        { 'row': 4, 'id': 11, 'num': 'three', 'n': 10 },
+        { 'row': 5, 'id': 12, 'num': 'four', 'n': 10 },
+        { 'row': 6, 'id': 12, 'num': 'five', 'n': 15 },
     ]
     phase = Phase(steps=steps)
     phase.load_data(data)

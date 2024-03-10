@@ -353,6 +353,7 @@ class Phase(PhaseBase):
 
 
 class PhaseRecords(UserList):
+    """ PhaseRecords holds the records or rows loaded into a phase, together with row numbers (indexed from 1) """
     def __init__(self, *args):
         super().__init__(*args)
         # Slicing a UserList results in constructing a brand new list, which
@@ -362,7 +363,7 @@ class PhaseRecords(UserList):
         # This is also generally helpful in steps where the record is mutated
         # and returned rather than being constructed new.
         self.data = [
-            PhaseRecords._recordize(index, record)
+            PhaseRecords._recordize(index+1, record)
             for index, record in enumerate(self.data)
         ]
 
