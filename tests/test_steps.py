@@ -2,7 +2,7 @@ from pathlib import Path
 import pytest
 
 from phaser import (check_unique, Phase, row_step, batch_step, context_step, Pipeline, sort_by, IntColumn,
-                    PipelineErrorException, DropRowException, PhaserError, read_csv)
+                    DataErrorException, DropRowException, PhaserError, read_csv)
 from fixtures import test_data_phase_class
 
 current_path = Path(__file__).parent
@@ -45,13 +45,13 @@ def test_builtin_step():
 def test_check_unique_fails(test_data_phase_class):
     phase = test_data_phase_class(error_policy=Pipeline.ON_ERROR_STOP_NOW)
     phase.load_data([{'id': '1'}, {'id': '1'}])
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         phase.run_steps()
 
 
 def test_check_unique_strips_spaces():
     fn = check_unique('id')
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         fn([{'id': " 1 "}, {'id': '1'}])
 
 
@@ -67,7 +67,7 @@ def test_check_unique_case_sensitive():
 
 def test_check_unique_case_insensitive():
     fn = check_unique('dept', ignore_case=True)
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         fn([{'dept': "ENG"}, {'dept': 'Sales'}, {'dept': "Eng"}])
 
 
@@ -79,7 +79,7 @@ def test_check_unique_null_values():
 def test_check_unique_int_values():
     fn = check_unique('id')
     fn([{'id': 1}, {'id': 2}, {'id': 3}])   # passes
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         fn([{'id': 1}, {'id': 2}, {'id': 2}])
 
 
@@ -91,7 +91,7 @@ def test_check_unique_takes_column_instance():
 
 def test_check_unique_is_helpful_when_column_missing():
     fn = check_unique('crew id')
-    with pytest.raises(PipelineErrorException) as error_info:
+    with pytest.raises(DataErrorException) as error_info:
         fn([{'id': 1}, {'id': 2}, {'id': 3}])
     assert "Check_unique: Some or all rows did not have 'crew id' present" in error_info.value.message
 

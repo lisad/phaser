@@ -3,7 +3,7 @@ from collections import UserDict, UserList
 import pandas as pd
 import logging
 from .column import make_strict_name, Column
-from .pipeline import (Pipeline, Context, DropRowException, WarningException, PipelineErrorException, PhaserException,
+from .pipeline import (Pipeline, Context, DropRowException, WarningException, DataErrorException, DataException,
                        PhaserError)
 from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step
 
@@ -32,7 +32,7 @@ class PhaseBase(ABC):
                 self.headers = data[0].keys()
             self.row_data = PhaseRecords(data)
         else:
-            raise PhaserException("Phase load_data called with unsupported data format")
+            raise PhaserError("Phase load_data called with unsupported data format")
 
     @abstractmethod
     def run(self):
@@ -73,7 +73,7 @@ class PhaseBase(ABC):
                     self.context.add_error(step, row, message)
                     raise exc
                 case _:
-                    raise PipelineErrorException(f"Unknown error policy '{self.error_policy}'") from exc
+                    raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
 
     def report_errors_and_warnings(self):
         """ In next iteration, we should probably move the generation of error info to stdout to other locations.
@@ -107,7 +107,7 @@ class DataFramePhase(PhaseBase):
         """ The df_transform method is implemented in subclasses of DataFramePhase.  Significant reshaping can be
         done because data is not processed row-by-row, and row numbers are not reported on in error reporting.
         """
-        raise PhaserException("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
+        raise PhaserError("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
 
     def load_data(self, data):
         # Overrides the regular load_data because we just want to accept dataframe and keep it in df format.
@@ -135,7 +135,7 @@ class ReshapePhase(PhaseBase):
         a new list of rows (as dicts), which could have a very different number of rows and/or columns.  The
         rest of the class takes care of loading, saving, and reporting errors and warnings.
         """
-        raise PhaserException("Subclass ReshapePhase and return new data version in this reshape method")
+        raise PhaserError("Subclass ReshapePhase and return new data version in this reshape method")
 
     def run(self):
         self.row_data = self.reshape(self.row_data)

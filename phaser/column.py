@@ -6,7 +6,7 @@ import logging
 import types
 from collections.abc import Iterable
 from pandas import isna
-from .pipeline import DropRowException, PipelineErrorException, WarningException
+from .pipeline import DropRowException, DataErrorException, WarningException
 
 logger = logging.getLogger('phaser')
 
@@ -69,14 +69,14 @@ class Column:
             self.rename = [self.rename]
         self.allowed_values = allowed_values
         self.save = save
-        self.use_exception = PipelineErrorException
+        self.use_exception = DataErrorException
         if on_error:
             self.use_exception = {
                 'warn': WarningException,
                 'drop_row': DropRowException,
-                'collect': PipelineErrorException,
+                'collect': DataErrorException,
                 'stop_now': Exception
-            }.get(on_error, PipelineErrorException)
+            }.get(on_error, DataErrorException)
 
         if self.null is False and self.default is not None:
             raise Exception(f"Column {self.name} defined to error on null values, but also provides a non-null default")
