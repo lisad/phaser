@@ -71,7 +71,7 @@ def check_unique(column, strip=True, ignore_case=False):
     column_name = column.name if isinstance(column, Column) else column
 
     @batch_step
-    def check_unique_step(batch, *args):
+    def check_unique_step(batch, context):
         try:
             values = [row[column_name] for row in batch]
         except KeyError:
