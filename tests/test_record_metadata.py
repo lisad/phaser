@@ -10,13 +10,13 @@ def futz_with_row_num(row, **kwargs):
 @row_step
 def error_on_row_four(row, **kwargs):
     if row.row_num == 4:
-        raise WarningException("Row three warning!")
+        raise WarningException("Row four warning!")
     return row
 
 @row_step
 def drop_row_five(row, **kwargs):
     if row.row_num == 5:
-        raise DropRowException("Row four dropped!")
+        raise DropRowException("Row five dropped!")
     return row
 
 @row_step
