@@ -135,4 +135,4 @@ def test_row_error_formatting():
     phase.load_data([{'deck': '21'}])
 
     phase.run_steps()
-    phase.report_errors_and_warnings()
+    # phase.report_errors_and_warnings()  Errors and warning reporting moved to pipeline
