@@ -10,9 +10,9 @@ logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
 
 
-class PhaserException(Exception):
-    """ PhaserException is thrown when processing data, and to trigger the library code to do something
-    about that data."""
+class DataException(Exception):
+    """ DataException subclasses are thrown when processing data, to trigger the phaser library code to follow
+     error-handling policy, often with respect to the row the issue occurs in."""
 
     def __init__(self, message):
         self.message = message
@@ -21,18 +21,20 @@ class PhaserException(Exception):
         return self.message
 
 
-class PipelineErrorException(PhaserException):
-    """ Using this exception will cause the error to stop the pipeline, and this will be reported as an error.
-    If possible, the pipeline will keep going and collect more errors until it reaches the end of a phase.  """
+class DataErrorException(DataException):
+    """ Using this exception will cause the data or the specific row to be listed among errors.
+    If possible, the pipeline will keep going to the end of a phase, collecting more errors, so they can all
+    be dealt with.  """
     pass
 
 
-class DropRowException(PhaserException):
-    """ Throwing this exception in a row_step will cause the current row to be dropped. """
+class DropRowException(DataException):
+    """ Throwing this exception in a row_step will cause the current row to be dropped. Rows dropped this
+    way will be listed in the phase results report along with a reason given in the exception constructor. """
     pass
 
 
-class WarningException(PhaserException):
+class WarningException(DataException):
     """ Throwing this exception will add warnings to the output of the pipeline.  While it can't be used
     in methods where a return value is needed, it can be used in methods that check results without returning
     fixed data.  """
@@ -182,7 +184,7 @@ class Pipeline:
         self.save_extra_outputs()
         logger.info(f"{phase.name} saved output to {destination}")
         if self.context.has_errors():
-            raise PipelineErrorException(f"Phase '{phase.name}' failed with {len(self.context.errors.keys())} errors.")
+            raise DataException(f"Phase '{phase.name}' failed with {len(self.context.errors.keys())} errors.")
 
     def save_extra_outputs(self):
         for item in self.context.outputs:
@@ -190,7 +192,7 @@ class Pipeline:
             if item.to_save:
                 filename = self.working_dir / f"{item.name}.csv"
                 if os.path.exists(filename):
-                    raise PhaserException(f"Output with name '{filename}' exists.  Aborting before overwrite.")
+                    raise PhaserError(f"Output with name '{filename}' exists.  Aborting before overwrite.")
                 pd.DataFrame(item.data).to_csv(filename, index=False, na_rep="NULL")
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False

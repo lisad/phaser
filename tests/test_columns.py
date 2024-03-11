@@ -5,7 +5,7 @@ import pytest
 from dateutil.tz import gettz
 
 from phaser import (Phase, Column, IntColumn, FloatColumn, DateColumn, DateTimeColumn,
-                    PipelineErrorException, DropRowException)
+                    DataErrorException, DropRowException)
 
 
 # Constructor tests
@@ -16,7 +16,7 @@ def test_null_forbidden_but_null_default():
 
 def test_invalid_on_error():
     col = Column(name="anything", on_error="Bogus")
-    assert col.use_exception == PipelineErrorException
+    assert col.use_exception == DataErrorException
 
 
 # Simple feature tests
@@ -24,13 +24,13 @@ def test_invalid_on_error():
 def test_required_values():
     mycol = Column('crew', allowed_values=["Kirk", "Riker", "Troi", "Crusher"])
     mycol.check_and_cast_value({"crew": "Kirk", 'position': "Captain"})
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         mycol.check_and_cast_value({"crew": "Gilligan", 'position': "mate"})
 
 
 def test_null_forbidden():
     col = Column('employeeid', null=False)
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         col.check_and_cast_value({'employeeid': None})
 
 
@@ -154,9 +154,9 @@ def test_cast_when_not_present():
 
 def test_int_column_minmax():
     col = IntColumn(name="Age", min_value=0, max_value=130)
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         col.check_value(-1)
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         col.check_value(2000)
 
 
@@ -196,7 +196,7 @@ def test_date_column_casts_to_date():
 def test_date_column_range():
     col = DateColumn(name="start", min_value=date(2019, 12, 1), max_value=date.today())
     col.check_and_cast_value({'start': "2024-01-14"})
-    with pytest.raises(PipelineErrorException):
+    with pytest.raises(DataErrorException):
         col.check_and_cast_value({'start': "2012-01-01"})
 
 

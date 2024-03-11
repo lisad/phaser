@@ -13,7 +13,7 @@ exact decimal versions
 
 """
 from phaser import (Phase, Pipeline, Column, FloatColumn, row_step, check_unique,
-                    PipelineErrorException, DropRowException)
+                    DataErrorException, DropRowException)
 
 
 """
@@ -31,11 +31,11 @@ import employee data fixture  (change the other tests to use a 'crew' fixture)
 def drop_rows_with_no_id_and_not_employed(row, **kwargs):
     if not row["Employee ID"]:
         if row['Status'] == "Active":
-            raise PipelineErrorException("Missing employee ID for active employee, need to followup")
+            raise DataErrorException("Missing employee ID for active employee, need to followup")
         elif row['Status'] == "Inactive":
             raise DropRowException(f"Employee {row['Last name']} has no ID and inactive, dropping row")
         else:
-            raise PipelineErrorException(f"Unknown employee status {row['Status']}")
+            raise DataErrorException(f"Unknown employee status {row['Status']}")
     return row
 
 
