@@ -68,13 +68,16 @@ class Context:
     to carry extra data or variable values between phases if necessary. """
 
     def __init__(self, variables=None, working_dir=None):
-        self.errors = {}
-        self.warnings = {}
+        self.reset_events()
         self.variables = variables or {}
         self.current_row = None
-        self.dropped_rows = {}
         self.outputs = []
         self.working_dir = working_dir
+
+    def reset_events(self):
+        self.errors = {}
+        self.warnings = {}
+        self.dropped_rows = {}
 
     def add_error(self, step, row, message):
         # LMDTODO Am I passing row or getting row from context?
@@ -183,8 +186,27 @@ class Pipeline:
         self.save(results, destination)
         self.save_extra_outputs()
         logger.info(f"{phase.name} saved output to {destination}")
+        self.report_errors_and_warnings(phase.name)
         if self.context.has_errors():
             raise DataException(f"Phase '{phase.name}' failed with {len(self.context.errors.keys())} errors.")
+        else:
+            self.context.reset_events()
+
+    def report_errors_and_warnings(self, phase_name):
+        """ TODO: different formats, flexibility
+        For CLI operation we want to report errors to the CLI, but for unsupervised operation these should go
+        to logs.  Python logging does allow users of a library to send log messages to more than one place while
+        customizing log level desired, and we could have drop-row messages as info and warning as warn level so
+        these fit very nicely into the standard levels allowing familiar customization.  """
+        print(f"Reporting for phase {phase_name}")
+        for row_num, info in self.context.dropped_rows.items():
+            print(f"DROPPED row: {row_num}, message: '{info['message']}'")
+        # Unlike errors and dropped rows, there can be multiple warnings per row
+        for row_num, warnings in self.context.warnings.items():
+            for warning in warnings:
+                print(f"WARNING row: {row_num}, message: '{warning['message']}'")
+        for row_num, error in self.context.errors.items():
+            print(f"ERROR row: {row_num}, message: '{error['message']}'")
 
     def save_extra_outputs(self):
         for item in self.context.outputs:

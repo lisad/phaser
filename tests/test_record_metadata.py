@@ -44,7 +44,6 @@ def test_row_step_preserves_row_nums(steps, expected_row_nums):
     phase = Phase(steps=steps)
     phase.load_data(data)
     phase.run_steps()
-    phase.report_errors_and_warnings()
     row_data = phase.row_data
     row_nums = [ r.row_num for r in row_data ]
     assert row_nums == expected_row_nums
@@ -93,7 +92,6 @@ def test_batch_step_preserves_row_num(steps, expected_row_nums):
     phase = Phase(steps=steps)
     phase.load_data(data)
     phase.run_steps()
-    phase.report_errors_and_warnings()
     row_data = phase.row_data
     row_nums = [ r.row_num for r in row_data ]
     assert row_nums == expected_row_nums

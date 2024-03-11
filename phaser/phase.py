@@ -75,22 +75,6 @@ class PhaseBase(ABC):
                 case _:
                     raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
 
-    def report_errors_and_warnings(self):
-        """ In next iteration, we should probably move the generation of error info to stdout to other locations.
-        For CLI operation we want to report errors to the CLI, but for unsupervised operation these should go
-        to logs.  Python logging does allow users of a library to send log messages to more than one place while
-        customizing log level desired, and we could have drop-row messages as info and warning as warn level so
-        these fit very nicely into the standard levels allowing familiar customization.  """
-        # LMDTODO: How are one phases's errors and warnings kept separate from another phase's?
-        for row_num, info in self.context.dropped_rows.items():
-            print(f"DROPPED row: {row_num}, message: '{info['message']}'")
-        # Unlike errors and dropped rows, there can be multiple warnings per row
-        for row_num, warnings in self.context.warnings.items():
-            for warning in warnings:
-                print(f"WARNING row: {row_num}, message: '{warning['message']}'")
-        for row_num, error in self.context.errors.items():
-            print(f"ERROR row: {row_num}, message: '{error['message']}'")
-
 
 class DataFramePhase(PhaseBase):
     def __init__(self, name, context=None, error_policy=None):
@@ -99,7 +83,6 @@ class DataFramePhase(PhaseBase):
 
     def run(self):
         self.df_data = self.df_transform(self.df_data)
-        self.report_errors_and_warnings()
         return self.df_data.to_dict('records')
 
     @abstractmethod
@@ -139,7 +122,6 @@ class ReshapePhase(PhaseBase):
 
     def run(self):
         self.row_data = self.reshape(self.row_data)
-        self.report_errors_and_warnings()
         return self.row_data
 
 
@@ -217,7 +199,6 @@ class Phase(PhaseBase):
         # Break down run into load, steps, error handling, save and delegate
         self.do_column_stuff()
         self.run_steps()
-        self.report_errors_and_warnings()
         self.prepare_for_save()
         return self.row_data.to_records()
 
