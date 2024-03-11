@@ -62,8 +62,8 @@ def test_error_provides_info(reconcile_phase_class):
     phase.load_data([{'deck': '21'}])
 
     phase.run_steps()
-    error = phase.context.errors[0]
-    assert error['row'].row_num == 0
+    error = phase.context.errors[1]
+    assert error['row'].row_num == 1
     assert error['row']['deck'] == '21'
     assert error['step'] == 'assert_false'
     assert error['message'] == "AssertionError raised (assert False)"
@@ -77,8 +77,8 @@ def test_row_processing_continues():
 
     phase.run_steps()
     assert len(phase.context.errors) == 2
-    assert phase.context.errors[0]['step'] == 'check_deck_is_21'   # First row fails on the first step
-    assert phase.context.errors[1]['step'] == 'assert_false'  # 2nd row fails on 2nd step
+    assert phase.context.errors[1]['step'] == 'check_deck_is_21'   # First row fails on the first step
+    assert phase.context.errors[2]['step'] == 'assert_false'  # 2nd row fails on 2nd step
 
 
 def test_row_processing_skips_row():
@@ -89,7 +89,7 @@ def test_row_processing_skips_row():
 
     phase.run_steps()
     assert len(phase.context.errors) == 1
-    assert phase.context.errors[0]['step'] == 'check_deck_is_21'
+    assert phase.context.errors[1]['step'] == 'check_deck_is_21'
 
 
 def test_warning_contains_info():
@@ -98,7 +98,7 @@ def test_warning_contains_info():
 
     phase.run_steps()
     assert len(phase.context.warnings) == 1
-    the_warning = phase.context.warnings[1][0]
+    the_warning = phase.context.warnings[2][0]
     assert the_warning['row']['deck'] == '5'
     assert the_warning['step'] == 'warn_if_lower_decks'
     assert the_warning['message'] == "Lower decks should not be in this dataset"
@@ -110,7 +110,7 @@ def test_drop_row_info():
 
     phase.run_steps()
     assert len(phase.context.dropped_rows) == 1
-    assert phase.context.dropped_rows[1]['step'] == 'check_deck_is_21'
+    assert phase.context.dropped_rows[2]['step'] == 'check_deck_is_21'
 
 
 def test_batch_step_error():
