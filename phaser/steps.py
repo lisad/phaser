@@ -18,9 +18,9 @@ def row_step(step_function):
             return ROW_STEP  # Allows Phase to probe a step for how to call it
         result = step_function(row, context=context)
         if result is None:
-            raise DataErrorException("Step should return row.")
+            raise PhaserError("Step should return row.")
         if not isinstance(result, Mapping):
-            raise DataErrorException(f"Step should return row in dict format, not {result}")
+            raise PhaserError(f"Step should return row in dict format, not {result}")
         return result
     return _row_step_wrapper
 
@@ -98,7 +98,7 @@ def sort_by(column):
     elif isinstance(column, str):
         column_name = column
     else:
-        raise DataException("Error declaring sort_by step - expecting column to be a Column or a column name string")
+        raise PhaserError("Error declaring sort_by step - expecting column to be a Column or a column name string")
 
     @batch_step
     def sort_by_step(batch, **kwargs):
