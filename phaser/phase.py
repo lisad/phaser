@@ -59,6 +59,8 @@ class PhaseBase(ABC):
         else:
             e_name = exc.__class__.__name__
             e_message = str(exc)
+            # TODO: Would be nice to include some traceback information in the
+            # recorded error as well.
             message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
             logger.debug(f"Unknown exception handled in executing steps ({message}")
 
@@ -272,7 +274,11 @@ class Phase(PhaseBase):
         for row in self.row_data:
             for field_name in row.keys():
                 if field_name not in self.headers:
-                    self.context.add_warning('consistency_check', row.row_num,
+                    # TODO: Fix -- context adds warnings to the 'current_row'
+                    # record, not the record associated with the row passed in
+                    # here. In this method, all of the errors are logged on the
+                    # last row of the data, because current_row is not changed.
+                    self.context.add_warning('consistency_check', row,
                         f"At some point, {field_name} was added to the row_data and not declared a header")
 
     def run_steps(self):

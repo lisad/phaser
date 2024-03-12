@@ -131,13 +131,11 @@ class Pipeline:
 
     def _find_extra_sources(phase):
         if hasattr(phase, 'extra_sources'):
-            print(f"Phase {phase} has extra_sources: {phase.extra_sources}")
             return phase.extra_sources
         return []
 
     def _find_extra_outputs(phase):
         if hasattr(phase, 'extra_outputs'):
-            print(f"Phase {phase} has extra_outputs: {phase.extra_outputs}")
             return phase.extra_outputs
         return []
 
