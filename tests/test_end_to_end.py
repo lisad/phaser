@@ -1,4 +1,6 @@
 import pytest
+import io
+from contextlib import redirect_stdout
 import os
 import pandas
 from pathlib import Path
@@ -22,5 +24,16 @@ def test_results(tmpdir):
     assert len(new_data) == 2 # One employee should be dropped
     assert all([row['Bonus percent'] > 0.1 and row['Bonus percent'] < 0.2 for row in new_data])
 
-    assert len(pipeline.context.dropped_rows) == 1
-    assert "Garak" in pipeline.context.dropped_rows[3]['message']
+
+def test_reporting(tmpdir):
+    source = current_path / "fixture_files" / "employees.csv"
+    pipeline = EmployeeReviewPipeline(source=source, working_dir=tmpdir)
+    f = io.StringIO()
+    with redirect_stdout(f):
+        # Having to grab stdout is probably temporary until we make pipeline more versatile in reporting errors
+        pipeline.run()
+    stdout = f.getvalue()
+    assert "Reporting for phase Validator" in stdout
+    assert "Employee Garak has no ID and inactive" in stdout
+    assert "Reporting for phase Transformer" in stdout
+    assert "WARNING row: 2, message: 'At some point, Full name was added to the row_data and not declared a header'"
