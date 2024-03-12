@@ -11,18 +11,28 @@ current_path = Path(__file__).parent
 
 def test_employee_pipeline(tmpdir):
     source = current_path / "fixture_files" / "employees.csv"
-    EmployeeReviewPipeline(source=source, working_dir=tmpdir).run()
+    department_source = current_path / "fixture_files" / "departments.csv"
+    pipeline = EmployeeReviewPipeline(source=source, working_dir=tmpdir)
+    pipeline.init_source('departments', department_source)
+    pipeline.run()
     assert os.path.exists(tmpdir / 'Validator_output_employees.csv')
     assert os.path.exists(tmpdir / 'Transformer_output_employees.csv')
 
 
 def test_results(tmpdir):
     source = current_path / "fixture_files" / "employees.csv"
+    department_source = current_path / "fixture_files" / "departments.csv"
     pipeline = EmployeeReviewPipeline(source=source, working_dir=tmpdir)
+    pipeline.init_source('departments', department_source)
     pipeline.run()
     new_data = read_csv(tmpdir / 'Transformer_output_employees.csv')
     assert len(new_data) == 2 # One employee should be dropped
-    assert all([float(row['Bonus percent']) > 0.1 and float(row['Bonus percent']) < 0.2 for row in new_data])
+    assert all([row['Bonus percent'] > 0.1 and row['Bonus percent'] < 0.2 for row in new_data])
+    assert len(pipeline.context.dropped_rows) == 1
+    assert "Garak" in pipeline.context.dropped_rows[3]['message']
+
+    assert new_data[0]['department_id'] == 2
+    assert new_data[1]['department_id'] == 1
 
 
 def test_reporting(tmpdir):

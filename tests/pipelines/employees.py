@@ -12,8 +12,17 @@ version of this will have to be linear.
 exact decimal versions
 
 """
-from phaser import (Phase, Pipeline, Column, FloatColumn, row_step, check_unique,
-                    DataErrorException, DropRowException)
+from phaser import (
+    Phase,
+    Pipeline,
+    Column,
+    FloatColumn,
+    row_step,
+    context_step,
+    check_unique,
+    DataErrorException,
+    DropRowException
+)
 
 
 """
@@ -64,6 +73,34 @@ def calculate_bonus_percent(row, **kwargs):
         row["Bonus percent"] = row['bonusAmount'] / row['salary']
     return row
 
+@context_step
+def index_departments(context):
+    """ Transforms the 'departments' source from a list of records as it came
+    from the loaded file into a dictionary of name to record."""
+    # TODO: Make this functionality be a built-in feature of Phaser
+    lookup_departments = context.get_source('departments')
+    departments = {
+        r['name']: r for r in lookup_departments
+    }
+    # Overwrite the existing departments source. Is this ok?
+    context.set_source('departments', departments)
+
+@row_step
+def add_department_id(row, context):
+    lookup_departments = context.get_source('departments')
+    department_names = lookup_departments.keys()
+    if row['department']:
+        if row['department'] in department_names:
+            row['department_id'] = lookup_departments[row['department']]['id']
+        else:
+            context.add_warning(add_department_id, row,
+                f"Department name {row['department']} invalid for employee ID {row['Employee ID']}")
+    else:
+        context.add_warning(add_department_id, row,
+            f"Department name missing for employee ID {row['Employee ID']}")
+
+    return row
+
 
 class Validator(Phase):
     columns = [
@@ -92,10 +129,16 @@ class Transformer(Phase):
     steps = [
         combine_full_name,
         calculate_annual_salary,
-        calculate_bonus_percent
+        calculate_bonus_percent,
+        index_departments,
+        add_department_id
+    ]
+    extra_sources = [
+        'departments'
     ]
 
-
 class EmployeeReviewPipeline(Pipeline):
-
-    phases = [Validator, Transformer]
+    phases = [
+        Validator,
+        Transformer
+    ]

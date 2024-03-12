@@ -1,4 +1,4 @@
-employeeNumber,firstName,lastName,payType,paidPer,payRate,bonusAmount,Status
-1,Benjamin,Sisko,"salary","Year","188625","30000",Active
-2,Kira,Nerys,"salary","Year","118625","20000",Active
-,None,Garak,"salary","Year", 100000,,Inactive
+employeeNumber,firstName,lastName,payType,paidPer,payRate,bonusAmount,Status,department
+1,Benjamin,Sisko,"salary","Year","188625","30000",Active,Marketing
+2,Kira,Nerys,"salary","Year","118625","20000",Active,Finance
+,None,Garak,"salary","Year", 100000,,Inactive,Finance
