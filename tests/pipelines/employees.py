@@ -12,11 +12,13 @@ version of this will have to be linear.
 exact decimal versions
 
 """
+from collections import defaultdict
 from phaser import (
     Phase,
     Pipeline,
     Column,
     FloatColumn,
+    IntColumn,
     row_step,
     context_step,
     check_unique,
@@ -101,6 +103,22 @@ def add_department_id(row, context):
 
     return row
 
+@row_step
+def identify_managers(row, context):
+    managers = context.get('managers')
+    manager_id = row['manager_id']
+    if manager_id:
+        managers[manager_id] += 1
+    return row
+
+@context_step
+def reformat_managers(context):
+    managers = context.get('managers')
+    rows = [
+        { 'manager_id': key, 'num_employees': value }
+        for key, value in managers.items()
+    ]
+    context.add_output('managers', rows)
 
 class Validator(Phase):
     columns = [
@@ -137,8 +155,26 @@ class Transformer(Phase):
         'departments'
     ]
 
+class ManagerPhase(Phase):
+    columns = [
+        IntColumn(name='manager_id')
+    ]
+    steps = [
+        identify_managers,
+        reformat_managers
+    ]
+    extra_outputs = [
+        'managers'
+    ]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Initialize a dict to hold the manager counts
+        self.context.add_variable('managers', defaultdict(int))
+
 class EmployeeReviewPipeline(Pipeline):
     phases = [
         Validator,
-        Transformer
+        Transformer,
+        ManagerPhase
     ]
