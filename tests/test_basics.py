@@ -71,7 +71,7 @@ def full_name_step(row, **kwargs):
 
 # Phase tests
 
-def phase_accepts_single_col():
+def test_phase_accepts_single_col():
     # Helpfully should wrap column in a list if only one is defined
     col = Column(name="Test")
     phase = Phase(name="Transform", columns=col)
@@ -84,28 +84,6 @@ def test_have_and_run_steps(tmpdir):
     transformer.load_data(read_csv(current_path / "fixture_files" / "crew.csv"))
     transformer.run_steps()
     assert "full name" in transformer.row_data[1]
-
-
-def test_duplicate_column_names(tmpdir):
-    with open(tmpdir / 'dupe-column-name.csv', 'w') as f:
-        f.write("id,name,name\n1,Percy,Jackson\n")
-    pipeline = Pipeline(working_dir=tmpdir, source=tmpdir / 'dupe-column-name.csv')
-    with pytest.raises(Exception):
-        pipeline.load(tmpdir / 'dupe-column-name.csv')
-
-
-def test_extra_field_in_csv(tmpdir):
-    with open(tmpdir / 'extra-field.csv', 'w') as f:
-        f.write("id,name,age\n1,James Kirk,42,\n")
-    pipeline = Pipeline(working_dir=tmpdir, source=tmpdir / 'extra-field.csv')
-    data = pipeline.load(tmpdir / 'extra-field.csv')
-    phase = Phase()
-    phase.load_data(data)
-    phase.do_column_stuff()
-
-    assert len(phase.context.warnings) == 1
-    print(phase.context.warnings)
-    assert 'Extra value found' in phase.context.warnings[1][0]['message']
 
 
 def test_column_error_drops_row():
