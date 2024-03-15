@@ -57,7 +57,7 @@ def test_subclassing(tmpdir):
         pass
 
     t = Transformer()
-    data = read_csv(current_path / "fixture_files" / "crew.csv").to_dict('records')
+    data = read_csv(current_path / "fixture_files" / "crew.csv")
     t.load_data(data)
     results = t.run()
     assert len(results) == len(data)
@@ -86,13 +86,26 @@ def test_have_and_run_steps(tmpdir):
     assert "full name" in transformer.row_data[1]
 
 
-@pytest.mark.skip("Pandas.read_csv doesn't allow this detection it just renames the 2nd 'name' to 'name.1'")
 def test_duplicate_column_names(tmpdir):
-    # See https://github.com/pandas-dev/pandas/issues/13262 - another reason to write our own CSV reader
     with open(tmpdir / 'dupe-column-name.csv', 'w') as f:
         f.write("id,name,name\n1,Percy,Jackson\n")
-    # TODO - finish this test when we are able to - now that read_csv is a util that wraps
-    # pandas.read_csv maybe we can look at the column names and look for duplicates without the #
+    pipeline = Pipeline(working_dir=tmpdir, source=tmpdir / 'dupe-column-name.csv')
+    with pytest.raises(Exception):
+        pipeline.load(tmpdir / 'dupe-column-name.csv')
+
+
+def test_extra_field_in_csv(tmpdir):
+    with open(tmpdir / 'extra-field.csv', 'w') as f:
+        f.write("id,name,age\n1,James Kirk,42,\n")
+    pipeline = Pipeline(working_dir=tmpdir, source=tmpdir / 'extra-field.csv')
+    data = pipeline.load(tmpdir / 'extra-field.csv')
+    phase = Phase()
+    phase.load_data(data)
+    phase.do_column_stuff()
+
+    assert len(phase.context.warnings) == 1
+    print(phase.context.warnings)
+    assert 'Extra value found' in phase.context.warnings[1][0]['message']
 
 
 def test_column_error_drops_row():

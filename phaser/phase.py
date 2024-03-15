@@ -32,7 +32,7 @@ class PhaseBase(ABC):
                 self.headers = data[0].keys()
             self.row_data = PhaseRecords(data)
         else:
-            raise PhaserError("Phase load_data called with unsupported data format")
+            raise PhaserError(f"Phase load_data called with unsupported data format {data.__class__}")
 
     @abstractmethod
     def run(self):
@@ -93,8 +93,8 @@ class DataFramePhase(PhaseBase):
         raise PhaserError("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
 
     def load_data(self, data):
-        # Overrides the regular load_data because we just want to accept dataframe and keep it in df format.
-        self.df_data = data
+        # Overrides the regular load_data because we want to convert incoming data to DataFrame.
+        self.df_data = pd.DataFrame(data)
 
 
 class ReshapePhase(PhaseBase):
@@ -239,8 +239,19 @@ class Phase(PhaseBase):
                 name = rename_list[name]  # Do declared renames
             return name
 
-        self.row_data = PhaseRecords([{rename_me(key): value for key, value in row.items()} for row in self.row_data])
-        self.headers = [rename_me(name) for name in self.headers]
+        renamed_data = []
+        for index, row in enumerate(self.row_data):
+            if None in row.keys():
+                self.context.current_row = index + 1
+                self.context.add_warning('__phaser_rename_columns',
+                                         row,
+                                         f"Extra value found in row, may mis-align other values")
+                del row[None]
+
+            renamed_data.append({rename_me(key): value for key, value in row.items()})
+
+        self.row_data = PhaseRecords(renamed_data)
+        self.headers = [rename_me(name) for name in self.headers if name is not None]
 
     def prepare_for_save(self):
         """ Checks consistency of data and drops unneeded columns

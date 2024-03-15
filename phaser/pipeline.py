@@ -6,6 +6,7 @@ import phaser
 from phaser.util import read_csv
 from phaser.exceptions import *
 from pathlib import PosixPath
+from phaser.exceptions import *
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -138,7 +139,7 @@ class Pipeline:
 
     def run_phase(self, phase, source, destination):
         logger.info(f"Loading input from {source} for {phase.name}")
-        data = self.load(phase, source)
+        data = self.load(source)
         phase.load_data(data)
         results = phase.run()
         self.save(results, destination)
@@ -177,15 +178,10 @@ class Pipeline:
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
 
-    def load(self, phase, next_source):
+    def load(self, source):
         """ The load method can be overridden to apply a pipeline-specific way of loading data.
         Phaser default is to read data from a CSV file. """
-        df = read_csv(next_source)
-        # This is a hacky way to handle a phase we know needs a DataFrame as its
-        # data, rather than a list of dicts.
-        if isinstance(phase, phaser.DataFramePhase):
-            return df
-        return df.to_dict('records')
+        return read_csv(source)
 
     def save(self, results, destination):
         """ This method saves the result of the Phase operating on the batch, in phaser's preferred format.
