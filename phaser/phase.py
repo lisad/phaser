@@ -233,6 +233,8 @@ class Phase(PhaseBase):
 
         def rename_me(name):
             name = name.strip()
+            if name.startswith('"') and name.endswith('"'):
+                name = name.strip('"')
             if make_strict_name(name) in strict_name_list.keys():
                 name = strict_name_list[make_strict_name(name)]  # Convert to declared capital'n/separ'n
             if name in rename_list.keys():
