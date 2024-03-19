@@ -32,6 +32,6 @@ from phaser.exceptions import PhaserError, DataErrorException, DataException, Dr
 from phaser.phase import Phase, ReshapePhase, DataFramePhase
 from phaser.steps import row_step, batch_step, context_step, check_unique, sort_by
 from phaser.column import Column, IntColumn, DateColumn, DateTimeColumn, FloatColumn
-from phaser.util import read_csv
+from phaser.io import read_csv
 
 __version__ = 0.1

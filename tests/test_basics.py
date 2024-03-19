@@ -57,7 +57,7 @@ def test_subclassing(tmpdir):
         pass
 
     t = Transformer()
-    data = read_csv(current_path / "fixture_files" / "crew.csv").to_dict('records')
+    data = read_csv(current_path / "fixture_files" / "crew.csv")
     t.load_data(data)
     results = t.run()
     assert len(results) == len(data)
@@ -71,7 +71,7 @@ def full_name_step(row, **kwargs):
 
 # Phase tests
 
-def phase_accepts_single_col():
+def test_phase_accepts_single_col():
     # Helpfully should wrap column in a list if only one is defined
     col = Column(name="Test")
     phase = Phase(name="Transform", columns=col)
@@ -84,15 +84,6 @@ def test_have_and_run_steps(tmpdir):
     transformer.load_data(read_csv(current_path / "fixture_files" / "crew.csv"))
     transformer.run_steps()
     assert "full name" in transformer.row_data[1]
-
-
-@pytest.mark.skip("Pandas.read_csv doesn't allow this detection it just renames the 2nd 'name' to 'name.1'")
-def test_duplicate_column_names(tmpdir):
-    # See https://github.com/pandas-dev/pandas/issues/13262 - another reason to write our own CSV reader
-    with open(tmpdir / 'dupe-column-name.csv', 'w') as f:
-        f.write("id,name,name\n1,Percy,Jackson\n")
-    # TODO - finish this test when we are able to - now that read_csv is a util that wraps
-    # pandas.read_csv maybe we can look at the column names and look for duplicates without the #
 
 
 def test_column_error_drops_row():

@@ -124,6 +124,25 @@ def test_forbidden_column_name_characters():
         Column('a\tb\tc')
 
 
+def test_strip_column_name_spaces(tmpdir):
+    phase = Phase()
+    phase.load_data([{' id': '1', ' name': 'James T. Kirk'}])
+    phase.rename_columns()
+    assert phase.row_data[0]['id'] == '1'
+
+
+def test_curious_quote_situation(tmpdir):
+    """ If we load column names in with clevercsv or pandas, column names in quotes get the quotes removed
+     so "id","name" loads in the names you'd expect.  However, we can't count on that working if there are ALSO
+     spaces around column names - which normal people quite normally add when they're trying to 'fix' a CSV.
+     This test provides what the libraries provide after opening a CSV where the opening line is
+         "id", "name"\n
+     to make sure that our code strips the spaces AND quotes."""
+    phase = Phase()
+    phase.load_data([{'id': '1', ' "name"': 'James T. Kirk'}])
+    phase.rename_columns()
+    assert phase.row_data[0]['name'] == 'James T. Kirk'
+
 # Testing IntColumn
 
 def test_int_column_casts():
