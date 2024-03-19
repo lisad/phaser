@@ -3,7 +3,7 @@ import logging
 import os
 import pandas as pd
 import phaser
-from phaser.util import read_csv
+from phaser.io import read_csv
 from phaser.exceptions import *
 from pathlib import PosixPath
 from phaser.exceptions import *
