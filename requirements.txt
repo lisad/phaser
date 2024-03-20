@@ -1,3 +1,4 @@
+clevercsv
 pandas
 pytest
 # LMDTODO: FIgure out how to break out dev dependencies and the following:

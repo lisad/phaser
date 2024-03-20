@@ -3,7 +3,7 @@ import logging
 import os
 import pandas as pd
 import phaser
-from phaser.io import read_csv
+from phaser.io import read_csv, save_csv
 from phaser.exceptions import *
 from pathlib import PosixPath
 from phaser.exceptions import *
@@ -174,7 +174,7 @@ class Pipeline:
                 filename = self.working_dir / f"{item.name}.csv"
                 if os.path.exists(filename):
                     raise PhaserError(f"Output with name '{filename}' exists.  Aborting before overwrite.")
-                pd.DataFrame(item.data).to_csv(filename, index=False, na_rep="NULL")
+                save_csv(filename, item.data)
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
 
@@ -185,8 +185,8 @@ class Pipeline:
 
     def save(self, results, destination):
         """ This method saves the result of the Phase operating on the batch, in phaser's preferred format.
-        It should be easy to override this method to save in a different way, using different
-        parameters on pandas' to_csv, or to use pandas' to_excel, to_json or a different output entirely.
+        It should be easy to override this method to save in a different way, using pandas' to_csv, to_excel, to_json
+        or a different output entirely.
 
         CSV defaults chosen:
         * separator character is ','
@@ -197,7 +197,7 @@ class Pipeline:
         # Use the raw list(dict) form of the data, because DataFrame
         # construction does something different with a subclass of Sequence and
         # Mapping that results in the columns being re-ordered.
-        pd.DataFrame(results).to_csv(destination, index=False, na_rep="NULL")
+        save_csv(destination, results)
 
     def get_destination(self, phase):
         source_filename = None

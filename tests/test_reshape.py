@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 from pathlib import Path
 from collections import defaultdict
@@ -86,3 +87,14 @@ def test_reshape_explode(tmpdir):
     results = phase.run()
     assert len(results) == 6
     assert results[5]['language'] == "Klingon"
+
+def test_nans_not_returned():
+    class InsertNanValues(DataFramePhase):
+        def df_transform(self, df):
+            df['nan_column'] = np.NAN
+            return df
+
+    phase = InsertNanValues("insert_nan_values")
+    phase.load_data([{"id": 1}, {"id": 2}])
+    results = phase.run()
+    assert all([result['nan_column'] == "NULL" for result in results])

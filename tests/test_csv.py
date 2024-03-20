@@ -1,6 +1,7 @@
+import numpy as np
 import pytest
 from phaser import Pipeline, Phase, DataErrorException
-from phaser.io import read_csv
+from phaser.io import read_csv, save_csv
 
 def test_duplicate_column_names(tmpdir):
     with open(tmpdir / 'dupe-column-name.csv', 'w') as f:

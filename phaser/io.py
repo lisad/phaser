@@ -1,4 +1,6 @@
+import pandas as pd
 from clevercsv import stream_dicts, stream_table
+from clevercsv.wrappers import write_dicts
 from phaser.exceptions import DataErrorException
 
 
@@ -11,3 +13,7 @@ def read_csv(source):
         raise DataErrorException(f"CSV {source} has duplicate column names and cannot reliably be parsed")
 
     return list(stream_dicts(source))
+
+
+def save_csv(filename, row_data):
+    write_dicts(row_data, filename)
