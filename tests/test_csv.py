@@ -70,9 +70,10 @@ def test_regular_quotes(tmpdir):
     assert dict(read_csv(tmpdir / 'commented_line')[0])== {'id': '1', 'name': 'James Kirk'}
 
 
-@pytest.mark.skip("Although the library removes quotes normally, a space makes that not happen")
 def test_curious_quote_situation(tmpdir):
-    """ It's OK though, we can strip spaces and quotes when we canonicalize column names """
+    """ This is NOT how we think field names should ideally be determined. Note how the 'name' field
+    name is not 'name' but actually ' "name"'.  Humans edit CSVs and add spaces so this happens IRL.
+    It's OK though, we can strip spaces and quotes when we canonicalize column names in a regular phase"""
     with open(tmpdir / 'commented_line', 'w') as f:
         f.write('"id", "name"\n1,James Kirk\n')
-    assert dict(read_csv(tmpdir / 'commented_line')[0])== {'id': '1', 'name': 'James Kirk'}
+    assert dict(read_csv(tmpdir / 'commented_line')[0])== {'id': '1', ' "name"': 'James Kirk'}
