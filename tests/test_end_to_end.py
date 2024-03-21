@@ -44,7 +44,9 @@ def test_results(tmpdir):
 
 def test_reporting(tmpdir):
     source = current_path / "fixture_files" / "employees.csv"
+    department_source = current_path / "fixture_files" / "departments.csv"
     pipeline = EmployeeReviewPipeline(source=source, working_dir=tmpdir)
+    pipeline.init_source('departments', department_source)
     f = io.StringIO()
     with redirect_stdout(f):
         # Having to grab stdout is probably temporary until we make pipeline more versatile in reporting errors
