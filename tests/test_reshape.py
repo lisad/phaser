@@ -64,6 +64,7 @@ def test_dataframe_phase_in_pipeline(tmpdir):
         line = f.readline()
         assert line == "main engineering,10.9 μR/h,22\n"
 
+
 def test_reshape_explode(tmpdir):
     """ This test illustrates pandas explode, which is fun.  Also note it would be useful to have a multi-value
     column type that would automatically do the parsing done below where the string is split into a list -- not only
@@ -87,14 +88,3 @@ def test_reshape_explode(tmpdir):
     results = phase.run()
     assert len(results) == 6
     assert results[5]['language'] == "Klingon"
-
-def test_nans_not_returned():
-    class InsertNanValues(DataFramePhase):
-        def df_transform(self, df):
-            df['nan_column'] = np.NAN
-            return df
-
-    phase = InsertNanValues("insert_nan_values")
-    phase.load_data([{"id": 1}, {"id": 2}])
-    results = phase.run()
-    assert all([result['nan_column'] == "NULL" for result in results])

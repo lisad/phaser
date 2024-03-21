@@ -83,11 +83,7 @@ class DataFramePhase(PhaseBase):
 
     def run(self):
         self.df_data = self.df_transform(self.df_data)
-        self.prepare_for_save()
         return self.df_data.to_dict('records')
-
-    def prepare_for_save(self):
-        self.df_data.fillna("NULL", inplace=True)
 
     @abstractmethod
     def df_transform(self, df_data):
