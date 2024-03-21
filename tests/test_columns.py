@@ -143,7 +143,9 @@ def test_curious_quote_situation(tmpdir):
     phase.rename_columns()
     assert phase.row_data[0]['name'] == 'James T. Kirk'
 
+
 # Testing IntColumn
+
 
 def test_int_column_casts():
     col = IntColumn(name="Age", min_value=0)

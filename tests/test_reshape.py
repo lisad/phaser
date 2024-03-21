@@ -1,10 +1,10 @@
 import pytest
 from pathlib import Path
 from collections import defaultdict
-import pandas as pd
 from phaser import ReshapePhase, DataFramePhase, read_csv, Pipeline
 
 current_path = Path(__file__).parent
+
 
 def test_reshape():
 
@@ -62,6 +62,7 @@ def test_dataframe_phase_in_pipeline(tmpdir):
         assert line == "hangar deck,9.8 μR/h,16\n"
         line = f.readline()
         assert line == "main engineering,10.9 μR/h,22\n"
+
 
 def test_reshape_explode(tmpdir):
     """ This test illustrates pandas explode, which is fun.  Also note it would be useful to have a multi-value

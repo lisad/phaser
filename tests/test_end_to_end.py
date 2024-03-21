@@ -2,9 +2,9 @@ import pytest
 import io
 from contextlib import redirect_stdout
 import os
-import pandas
 from pathlib import Path
 from pipelines.employees import EmployeeReviewPipeline
+from phaser.io import read_csv
 
 current_path = Path(__file__).parent
 
@@ -20,9 +20,9 @@ def test_results(tmpdir):
     source = current_path / "fixture_files" / "employees.csv"
     pipeline = EmployeeReviewPipeline(source=source, working_dir=tmpdir)
     pipeline.run()
-    new_data = pandas.read_csv(tmpdir / 'Transformer_output_employees.csv').to_dict(orient='records')
+    new_data = read_csv(tmpdir / 'Transformer_output_employees.csv')
     assert len(new_data) == 2 # One employee should be dropped
-    assert all([row['Bonus percent'] > 0.1 and row['Bonus percent'] < 0.2 for row in new_data])
+    assert all([float(row['Bonus percent']) > 0.1 and float(row['Bonus percent']) < 0.2 for row in new_data])
 
 
 def test_reporting(tmpdir):
