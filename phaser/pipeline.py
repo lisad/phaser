@@ -1,10 +1,7 @@
 import inspect
 import logging
 import os
-import pandas as pd
-import phaser
 from phaser.io import read_csv, save_csv
-from phaser.exceptions import *
 from pathlib import PosixPath
 from phaser.exceptions import *
 

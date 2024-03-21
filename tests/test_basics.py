@@ -1,5 +1,3 @@
-import pandas as pd
-
 from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, DataException
 import pytest  # noqa # pylint: disable=unused-import
 import os
@@ -49,7 +47,7 @@ def test_drop_col_works_if_not_exist(tmpdir):
                   columns=[Column(name="ID", save=True), Column(name="Status", save=False)])
     phase.load_data([{"ID": 1, "Location": "onboard"}])
     phase.prepare_for_save()
-    assert 'Status' not in pd.DataFrame(phase.row_data).columns
+    assert 'Status' not in phase.row_data[0].keys()
 
 
 def test_subclassing(tmpdir):

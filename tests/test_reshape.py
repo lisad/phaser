@@ -1,11 +1,10 @@
-import numpy as np
 import pytest
 from pathlib import Path
 from collections import defaultdict
-import pandas as pd
 from phaser import ReshapePhase, DataFramePhase, read_csv, Pipeline
 
 current_path = Path(__file__).parent
+
 
 def test_reshape():
 
