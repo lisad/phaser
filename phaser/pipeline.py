@@ -145,7 +145,7 @@ class Pipeline:
         :param source: must be a os.PathLike file in csv format and will be read entirely into memory
         """
         # TODO: Check that file exists first?
-        data = read_csv(source).to_dict('records')
+        data = read_csv(source)
         self.context.set_source(name, data)
 
     def setup_phases(self):
