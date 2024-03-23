@@ -305,8 +305,22 @@ class DateColumn(DateTimeColumn):
 # -------  Below here: not exported for user use  -------
 
 def make_strict_name(name):
-    # LMDTODO: making a field name 'strict' should also condense multiple space characters to one
-    return name.lower().replace('_', ' ')
+    """
+    Often hand-edited spreadsheets or CSVs get extra tabs, returns or spaces in the field names
+    >>> make_strict_name('Homeworld_Quadrant')
+    'homeworld quadrant'
+    >>> make_strict_name('Homeworld  quadrant')
+    'homeworld quadrant'
+    >>> make_strict_name('Homeworld\tquadrant')
+    'homeworld quadrant'
+    >>> make_strict_name('Homeworld \\nquadrant')
+    'homeworld quadrant'
+    """
+    new_name = (name.lower().
+                replace('_', ' ').
+                replace('\t', ' ').
+                replace('\n', ' '))
+    return ' '.join(new_name.split())   # Replaces multiple spaces with single
 
 
 def call_method_on(obj, method):
