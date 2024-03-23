@@ -5,8 +5,8 @@ import inspect
 import logging
 import types
 from collections.abc import Iterable
-from pandas import isna
-from .pipeline import DropRowException, DataErrorException, WarningException
+from .exceptions import DropRowException, DataErrorException, WarningException
+from .io import is_nan_or_null, safe_is_nan, is_empty
 
 logger = logging.getLogger('phaser')
 
@@ -111,10 +111,10 @@ class Column:
         return row
 
     def cast(self, value):
-        """ Basic column only fixes 'na' values.
-        Override this method in a subclass to cast python data types or custom objects.
+        """ Basic column only fixes NaN values. Even values like "NULL" or "None" might be actual values if we
+        don't know the type. this is good to subclass to cast python data types or custom objects.
         """
-        if isna(value):
+        if safe_is_nan(value):
             return None
         return value
 
@@ -201,9 +201,7 @@ class IntColumn(Column):
             raise self.use_exception(f"Value for {self.name} is {value}, more than max {self.max_value}")
 
     def cast(self, value):
-        if value is None:
-            return None
-        if isna(value):
+        if is_nan_or_null(value) or is_empty(value):
             return None
         return int(Decimal(value))
 
@@ -213,7 +211,7 @@ class FloatColumn(IntColumn):
         super().__init__(*args, **kwargs)
 
     def cast(self, value):
-        if value is None or isna(value):
+        if is_nan_or_null(value) or is_empty(value):
             return None
         return float(Decimal(value))
 
@@ -283,16 +281,14 @@ class DateTimeColumn(Column):
             raise self.use_exception(f"Value for {self.name} is {value}, more than max {self.max_value}")
 
     def cast(self, value):
-        if value is None:
-            return None
-        if isna(value):
+        if is_nan_or_null(value) or is_empty(value):
             return None
         if self.date_format_code:
             value = datetime.strptime(value, self.date_format_code)
         else:
             value = parse(value)
         if value.tzname() is None and self.default_tz is not None:
-            value  = value.replace(tzinfo=self.default_tz)
+            value = value.replace(tzinfo=self.default_tz)
         return value
 
 
