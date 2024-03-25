@@ -36,4 +36,4 @@ def test_reporting(tmpdir):
     assert "Reporting for phase Validator" in stdout
     assert "Employee Garak has no ID and inactive" in stdout
     assert "Reporting for phase Transformer" in stdout
-    assert "WARNING row: 2, message: 'At some point, Full name was added to the row_data and not declared a header'"
+    assert "WARNING row: 2, message: 'At some point, Full name was added to the row_data and not declared a header'" in stdout
