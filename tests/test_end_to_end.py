@@ -22,7 +22,7 @@ def test_results(tmpdir):
     pipeline.run()
     new_data = read_csv(tmpdir / 'Transformer_output_employees.csv')
     assert len(new_data) == 2 # One employee should be dropped
-    assert all([row['Bonus percent'] > 0.1 and row['Bonus percent'] < 0.2 for row in new_data])
+    assert all([float(row['Bonus percent']) > 0.1 and float(row['Bonus percent']) < 0.2 for row in new_data])
 
 
 def test_reporting(tmpdir):
