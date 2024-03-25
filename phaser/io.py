@@ -35,26 +35,26 @@ class FixNansIterator:
             row = self._sequence[self._index]
             self._index += 1
             for key, val in row.items():
-                if safe_isnan(val):
+                if safe_is_nan(val):
                     row[key] = None
             return row
         else:
             raise StopIteration
 
 
-def safe_isnan(value):
+def safe_is_nan(value):
     """
     This function needs to be directly testable in case we find a better way than try/except that doesn't use
     pandas isnull or doesn't attempt to replace too many things with none.  The test may fail if numpy isn't
     available - numpy needs to be a test dependency but not a library dependency.
-    >>> safe_isnan('a')
+    >>> safe_is_nan('a')
     False
-    >>> safe_isnan(1)
+    >>> safe_is_nan(1)
     False
     >>> import numpy as np
-    >>> safe_isnan(np.nan)
+    >>> safe_is_nan(np.nan)
     True
-    >>> safe_isnan(float('nan'))
+    >>> safe_is_nan(float('nan'))
     True
     """
     try:
@@ -64,6 +64,32 @@ def safe_isnan(value):
     except TypeError:
         return False
 
+
+def is_nan_or_null(value):
+    """
+    NOTE: For purposes of dealing with IO, special values that are sometimes saved for None are also treated as None.
+    >>> is_nan_or_null(None)
+    True
+    >>> is_nan_or_null(True)
+    False
+    >>> is_nan_or_null("NULL")
+    True
+    """
+    return value is None or safe_is_nan(value) or value in ["NULL", "None"]
+
+
+def is_empty(value):
+    """
+    >>> is_empty("   ")
+    True
+    >>> is_empty("\t ")
+    True
+    >>> is_empty("Not empty")
+    False
+    """
+    if isinstance(value, str):
+        return value.replace('\t', '').replace('\n', '').replace(' ', '') == ""
+    return False
 
 def save_csv(filename, row_data):
     if not row_data:

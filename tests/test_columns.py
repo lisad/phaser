@@ -160,10 +160,12 @@ def test_int_column_null_value():
     assert col.cast(None) is None
 
 
-def test_cast_nan_when_null_ok():
+def test_cast_nans_and_nones():
     col = IntColumn(name="Skill level")
     assert col.cast(np.nan) is None
-
+    assert col.cast("NULL") is None
+    assert col.cast(None) is None
+    assert col.cast("") is None
 
 def test_cast_when_not_present():
     col = IntColumn(name="Shoe size", required=False)
