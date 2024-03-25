@@ -29,9 +29,10 @@ def warn_if_lower_decks(row, context):
 
 @row_step
 def warn_if_lower_decks_and_return_row(row, context):
-    # LMDTODO add test that covers this
     if int(row['deck']) < 10:
-        context.add_warning('warnif', row, "Lower decks should not be in this dataset")
+        context.add_warning('lower_decks_warning', row, "Lower decks should not be in this dataset")
+        row['deck'] = 10
+        row['incident'] = "Nothing happened"
     return row
 
 
@@ -102,6 +103,17 @@ def test_warning_contains_info():
     assert the_warning['row']['deck'] == '5'
     assert the_warning['step'] == 'warn_if_lower_decks'
     assert the_warning['message'] == "Lower decks should not be in this dataset"
+
+
+def test_warning_and_return_modified_row():
+    phase = Phase(steps=[warn_if_lower_decks_and_return_row])
+    phase.load_data([{'deck': '21', 'incident': 'security'}, {'deck': '5', 'incident': 'security'}])
+    phase.run_steps()
+    assert len(phase.context.warnings) == 1
+    the_warning = phase.context.warnings[2][0]
+    assert the_warning['row']['deck'] == 10
+    assert the_warning['step'] == 'lower_decks_warning'
+    assert phase.row_data[1]['incident'] == "Nothing happened"
 
 
 def test_drop_row_info():
