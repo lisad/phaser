@@ -10,9 +10,7 @@ from phaser.io import read_csv
 current_path = Path(__file__).parent
 
 
-def test_employee_pipeline(tmpdir):
-    print(tmpdir)
-
+def test_pipeline(tmpdir):
     source = current_path / "fixture_files" / "more-employees.csv"
     department_source = current_path / "fixture_files" / "departments.csv"
     pipeline = EmployeeReviewPipeline(source=source, working_dir=tmpdir)
@@ -22,7 +20,6 @@ def test_employee_pipeline(tmpdir):
         # Having to grab stdout is probably temporary until we make pipeline more versatile in reporting errors
         pipeline.run()
     stdout = f.getvalue()
-    print(stdout)
 
     assert os.path.exists(tmpdir / 'Validation_output_more-employees.csv')
     assert os.path.exists(tmpdir / 'Transformation_output_more-employees.csv')
