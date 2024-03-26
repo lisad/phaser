@@ -106,7 +106,7 @@ def reformat_managers(context):
     ]
     context.add_output('managers', rows)
 
-class Validator(Phase):
+class Validation(Phase):
     columns = [
         Column(name="Employee ID", rename="employeeNumber"),
         Column(name="First name", rename="firstName"),
@@ -125,32 +125,21 @@ class Validator(Phase):
     ]
 
 
-class Transformer(Phase):
+class Transformation(Phase):
+    # TODO: When the column is declared as IntColumn, it is output as "4.0" and
+    # "2.0" rather than as "4" and "2". I have not been able to figure out why,
+    # but I am stopping the doom loop before I can't get out of it.
     columns = [
         FloatColumn(name='Pay rate'),
-        FloatColumn(name="bonusAmount")
+        FloatColumn(name="bonusAmount"),
+#        IntColumn(name='manager_id')
     ]
     steps = [
         combine_full_name,
         calculate_annual_salary,
         calculate_bonus_percent,
-        index_departments,
-        add_department_id
-    ]
-    extra_sources = [
-        'departments'
-    ]
-
-class ManagerPhase(Phase):
-    # TODO: When the column is declared as IntColumn, it is output as "4.0" and
-    # "2.0" rather than as "4" and "2". I have not been able to figure out why,
-    # but I am stopping the doom loop before I can't get out of it.
-    columns = [
-#        IntColumn(name='manager_id')
-    ]
-    steps = [
         identify_managers,
-        reformat_managers
+        reformat_managers,
     ]
     extra_outputs = [
         'managers'
@@ -161,9 +150,20 @@ class ManagerPhase(Phase):
         # Initialize a dict to hold the manager counts
         self.context.add_variable('managers', defaultdict(int))
 
+
+class Enrichment(Phase):
+    steps = [
+        index_departments,
+        add_department_id,
+    ]
+    extra_sources = [
+        'departments'
+    ]
+
+
 class EmployeeReviewPipeline(Pipeline):
     phases = [
-        Validator,
-        Transformer,
-        ManagerPhase
+        Validation,
+        Transformation,
+        Enrichment,
     ]

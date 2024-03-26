@@ -24,12 +24,12 @@ def test_employee_pipeline(tmpdir):
     stdout = f.getvalue()
     print(stdout)
 
-    assert os.path.exists(tmpdir / 'Validator_output_more-employees.csv')
-    assert os.path.exists(tmpdir / 'Transformer_output_more-employees.csv')
-    assert os.path.exists(tmpdir / 'ManagerPhase_output_more-employees.csv')
+    assert os.path.exists(tmpdir / 'Validation_output_more-employees.csv')
+    assert os.path.exists(tmpdir / 'Transformation_output_more-employees.csv')
+    assert os.path.exists(tmpdir / 'Enrichment_output_more-employees.csv')
     assert os.path.exists(tmpdir / 'managers.csv')
 
-    new_data = read_csv(tmpdir / 'ManagerPhase_output_more-employees.csv')
+    new_data = read_csv(tmpdir / 'Enrichment_output_more-employees.csv')
     assert len(new_data) == 5 # One employee should be dropped
     assert all([float(row['Bonus percent']) > 0.1 and float(row['Bonus percent']) < 0.2 for row in new_data])
 
@@ -52,7 +52,7 @@ def test_employee_pipeline(tmpdir):
         { 'manager_id': '2', 'num_employees': '2' },
     ]
 
-    assert "Reporting for phase Validator" in stdout
+    assert "Reporting for phase Validation" in stdout
     assert "Employee Garak has no ID and inactive" in stdout
-    assert "Reporting for phase Transformer" in stdout
-    assert "WARNING row: 5, message: 'At some point, Full name was added to the row_data and not declared a header'" in stdout
+    assert "Reporting for phase Transformation" in stdout
+    assert "WARNING row: context, message: 'At some point, Full name was added to the row_data and not declared a header'" in stdout
