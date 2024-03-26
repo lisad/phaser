@@ -126,13 +126,10 @@ class Validation(Phase):
 
 
 class Transformation(Phase):
-    # TODO: When the column is declared as IntColumn, it is output as "4.0" and
-    # "2.0" rather than as "4" and "2". I have not been able to figure out why,
-    # but I am stopping the doom loop before I can't get out of it.
     columns = [
         FloatColumn(name='Pay rate'),
         FloatColumn(name="bonusAmount"),
-#        IntColumn(name='manager_id')
+        IntColumn(name='manager_id')
     ]
     steps = [
         combine_full_name,
