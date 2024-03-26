@@ -49,6 +49,17 @@ def test_drop_col_works_if_not_exist(tmpdir):
     phase.prepare_for_save()
     assert 'Status' not in phase.row_data[0].keys()
 
+# The prepare_for_save function used to use a DataFrame to succintcly drop the
+# columns, but DataFrame changes types sometimes. In particular, if there was
+# a column of `int`s that had some `None` values in it, DataFrame converted that
+# column to a `float`. Not what we want. This function checks that that behavior
+# no longer occurs.
+def test_dropping_columns_does_not_change_type(tmpdir):
+    phase = Phase(name="transform",
+                  columns=[IntColumn(name="id")])
+    phase.load_data([{"id": 1}, {"id": None}, {"id": 2}])
+    phase.prepare_for_save()
+    assert phase.row_data.to_records() == [{"id": 1}, {"id": None}, {"id": 2}]
 
 def test_subclassing(tmpdir):
     class Transformer(Phase):

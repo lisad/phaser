@@ -259,14 +259,14 @@ class Phase(PhaseBase):
         """ Checks consistency of data and drops unneeded columns
         """
         self.check_headers_consistent()
-        # Use the raw list(dict) form of the data, because DataFrame
-        # construction does something different with a subclass of Sequence and
-        # Mapping that results in the columns being re-ordered.
-        df = pd.DataFrame(self.row_data.to_records())
         columns_to_drop = [col.name for col in self.columns if col.save is False]
-        columns_exist_to_drop = [col_name for col_name in columns_to_drop if col_name in df.columns]
-        df.drop(columns_exist_to_drop, axis=1, inplace=True)
-        self.row_data = PhaseRecords(df.to_dict('records'))
+        if len(columns_to_drop) == 0:
+            # Nothing to do, so bail fast
+            return
+        for row in self.row_data:
+            for col in columns_to_drop:
+                if col in row:
+                    del row[col]
 
     def check_headers_consistent(self):
         for row in self.row_data:
