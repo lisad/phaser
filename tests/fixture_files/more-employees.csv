@@ -1,0 +1,7 @@
+employeeNumber,firstName,lastName,payType,paidPer,payRate,bonusAmount,Status,department,manager_id
+1,Benjamin,Sisko,"salary","Year","188625","30000",Active,Marketing,4
+2,Kira,Nerys,"salary","Year","118625","20000",Active,Finance
+,None,Garak,"salary","Year", 100000,,Inactive,Finance,
+4,Rasma,Son,"salary","Year",230000,24000,Active,Marketing,
+5,Aldina,Sharrow,"salary","Year",140000,18000,Active,Finance,2
+6,Viktor,Matic,"salary","Year",180000,25000,Active,Finance,2

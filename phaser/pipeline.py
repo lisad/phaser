@@ -27,6 +27,7 @@ class Context:
         self.reset_events()
         self.variables = variables or {}
         self.current_row = None
+        self.sources = {}
         self.outputs = []
         self.working_dir = working_dir
 
@@ -73,6 +74,14 @@ class Context:
         # At present outputs must be in record format and save to CSV, but this should be expanded.
         self.outputs.append(ReadWriteObject(name, data, to_save=True))
 
+    def set_source(self, name, data):
+        self.sources[name] = ReadWriteObject(name, data, to_save=False)
+
+    def get_source(self, name):
+        if name in self.sources.keys():
+            return self.sources[name].data
+        raise PhaserError(f"Source not loaded before being used: {name}")
+
 
 class ReadWriteObject:
     def __init__(self, name, data=None, to_save=True):
@@ -103,6 +112,41 @@ class Pipeline:
         self.phases = phases or self.__class__.phases
         self.phase_instances = []
         self.context = Context(working_dir=self.working_dir)
+        # Collect the extra sources and outputs from the phases so they can be
+        # reconciled and initialized as necessary.  Extra sources that match
+        # with extra outputs do not need to be initialized, but extra sources
+        # that do not come from phases must be initialized so that phases can
+        # access their data.
+        self.extra_sources = [
+            source for phase in self.phases for source in Pipeline._find_extra_sources(phase)
+        ]
+        self.extra_outputs = [
+            output for phase in self.phases for output in Pipeline._find_extra_outputs(phase)
+        ]
+        self.sources_needing_initialization = [
+            source
+            for source in self.extra_sources
+            if source not in self.extra_outputs
+        ]
+
+    def _find_extra_sources(phase):
+        if hasattr(phase, 'extra_sources'):
+            return phase.extra_sources
+        return []
+
+    def _find_extra_outputs(phase):
+        if hasattr(phase, 'extra_outputs'):
+            return phase.extra_outputs
+        return []
+
+    def init_source(self, name, source):
+        """ Initializes a named source based on the kind of 'source' passed in.
+
+        :param source: must be a os.PathLike file in csv format and will be read entirely into memory
+        """
+        # TODO: Check that file exists first?
+        data = read_csv(source)
+        self.context.set_source(name, data)
 
     def setup_phases(self):
         """ Instantiates phases passed as classes, assigns unique names to phases, and passes
@@ -111,8 +155,6 @@ class Pipeline:
         for phase in self.phases:
             phase_instance = phase
             if inspect.isclass(phase):
-                # TODO: Fix: Phase.__init__() missing required positional
-                # argument: 'name'
                 phase_instance = phase(context=self.context)
             else:
                 phase.context = self.context
@@ -124,8 +166,19 @@ class Pipeline:
             phase_instance.name = name
             self.phase_instances.append(phase_instance)
 
+    def validate_sources(self):
+        """ Check that all required sources have been initialized."""
+        missing_sources = []
+        for source in self.sources_needing_initialization:
+            if not source in self.context.sources:
+                missing_sources.append(source)
+
+        if len(missing_sources) > 0:
+            raise PhaserError(f"{len(missing_sources)} sources need initialization: {missing_sources}")
+
     def run(self):
         self.setup_phases()
+        self.validate_sources()
         if self.source is None:
             raise ValueError("Pipeline source may not be None")
         next_source = self.source

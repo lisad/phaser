@@ -31,6 +31,9 @@ class RunPipelineCommand(Command):
         parser.add_argument("working_dir", help="directory to output phase results")
         parser.add_argument("source", help="file to use as initial source")
 
+# TODO: figure out how to get additionaal needed sources from a pipeline and add
+# them as required arguments
+
     def execute(self, args):
         pipeline_name = args.pipeline_name
         # Pipelines are expected to be defined in a module in the `pipelines`
