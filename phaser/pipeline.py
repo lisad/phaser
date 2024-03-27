@@ -75,11 +75,11 @@ class Context:
         self.outputs.append(ReadWriteObject(name, data, to_save=True))
 
     def set_source(self, name, data):
-        self.sources[name] = data
+        self.sources[name] = ReadWriteObject(name, data, to_save=False)
 
     def get_source(self, name):
         if name in self.sources.keys():
-            return self.sources[name]
+            return self.sources[name].data
         raise PhaserError(f"Source not loaded before being used: {name}")
 
 
