@@ -10,6 +10,22 @@ current_path = Path(__file__).parent
 
 # Tests of the operation of steps
 
+
+def test_simple_batch_step():
+    @batch_step
+    def sum_so_far(batch, context):
+        running_sum = 0
+        for row in batch:
+            running_sum = running_sum + row['value']
+            row['sum'] = running_sum
+        return batch
+
+    phase = Phase(steps=[sum_so_far])
+    phase.load_data([{'value': 1}, {'value': 2}])
+    phase.run_steps()
+    assert phase.row_data == [{'value': 1, 'sum': 1}, {'value': 2, 'sum': 3}]
+
+
 def test_batch_step_cant_drop_row():
     @batch_step
     def try_something_nonsensical(batch, context):
@@ -19,6 +35,24 @@ def test_batch_step_cant_drop_row():
     phase.load_data([{'a': 'b'}])
     with pytest.raises(PhaserError) as e:
         phase.run_steps()
+
+
+def test_batch_step_missing_param():
+    @batch_step
+    def simple_step(batch):
+        batch[0]['a'] = 'c'
+        return batch
+
+    @batch_step
+    def step_with_context(batch, context):
+        context.add_variable('been here', True)
+        return batch
+
+    phase = Phase(steps=[simple_step, step_with_context])
+    phase.load_data([{'a': 'b'}])
+    phase.run_steps()
+    assert phase.row_data == [{'a': 'c'}]
+
 
 def test_context_available_to_step():
     @row_step
@@ -31,7 +65,6 @@ def test_context_available_to_step():
     transformer.load_data([{'id': 1, 'secret': 'unknown'}])
     transformer.run_steps()
     assert transformer.row_data[0]['secret'] == "I'm always angry"
-
 
 # Tests of the check_unique step
 

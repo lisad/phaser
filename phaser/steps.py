@@ -1,3 +1,4 @@
+import inspect
 from collections.abc import Mapping, Sequence
 from functools import wraps
 from .pipeline import DataErrorException, DataException, DropRowException, PhaserError
@@ -34,7 +35,13 @@ def batch_step(step_function):
         if __probe__ == PROBE_VALUE:
             return BATCH_STEP
         try:
-            result = step_function(batch, context=context)
+            # LMDTODO: Discovered in testing that if the step function doesn't declare the context in its params,
+            # when the calling code tries to pass it a batch AND a context, it doesn't even run and its hard to see why.
+            # See test test_batch_step_missing_param. The TODO is to fix this for the other step types as well.
+            if 'context' in inspect.signature(step_function).parameters.keys():
+                result = step_function(batch, context=context)
+            else:
+                result = step_function(batch)
         except DropRowException as exc:
             raise PhaserError("DropRowException can't be handled in batch steps ") from exc
         if not isinstance(result, Sequence):
