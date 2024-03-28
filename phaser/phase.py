@@ -43,7 +43,7 @@ class PhaseBase(ABC):
 
     def run_steps(self):
         if self.row_data is None or self.row_data == []:
-            raise Exception("No data loaded yet")
+            raise PhaserError("No data loaded yet")
         for step in self.steps:
             step_type = step(None, __probe__=PROBE_VALUE)
             if step_type == ROW_STEP:
@@ -55,7 +55,7 @@ class PhaseBase(ABC):
             elif step_type == CONTEXT_STEP:
                 self.execute_context_step(step)
             else:
-                raise Exception(f"Unknown step type {step_type}")
+                raise PhaserError(f"Unknown step type {step_type}")
 
 
     def execute_row_step(self, step):
