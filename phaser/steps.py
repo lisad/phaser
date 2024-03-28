@@ -1,3 +1,4 @@
+import inspect
 from collections.abc import Mapping, Sequence
 from functools import wraps
 import pandas as pd
@@ -54,7 +55,10 @@ def dataframe_step(step_function):
             return DATAFRAME_STEP
         try:
             dataframe = pd.DataFrame.from_records(row_data)
-            result = step_function(dataframe)
+            if 'context' in str(inspect.signature(step_function)):
+                result = step_function(dataframe, context=context)
+            else:
+                result = step_function(dataframe)
         except DropRowException as exc:
             raise PhaserError("DropRowException can't be handled in steps operating on bulk data ") from exc
         if not isinstance(result, pd.DataFrame):
