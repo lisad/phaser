@@ -5,7 +5,7 @@ import logging
 from .column import make_strict_name, Column
 from .pipeline import (Pipeline, Context, DropRowException, WarningException, DataErrorException, DataException,
                        PhaserError)
-from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step
+from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step, DATAFRAME_STEP
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -13,9 +13,10 @@ logger.addHandler(logging.NullHandler())
 
 class PhaseBase(ABC):
 
-    def __init__(self, name, context=None, error_policy=None):
+    def __init__(self, name, steps=None, context=None, error_policy=None):
         self.name = name or self.__class__.__name__
         self.context = context or Context()
+        self.steps = steps or self.__class__.steps
         self.error_policy = error_policy or Pipeline.ON_ERROR_COLLECT
         self.headers = None
         self.row_data = None
@@ -39,6 +40,76 @@ class PhaseBase(ABC):
         """ Each kind of phase has a different process for doing its work, so this method must
         be overridden.  """
         pass
+
+    def run_steps(self):
+        if self.row_data is None or self.row_data == []:
+            raise PhaserError("No data loaded yet")
+        for step in self.steps:
+            step_type = step(None, __probe__=PROBE_VALUE)
+            if step_type == ROW_STEP:
+                self.execute_row_step(step)
+            elif step_type == BATCH_STEP:
+                self.execute_batch_step(step)
+            elif step_type == DATAFRAME_STEP:
+                self.execute_batch_step(step)
+            elif step_type == CONTEXT_STEP:
+                self.execute_context_step(step)
+            else:
+                raise PhaserError(f"Unknown step type {step_type}")
+
+
+    def execute_row_step(self, step):
+        """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
+        numbering and error reporting.
+        """
+        new_data = PhaseRecords()
+        for row_index, row in enumerate(self.row_data):
+            self.context.current_row = row.row_num
+
+            if self.context.current_row in self.context.errors.keys():
+                # LMDTODO: This is an O(n) operation.  If instead the fact of the row having an error was part of the
+                # row data, this would be O(1).  We should probably do that instead, and definitely if any row metadata
+                # is on the row besides the original row number.  The thing in the special field in row could be an obj.
+                continue    # Only trap the first error per row
+            # NOw that we know the row number run the step and handle exceptions.
+            try:
+                # LMDTODO: pass a deepcopy of row
+                new_row = step(row, context=self.context)
+                # Ensure the original row_num is preserved with the new row
+                # returned from the step
+                if isinstance(new_row, PhaseRecord):
+                    new_row.row_num = self.context.current_row
+                    new_data.append(new_row)
+                else:
+                    new_data.append(PhaseRecord(self.context.current_row, new_row))
+            except Exception as exc:
+                self.process_exception(exc, step, row)
+                if not isinstance(exc, DropRowException):
+                    new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
+                    # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
+        self.row_data = new_data
+
+    def execute_batch_step(self, step):
+        self.context.current_row = 'batch'
+        try:
+            new_row_values = step(self.row_data, context=self.context)
+            row_size_diff = len(self.row_data) - len(new_row_values)
+            if row_size_diff > 0:
+                self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
+            elif row_size_diff < 0:
+                self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
+            self.row_data = PhaseRecords([row for row in new_row_values])
+        except Exception as exc:
+            self.process_exception(exc, step, None)
+
+    def execute_context_step(self, step):
+        self.context.current_row = 'context'
+        try:
+            step(self.context)
+        except DropRowException as dre:
+            raise PhaserError("DropRowException can't be handled in a context_step") from dre
+        except Exception as exc:
+            self.process_exception(exc, step, None)
 
     def process_exception(self, exc, step, row):
         """
@@ -78,27 +149,6 @@ class PhaseBase(ABC):
                     raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
 
 
-class DataFramePhase(PhaseBase):
-    def __init__(self, name, context=None, error_policy=None):
-        super().__init__(name, context=context, error_policy=error_policy)
-        self.df_data = None
-
-    def run(self):
-        self.df_data = self.df_transform(self.df_data)
-        return self.df_data.to_dict('records')
-
-    @abstractmethod
-    def df_transform(self, df_data):
-        """ The df_transform method is implemented in subclasses of DataFramePhase.  Significant reshaping can be
-        done because data is not processed row-by-row, and row numbers are not reported on in error reporting.
-        """
-        raise PhaserError("Subclass DataFramePhase and return a new dataframe in the 'df_transform' method")
-
-    def load_data(self, data):
-        # Overrides the regular load_data because we want to convert incoming data to DataFrame.
-        self.df_data = pd.DataFrame(data)
-
-
 class ReshapePhase(PhaseBase):
     """ Operations that combine rows or split rows, and thus arrive at a different number of rows (beyond just
     dropping bad data), don't work well in a regular Phase and are hard to do diffs for.  This class solves
@@ -111,20 +161,13 @@ class ReshapePhase(PhaseBase):
     that a regular phase provides.
     """
 
-    def __init__(self, name, context=None, error_policy=None):
-        super().__init__(name, context=context, error_policy=error_policy)
-
-    @abstractmethod
-    def reshape(self, row_data):
-        """ When ReshapePhase is implemented for a pipeline, this method takes a list of rows (as dicts) and returns
-        a new list of rows (as dicts), which could have a very different number of rows and/or columns.  The
-        rest of the class takes care of loading, saving, and reporting errors and warnings.
-        """
-        raise PhaserError("Subclass ReshapePhase and return new data version in this reshape method")
+    def __init__(self, name, steps=None, context=None, error_policy=None):
+        super().__init__(name, steps=steps, context=context, error_policy=error_policy)
 
     def run(self):
-        self.row_data = self.reshape(self.row_data)
-        return self.row_data
+        # Break down run into load, steps, error handling, save and delegate
+        self.run_steps()
+        return self.row_data.to_records()
 
 
 class Phase(PhaseBase):
@@ -188,8 +231,7 @@ class Phase(PhaseBase):
     def __init__(self, name=None, steps=None, columns=None, context=None, error_policy=None):
         """ Instantiate (or subclass) a Phase with an ordered list of steps (they will be called in this order) and
         with an ordered list of columns (they will do their checks and type casting in this order).  """
-        super().__init__(name, context=context, error_policy=error_policy)
-        self.steps = steps or self.__class__.steps
+        super().__init__(name, steps=steps, context=context, error_policy=error_policy)
         self.columns = columns or self.__class__.columns
         if isinstance(self.columns, Column):
             self.columns = [self.columns]
@@ -280,76 +322,6 @@ class Phase(PhaseBase):
                     # last row of the data, because current_row is not changed.
                     self.context.add_warning('consistency_check', row,
                         f"At some point, {field_name} was added to the row_data and not declared a header")
-
-    def run_steps(self):
-        if self.row_data is None or self.row_data == []:
-            raise Exception("No data loaded yet")
-        for step in self.steps:
-            step_type = step(None, __probe__=PROBE_VALUE)
-            if step_type == ROW_STEP:
-                self.execute_row_step(step)
-            elif step_type == BATCH_STEP:
-                self.execute_batch_step(step)
-            elif step_type == CONTEXT_STEP:
-                self.execute_context_step(step)
-            else:
-                raise Exception(f"Unknown step type {step_type}")
-
-    def execute_row_step(self, step):
-        """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
-        numbering and error reporting.
-        """
-        new_data = PhaseRecords()
-        for row_index, row in enumerate(self.row_data):
-            self.context.current_row = row.row_num
-
-            if self.context.current_row in self.context.errors.keys():
-                # LMDTODO: This is an O(n) operation.  If instead the fact of the row having an error was part of the
-                # row data, this would be O(1).  We should probably do that instead, and definitely if any row metadata
-                # is on the row besides the original row number.  The thing in the special field in row could be an obj.
-                continue    # Only trap the first error per row
-            # NOw that we know the row number run the step and handle exceptions.
-            try:
-                # LMDTODO: pass a deepcopy of row
-                new_row = step(row, context=self.context)
-                # Ensure the original row_num is preserved with the new row
-                # returned from the step
-                if isinstance(new_row, PhaseRecord):
-                    new_row.row_num = self.context.current_row
-                    new_data.append(new_row)
-                else:
-                    new_data.append(PhaseRecord(self.context.current_row, new_row))
-            except Exception as exc:
-                self.process_exception(exc, step, row)
-                if not isinstance(exc, DropRowException):
-                    new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
-                    # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
-        self.row_data = new_data
-
-    def execute_batch_step(self, step):
-        self.context.current_row = 'batch'
-        try:
-            new_row_values = step(self.row_data, context=self.context)
-            row_size_diff = len(self.row_data) - len(new_row_values)
-            if row_size_diff > 0:
-                self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
-            elif row_size_diff < 0:
-                self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
-            self.row_data = PhaseRecords([row for row in new_row_values])
-        except Exception as exc:
-            self.process_exception(exc, step, None)
-
-    def execute_context_step(self, step):
-        self.context.current_row = 'context'
-        try:
-            step(self.context)
-        except DropRowException as dre:
-            raise PhaserError("DropRowException can't be handled in a context_step") from dre
-        except Exception as exc:
-            self.process_exception(exc, step, None)
-
-
-# LMDTODO: add a test that makes sure that a batch step followed by a row step works fine
 
 
 class PhaseRecords(UserList):

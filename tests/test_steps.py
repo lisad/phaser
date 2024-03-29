@@ -2,7 +2,7 @@ from pathlib import Path
 import pytest
 
 from phaser import (check_unique, Phase, row_step, batch_step, context_step, Pipeline, sort_by, IntColumn,
-                    DataErrorException, DropRowException, PhaserError, read_csv)
+                    DataErrorException, DropRowException, PhaserError, read_csv, dataframe_step)
 from fixtures import test_data_phase_class
 
 current_path = Path(__file__).parent
@@ -60,6 +60,14 @@ def test_context_available_to_step():
         row['secret'] = context.get('secret')
         return row
 
+
+@row_step
+def replace_value_fm_context(row, context):
+    row['secret'] = context.get('secret')
+    return row
+
+
+def test_context_available_to_step():
     transformer = Phase(steps=[replace_value_fm_context])
     transformer.context.add_variable('secret', "I'm always angry")
     transformer.load_data([{'id': 1, 'secret': 'unknown'}])
@@ -169,6 +177,7 @@ def test_context_step_cant_raise_drop_row():
         phase.run_steps()
     assert "DropRowException can't" in exc_info.value.message
 
+
 def test_context_step_cant_return_random_stuff():
     @context_step
     def return_inappropriate_stuff(context):
@@ -179,3 +188,48 @@ def test_context_step_cant_return_random_stuff():
     with pytest.raises(PhaserError) as exc_info:
         phase.run_steps()
     assert "return a value" in exc_info.value.message
+
+
+@dataframe_step
+def sum_bonuses(df, context):
+    df['total'] = df.sum(axis=1, numeric_only=True)
+    return df
+
+
+def test_dataframe_step():
+    phase = Phase(steps=[sum_bonuses])
+    phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000},
+                     {'eid': '002', 'commission': 9000, 'performance': 1000}])
+    phase.run_steps()
+    assert all([row['total'] == 10000 for row in phase.row_data])
+
+
+def test_dataframe_step_doesnt_declare_context():
+    @dataframe_step
+    def sum_bonuses_one_param(df):
+        df['total'] = df.sum(axis=1, numeric_only=True)
+        return df
+
+    phase = Phase(steps=[sum_bonuses_one_param])
+    phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
+    phase.run_steps()
+    assert phase.row_data[0]['total'] == 10000
+
+
+def test_dataframe_step_doesnt_return_df():
+    @dataframe_step
+    def sum_bonuses_forgot_return(df):
+        df['total'] = df.sum(axis=1, numeric_only=True)
+
+    phase = Phase(steps=[sum_bonuses_forgot_return])
+    phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
+    with pytest.raises(PhaserError) as e:
+        phase.run_steps()
+    assert 'pandas DataFrame' in e.value.message
+
+
+def test_multiple_step_types():
+    phase = Phase(steps=[sum_bonuses, replace_value_fm_context])
+    phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
+    phase.run_steps()
+    assert set(phase.row_data[0].keys()) == set(['eid', 'commission', 'performance', 'total', 'secret'])

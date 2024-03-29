@@ -1,26 +1,26 @@
 import pytest
 from pathlib import Path
 from collections import defaultdict
-from phaser import ReshapePhase, DataFramePhase, read_csv, Pipeline
+from phaser import ReshapePhase, read_csv, Pipeline, dataframe_step, batch_step
 
 current_path = Path(__file__).parent
 
 
+@batch_step
+def merge_by_location(row_data, context):
+    """ Data coming into this step has multiple rows per subject, each with a different
+    field and value reading. """
+    fields_by_location = defaultdict(dict)  # first organize into a dict with one entry per subject
+    for row in row_data:
+        fields_by_location[row['location']][row['measure']] = row['value']
+    location_list = []  # Now reorganize to a list of records with unique locations
+    for location, field_dict in fields_by_location.items():
+        location_list.append({'location': location, **field_dict})
+    return location_list
+
+
 def test_reshape():
-
-    class MyReshape(ReshapePhase):
-        def reshape(self, row_data):
-            """ Data coming into this reshape has multiple rows per subject, each with a different
-            field and value reading. """
-            fields_by_location = defaultdict(dict)   #first organize into a dict with one entry per subject
-            for row in row_data:
-                fields_by_location[row['location']][row['measure']] = row['value']
-            location_list = []   # Now reorganize to a list of records with unique locations
-            for location, field_dict in fields_by_location.items():
-                location_list.append({'location': location, **field_dict})
-            return location_list
-
-    phase = MyReshape("myreshape")
+    phase = ReshapePhase("myreshape", steps=[merge_by_location])
     phase.load_data(read_csv(current_path / 'fixture_files' / 'locations.csv'))
     phase.run()
     assert len(phase.row_data) == 2
@@ -30,12 +30,14 @@ def test_reshape():
     ]
 
 
-def test_dataframe_phase(tmpdir):
-    class MyPandasPhase(DataFramePhase):
-        def df_transform(self, df):
-            return df.pivot(index='location', columns='measure', values='value').reset_index()
+@dataframe_step
+def df_transform(df, context):
+    return df.pivot(index='location', columns='measure', values='value').reset_index()
 
-    phase = MyPandasPhase("MyPandasPhase")
+
+def test_dataframe_phase(tmpdir):
+
+    phase = ReshapePhase("PhaseWithDFStep", steps=[df_transform])
     phase.load_data(read_csv(current_path / 'fixture_files' / 'locations.csv'))
     results = phase.run()
     assert len(results) == 2
@@ -44,18 +46,17 @@ def test_dataframe_phase(tmpdir):
         {'location': 'main engineering', 'temperature': '22', 'gamma radiation': '10.9 μR/h'}
     ]
 
+
 def test_dataframe_phase_in_pipeline(tmpdir):
-    class MyPandasPhase(DataFramePhase):
-        def df_transform(self, df):
-            return df.pivot(index='location', columns='measure', values='value').reset_index()
+    phase = ReshapePhase("PhaseWithDFStep", steps=[df_transform])
 
     class MyPandasPipeline(Pipeline):
         source = current_path / 'fixture_files' / 'locations.csv'
-        phases = [ MyPandasPhase('reshape') ]
+        phases = [phase]
 
-    pipeline = MyPandasPipeline(working_dir = tmpdir)
+    pipeline = MyPandasPipeline(working_dir=tmpdir)
     pipeline.run()
-    with open(tmpdir / 'reshape_output_locations.csv') as f:
+    with open(tmpdir / 'PhaseWithDFStep_output_locations.csv') as f:
         line = f.readline()
         assert line == "location,gamma radiation,temperature\n"
         line = f.readline()
@@ -70,13 +71,13 @@ def test_reshape_explode(tmpdir):
     to have the column convert type on loading, but also so we can save correctly (see
     [issue](https://github.com/lisad/phaser/issues/46) )  The file created in here should be converted to a fixture
     when that would be useful for testing MultiValueColumn """
-    class ExplodeListValues(DataFramePhase):
-        def df_transform(self, df):
-            df['languages'] = df['languages'].str.split(',')
-            df = df.explode('languages')
-            return df.rename(columns={'languages': 'language'})
+    @dataframe_step
+    def explode_step(df):
+        df['languages'] = df['languages'].str.split(',')
+        df = df.explode('languages')
+        return df.rename(columns={'languages': 'language'})
 
-    phase = ExplodeListValues("explode")
+    phase = ReshapePhase("explode", steps=[explode_step])
     with (open(tmpdir / 'languages.csv', 'w') as csv):
         csv.write("crew id,languages\n")
         csv.write('1,"Standard"\n')

@@ -1,13 +1,16 @@
 import inspect
 from collections.abc import Mapping, Sequence
 from functools import wraps
+import pandas as pd
 from .pipeline import DataErrorException, DataException, DropRowException, PhaserError
 from .column import Column
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
+DATAFRAME_STEP = "DATAFRAME_STEP"
 CONTEXT_STEP = "CONTEXT_STEP"
 PROBE_VALUE = "__PROBE__"
+
 
 def row_step(step_function):
     """ This decorator is used to indicate a step that should run on each row of a data set.
@@ -49,6 +52,26 @@ def batch_step(step_function):
                 f"Step {step_function} returned a {result.__class__} rather than a list of rows")
         return result
     return _batch_step_wrapper
+
+
+def dataframe_step(step_function):
+    @wraps(step_function)
+    def _df_step_wrapper(row_data, context=None, __probe__=None):
+        if __probe__ == PROBE_VALUE:
+            return DATAFRAME_STEP
+        try:
+            dataframe = pd.DataFrame.from_records(row_data)
+            if 'context' in str(inspect.signature(step_function)):
+                result = step_function(dataframe, context=context)
+            else:
+                result = step_function(dataframe)
+        except DropRowException as exc:
+            raise PhaserError("DropRowException can't be handled in steps operating on bulk data ") from exc
+        if not isinstance(result, pd.DataFrame):
+            raise PhaserError(
+                f"Step {step_function} returned a {result.__class__} rather than a pandas DataFrame")
+        return result.to_dict('records')
+    return _df_step_wrapper
 
 
 def context_step(step_function):
