@@ -28,7 +28,7 @@ class Context:
         self.variables = variables or {}
         self.current_row = None
         self.sources = {}
-        self.outputs = []
+        self.outputs = {}
         self.working_dir = working_dir
 
     def reset_events(self):
@@ -71,10 +71,12 @@ class Context:
         return self.errors != {}
 
     def add_output(self, name, data):
+        # TODO: Should we warn if an output is overwritten?
         # At present outputs must be in record format and save to CSV, but this should be expanded.
-        self.outputs.append(ReadWriteObject(name, data, to_save=True))
+        self.outputs[name] = ReadWriteObject(name, data, to_save=True)
 
     def set_source(self, name, data):
+        # TODO: Should we warn if a source is overwritten?
         self.sources[name] = ReadWriteObject(name, data, to_save=False)
 
     def get_source(self, name):
@@ -193,6 +195,7 @@ class Pipeline:
         phase.load_data(data)
         results = phase.run()
         self.save(results, destination)
+        self.check_extra_outputs(phase)
         self.save_extra_outputs()
         logger.info(f"{phase.name} saved output to {destination}")
         self.report_errors_and_warnings(phase.name)
@@ -217,8 +220,18 @@ class Pipeline:
         for row_num, error in self.context.errors.items():
             print(f"ERROR row: {row_num}, message: '{error['message']}'")
 
+    def check_extra_outputs(self, phase):
+        """ Check that any extra outputs the phase declared have been added into the context.
+        Throws a PhaserError if any do not exist, as that is a programming error that should be fixed."""
+        missing = []
+        for name in Pipeline._find_extra_outputs(phase):
+            if name not in self.context.outputs:
+                missing.append(name)
+        if len(missing) > 0:
+            raise PhaserError(f"Phase {phase.name} missing extra_outputs: {missing}")
+
     def save_extra_outputs(self):
-        for item in self.context.outputs:
+        for item in self.context.outputs.values():
             # Since context is passed from Phase to Phase, only save the new ones with to_save=True
             if item.to_save:
                 filename = self.working_dir / f"{item.name}.csv"
@@ -227,6 +240,11 @@ class Pipeline:
                 save_csv(filename, item.data)
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
+                # If the output is meant to be used as a source also, then set
+                # the data into the context as a source so that the phase that
+                # needs it can access the data.
+                if item.name in self.extra_sources:
+                    self.context.set_source(item.name, item.data)
 
     def load(self, source):
         """ The load method can be overridden to apply a pipeline-specific way of loading data.
