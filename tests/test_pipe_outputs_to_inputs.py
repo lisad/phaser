@@ -41,7 +41,7 @@ def source_to_counts(rows):
 @context_step
 def output_counts(context):
     counts = context.get('counts')
-    context.add_output('sibling_counts', counts_to_output(counts))
+    context.set_output('sibling_counts', counts_to_output(counts))
 
 class CountParents(Phase):
     columns = [

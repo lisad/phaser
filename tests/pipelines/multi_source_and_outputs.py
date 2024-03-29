@@ -104,7 +104,7 @@ def reformat_managers(context):
         { 'manager_id': key, 'num_employees': value }
         for key, value in managers.items()
     ]
-    context.add_output('managers', rows)
+    context.set_output('managers', rows)
 
 class Validation(Phase):
     columns = [

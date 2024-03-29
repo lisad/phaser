@@ -27,8 +27,8 @@ class Context:
         self.reset_events()
         self.variables = variables or {}
         self.current_row = None
-        self.sources = {}
-        self.outputs = {}
+        # Stores sources and outputs as ReadWriteObjects
+        self.rwos = {}
         self.working_dir = working_dir
 
     def reset_events(self):
@@ -70,18 +70,20 @@ class Context:
     def has_errors(self):
         return self.errors != {}
 
-    def add_output(self, name, data):
-        # TODO: Should we warn if an output is overwritten?
+    def set_output(self, name, data):
         # At present outputs must be in record format and save to CSV, but this should be expanded.
-        self.outputs[name] = ReadWriteObject(name, data, to_save=True)
+        if name in self.rwos:
+            logger.warning("Overwriting while adding output '%s'", name)
+        self.rwos[name] = ReadWriteObject(name, data, to_save=True)
 
     def set_source(self, name, data):
-        # TODO: Should we warn if a source is overwritten?
-        self.sources[name] = ReadWriteObject(name, data, to_save=False)
+        if name in self.rwos:
+            logger.warning("Overwriting while setting source '%s'", name)
+        self.rwos[name] = ReadWriteObject(name, data, to_save=False)
 
     def get_source(self, name):
-        if name in self.sources.keys():
-            return self.sources[name].data
+        if name in self.rwos:
+            return self.rwos[name].data
         raise PhaserError(f"Source not loaded before being used: {name}")
 
 
@@ -172,7 +174,7 @@ class Pipeline:
         """ Check that all required sources have been initialized."""
         missing_sources = []
         for source in self.sources_needing_initialization:
-            if not source in self.context.sources:
+            if not source in self.context.rwos:
                 missing_sources.append(source)
 
         if len(missing_sources) > 0:
@@ -225,13 +227,13 @@ class Pipeline:
         Throws a PhaserError if any do not exist, as that is a programming error that should be fixed."""
         missing = []
         for name in Pipeline._find_extra_outputs(phase):
-            if name not in self.context.outputs:
+            if name not in self.context.rwos:
                 missing.append(name)
         if len(missing) > 0:
             raise PhaserError(f"Phase {phase.name} missing extra_outputs: {missing}")
 
     def save_extra_outputs(self):
-        for item in self.context.outputs.values():
+        for item in self.context.rwos.values():
             # Since context is passed from Phase to Phase, only save the new ones with to_save=True
             if item.to_save:
                 filename = self.working_dir / f"{item.name}.csv"
@@ -240,11 +242,6 @@ class Pipeline:
                 save_csv(filename, item.data)
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
-                # If the output is meant to be used as a source also, then set
-                # the data into the context as a source so that the phase that
-                # needs it can access the data.
-                if item.name in self.extra_sources:
-                    self.context.set_source(item.name, item.data)
 
     def load(self, source):
         """ The load method can be overridden to apply a pipeline-specific way of loading data.

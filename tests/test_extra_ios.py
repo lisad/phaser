@@ -9,7 +9,7 @@ current_path = Path(__file__).parent
 
 @context_step
 def add_an_output(context):
-    context.add_output('doctors', [{'on_call': "Julian Bashir"}])
+    context.set_output('doctors', [{'on_call': "Julian Bashir"}])
 
 class EmployeePhase(Phase):
     steps = [
