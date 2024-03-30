@@ -1,4 +1,5 @@
-from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, DataException
+import phaser.records
+from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, DataException, PHASER_ROW_NUM
 import pytest  # noqa # pylint: disable=unused-import
 import os
 from pathlib import Path
@@ -140,3 +141,4 @@ def test_phase_saved_even_if_error(tmpdir):
     with pytest.raises(DataException):
         pipeline.run_phase(phase, tmpdir / 'negative-level.csv', tmpdir / 'test-saved-despite-error.csv')
     assert os.path.exists(os.path.join(tmpdir, 'test-saved-despite-error.csv'))
+

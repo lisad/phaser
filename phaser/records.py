@@ -23,6 +23,8 @@ class Records(UserList):
         "[(row_num=1, data={'id': 18, 'val': 'a'})]"
         >>> Records()
         []
+        >>> str(Records([{'id': 18, 'val': 'a', PHASER_ROW_NUM: '2'}]))
+        "[(row_num=2, data={'id': 18, 'val': 'a'})]"
         """
         row_num_gen = kwargs.get('row_num_generator', row_num_generator())
         super().__init__(args[0] if args else None)
@@ -53,8 +55,7 @@ class Records(UserList):
         if isinstance(record, Record):
             return record
         if PHASER_ROW_NUM in record:
-            record[PHASER_ROW_NUM] = int(record[PHASER_ROW_NUM])
-            return Record(record[PHASER_ROW_NUM], record)
+            return Record(int(record.pop(PHASER_ROW_NUM)), record)
         return Record(next(number_generator), record)
 
     # Transform back into native list(dict)
@@ -64,6 +65,13 @@ class Records(UserList):
         [{'id': 18, 'val': 'a'}]
         """
         return [ r.data for r in self.data ]
+
+    def for_save(self):
+        """
+        >>> Records([{'id': 18, 'val': 'a', PHASER_ROW_NUM: 1}]).for_save()
+        [{'id': 18, 'val': 'a', '__phaser_row_num__': 1}]
+        """
+        return [ {**r.data, PHASER_ROW_NUM: r.row_num} for r in self.data ]
 
 
 class Record(UserDict):

@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from collections import defaultdict
-from phaser import ReshapePhase, read_csv, Pipeline, dataframe_step, batch_step
+from phaser import ReshapePhase, read_csv, Pipeline, dataframe_step, batch_step, PHASER_ROW_NUM
 
 current_path = Path(__file__).parent
 
@@ -58,11 +58,11 @@ def test_dataframe_phase_in_pipeline(tmpdir):
     pipeline.run()
     with open(tmpdir / 'PhaseWithDFStep_output_locations.csv') as f:
         line = f.readline()
-        assert line == "location,gamma radiation,temperature\n"
+        assert line == f"location,gamma radiation,temperature,{PHASER_ROW_NUM}\n"
         line = f.readline()
-        assert line == "hangar deck,9.8 μR/h,16\n"
+        assert line == "hangar deck,9.8 μR/h,16,1\n"
         line = f.readline()
-        assert line == "main engineering,10.9 μR/h,22\n"
+        assert line == "main engineering,10.9 μR/h,22,2\n"
 
 
 def test_reshape_explode(tmpdir):
@@ -88,3 +88,11 @@ def test_reshape_explode(tmpdir):
     results = phase.run()
     assert len(results) == 6
     assert results[5]['language'] == "Klingon"
+
+
+def test_reshape_renumber():
+    assert False
+
+def test_add_rows_add_numbers():
+    # Test that numbering of new rows goes up
+    assert False

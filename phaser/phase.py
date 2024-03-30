@@ -80,21 +80,13 @@ class PhaseBase(ABC):
             # NOw that we know the row number run the step and handle exceptions.
             try:
                 new_row = step(deepcopy(row), context=self.context)
-                # Ensure the original row_num is preserved with the new row
-                # returned from the step
-                if PHASER_ROW_NUM in new_row and not isinstance(new_row[PHASER_ROW_NUM], int):
-                    raise PhaserError(f"Field {PHASER_ROW_NUM} must be int but it is {type(new_row[PHASER_ROW_NUM])}")
-                if PHASER_ROW_NUM in new_row and new_row[PHASER_ROW_NUM] != row.row_num:
-                    raise PhaserError(f"Field {PHASER_ROW_NUM}={row.row_num} changed to {new_row.row_num} during row_step")
-                if PHASER_ROW_NUM not in new_row:
-                    new_row[PHASER_ROW_NUM] = row.row_num
                 if isinstance(new_row, Record):
-                    # If we're getting a Record back, the row_num should be unchanged unless somebody is doing
-                    # something weird.
+                    # Ensure the original row_num is preserved with the new row returned from the step
                     if new_row.row_num != row.row_num:
                         raise PhaserError(f"Row number {row.row_num} changed to {new_row.row_num} during row_step")
                     new_data.append(new_row)
                 else:
+                    # LMDTODO: write a test that confirms we can just return a new dict from a step
                     new_data.append(Record(row.row_num, new_row))
             except Exception as exc:
                 self.process_exception(exc, step, row)
@@ -179,7 +171,7 @@ class ReshapePhase(PhaseBase):
     def run(self):
         # Break down run into load, steps, error handling, save and delegate
         self.run_steps()
-        return self.row_data.to_records()
+        return self.row_data
 
 
 class Phase(PhaseBase):
@@ -256,7 +248,7 @@ class Phase(PhaseBase):
         self.do_column_stuff()
         self.run_steps()
         self.prepare_for_save()
-        return self.row_data.to_records()
+        return self.row_data
 
     def do_column_stuff(self):
         @row_step
@@ -297,18 +289,18 @@ class Phase(PhaseBase):
                 name = rename_list[name]  # Do declared renames
             return name
 
-        renamed_data = []
-        for index, row in enumerate(self.row_data):
+        for row in self.row_data:
             if None in row.keys():
-                self.context.current_row = index + 1
+                # This check for keys named None should maybe be done in read_csv or at least in pipeline.
+                # It's IO relaetd - it can happen if a row has extra commas compared to the header line
                 self.context.add_warning('__phaser_rename_columns',
                                          row,
                                          f"Extra value found in row, may mis-align other values")
                 del row[None]
 
-            renamed_data.append({rename_me(key): value for key, value in row.items()})
+            # We're resetting the data in the whole Record to achieve renaming ... but keeping the row number
+            row.data = {rename_me(key): value for key, value in row.items()}
 
-        self.row_data = Records(renamed_data)
         self.headers = [rename_me(name) for name in self.headers if name is not None]
 
     def prepare_for_save(self):

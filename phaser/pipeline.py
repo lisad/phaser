@@ -110,7 +110,6 @@ class ReadWriteObject:
         self.data = data
         self.to_save = to_save
 
-
 class Pipeline:
     """ Pipeline handles running phases in order.  It also handles I/O and marshalling what
     outputs from phases get used as inputs in later phases.  """
@@ -132,6 +131,7 @@ class Pipeline:
         self.phases = phases or self.__class__.phases
         self.phase_instances = []
         self.context = Context(working_dir=self.working_dir)
+        self.row_num_gen = row_num_generator()
         # Collect the extra sources and outputs from the phases so they can be
         # reconciled and initialized as necessary.  Extra sources that match
         # with extra outputs do not need to be initialized, but extra sources
@@ -209,10 +209,12 @@ class Pipeline:
 
     def run_phase(self, phase, source, destination):
         logger.info(f"Loading input from {source} for {phase.name}")
-        data = Records(self.load(source), row_num_generator())
+        data = Records(self.load(source), self.row_num_gen)
+        print("pipeline loaded data: ", data)
         phase.load_data(data)
         results = phase.run()
-        self.save(results, destination)
+        print("pipeline jsut before save: ", results)
+        self.save(results.for_save(), destination)
         self.save_extra_outputs()
         logger.info(f"{phase.name} saved output to {destination}")
         self.report_errors_and_warnings(phase.name)
