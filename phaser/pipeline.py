@@ -1,12 +1,16 @@
 import inspect
 import logging
 import os
-from phaser.io import read_csv, save_csv
 from pathlib import PosixPath
-from phaser.exceptions import *
+from .io import read_csv, save_csv
+from .exceptions import *
+from .records import Records, Record, row_num_generator
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
+
+
+PHASER_ROW_NUM = '__phaser_row_num__'
 
 
 def _stringify_step(step):
@@ -17,6 +21,14 @@ def _stringify_step(step):
     except Exception as e:
         logger.error(f"Unknown case trying to turn {step} into a step name")
         raise e
+
+
+def _extract_row_num(row):
+    if not row:
+        return 'none'
+    if isinstance(row, Record):
+        return row.row_num
+    return row.get(PHASER_ROW_NUM, 'unknown')
 
 
 class Context:
@@ -37,28 +49,36 @@ class Context:
         self.dropped_rows = {}
 
     def add_error(self, step, row, message):
-        # LMDTODO Am I passing row or getting row from context?
         step_name = _stringify_step(step)
-        if self.current_row is None:
-            raise Exception("Code error: Pipeline Context should always know what row we're operating on")
-        self.errors[self.current_row] = {'step': step_name, 'message': message, 'row': row}
+        index = _extract_row_num(row)
+        if index in self.errors:
+            raise PhaserError(f"Reporting 2 errors on same row ({index}) not handled yet")
+            # LMDTODO This only captures one error per row number or one error for 'unknown'. that seems fine for
+            # now because we stop processing errored rows, but eventually can be more complete
+        else:
+            self.errors[index] = {'step': step_name, 'message': message, 'row': row}
 
     def add_warning(self, step, row, message):
         step_name = _stringify_step(step)
-        if self.current_row is None:
-            raise Exception("Code error: Pipeline Context should always know what row we're operating on")
-
+        index = _extract_row_num(row)
         warning_data = {'step': step_name, 'message': message, 'row': row}
-        if self.current_row in self.warnings.keys():
-            self.warnings[self.current_row].append(warning_data)
+        # LMDTODO to simplify this, self.warnings can be a defaultdict with default to array
+        if index in self.warnings:
+            self.warnings[index].append(warning_data)
         else:
-            self.warnings[self.current_row] = [warning_data]
+            self.warnings[index] = [warning_data]
 
     def add_dropped_row(self, step, row, message):
         step_name = _stringify_step(step)
-        if self.current_row is None:
-            raise Exception("Code error: Pipeline Context should always know what row we're operating on")
-        self.dropped_rows[self.current_row] = {'step': step_name, 'message': message, 'row': row}
+        index = _extract_row_num(row)
+        # LMDTODO: we should think about preventing rows from being dropped twice, although
+        # if rows are renumbered starting from 1, the same row num could be dropped twice.  we're collecting
+        # more arguments towards robust, unique row numbers using generations or a sequence that does not
+        # restart from 1.
+        if index in self. dropped_rows:
+            raise PhaserError(f"Dropping same row ({index}) twice not handled properly yet")
+        else:
+            self.dropped_rows[index] = {'step': step_name, 'message': message, 'row': row}
 
     def add_variable(self, name, value):
         """ Add variables that are global to the pipeline and accessible to steps and internal methods """
@@ -189,7 +209,7 @@ class Pipeline:
 
     def run_phase(self, phase, source, destination):
         logger.info(f"Loading input from {source} for {phase.name}")
-        data = self.load(source)
+        data = Records(self.load(source), row_num_generator())
         phase.load_data(data)
         results = phase.run()
         self.save(results, destination)

@@ -2,7 +2,8 @@ from pathlib import Path
 import pytest
 
 from phaser import (check_unique, Phase, row_step, batch_step, context_step, Pipeline, sort_by, IntColumn,
-                    DataErrorException, DropRowException, PhaserError, read_csv, dataframe_step)
+                    DataErrorException, DropRowException, PhaserError, read_csv, dataframe_step,
+                    PHASER_ROW_NUM)
 from fixtures import test_data_phase_class
 
 current_path = Path(__file__).parent
@@ -232,4 +233,4 @@ def test_multiple_step_types():
     phase = Phase(steps=[sum_bonuses, replace_value_fm_context])
     phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
     phase.run_steps()
-    assert set(phase.row_data[0].keys()) == set(['eid', 'commission', 'performance', 'total', 'secret'])
+    assert set(phase.row_data[0].keys()) == set([PHASER_ROW_NUM, 'eid', 'commission', 'performance', 'total', 'secret'])

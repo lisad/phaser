@@ -27,11 +27,11 @@ have datatype casting and name canonicalization done automatically.
 # commitment to build for that.
 
 
-from phaser.pipeline import Pipeline
+from phaser.pipeline import Pipeline, PHASER_ROW_NUM
 from phaser.exceptions import PhaserError, DataErrorException, DataException, DropRowException, WarningException
 from phaser.phase import Phase, ReshapePhase
 from phaser.steps import row_step, batch_step, dataframe_step, context_step, check_unique, sort_by
 from phaser.column import Column, IntColumn, DateColumn, DateTimeColumn, FloatColumn
-from phaser.io import read_csv
+from phaser.io import read_csv, save_csv
 
 __version__ = 0.1

@@ -122,6 +122,7 @@ def test_drop_row_info():
 
     phase.run_steps()
     assert len(phase.context.dropped_rows) == 1
+    print(phase.context.dropped_rows)
     assert phase.context.dropped_rows[2]['step'] == 'check_deck_is_21'
 
 
@@ -129,7 +130,7 @@ def test_batch_step_error():
     phase = Phase(steps=[error_tachyon_level_variance])
     phase.load_data([{'tachyon_level': 513}, {'tachyon_level': 532}])
     phase.run_steps()
-    assert phase.context.errors['batch']['step'] == 'error_tachyon_level_variance'
+    assert phase.context.errors['none']['step'] == 'error_tachyon_level_variance'
 
 
 def test_batch_step_warning():
@@ -137,8 +138,8 @@ def test_batch_step_warning():
     phase.load_data([{'tachyon_level': 513}, {'tachyon_level': 532}])
 
     phase.run_steps()
-    assert phase.context.warnings['batch'][0]['step'] == 'warn_tachyon_level_variance'
-    assert phase.context.warnings['batch'][0]['row'] is None
+    assert phase.context.warnings['none'][0]['step'] == 'warn_tachyon_level_variance'
+    assert phase.context.warnings['none'][0]['row'] is None
 
 
 @pytest.mark.skip("Will test for error reporting format when we have output going to logger")

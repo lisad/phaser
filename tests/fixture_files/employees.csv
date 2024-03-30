@@ -2,3 +2,4 @@ employeeNumber,firstName,lastName,payType,paidPer,payRate,bonusAmount,Status
 1,Benjamin,Sisko,"salary","Year","188625","30000",Active
 2,Kira,Nerys,"salary","Year","118625","20000",Active
 ,None,Garak,"salary","Year", 100000,,Inactive
+3,Julian,Bashir,"salary","Year",142880,"25000",Active

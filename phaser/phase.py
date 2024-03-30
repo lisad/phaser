@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
-from collections import UserDict, UserList
+from copy import deepcopy
 import pandas as pd
 import logging
 from .column import make_strict_name, Column
-from .pipeline import (Pipeline, Context, DropRowException, WarningException, DataErrorException, DataException,
-                       PhaserError)
+from .pipeline import (Pipeline, Context, DropRowException, WarningException, PhaserError,
+                       PHASER_ROW_NUM)
+from .records import Records, Record
 from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step, DATAFRAME_STEP
 
 logger = logging.getLogger('phaser')
@@ -24,14 +25,21 @@ class PhaseBase(ABC):
     def load_data(self, data):
         """ Call this method to pass record-oriented data to the Phase before calling 'run'
         Can be overridden to load data in a different structure.
-        Used in phaser's builtin phases - by regular Phase and ReshapePhase. """
+        Used in phaser's builtin phases - by regular Phase and ReshapePhase.
+        Note that in normal operation, a Records object is passed in with Record objects and row numbers -
+        however if a Phase is being used in tests, it makes testing a lot easier if load_data can take a
+        raw list of dicts and row numbers get added.  """
         if isinstance(data, pd.DataFrame):
             self.headers = data.columns.values.tolist()
             data = data.to_dict('records')
-        if isinstance(data, list):
+
+        if isinstance(data, Records):
+            self.headers = data.headers
+            self.row_data = data
+        elif isinstance(data, list):
             if len(data) > 0 and self.headers is None:
                 self.headers = data[0].keys()
-            self.row_data = PhaseRecords(data)
+            self.row_data = Records(data)
         else:
             raise PhaserError(f"Phase load_data called with unsupported data format {data.__class__}")
 
@@ -62,26 +70,32 @@ class PhaseBase(ABC):
         """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
         numbering and error reporting.
         """
-        new_data = PhaseRecords()
+        new_data = Records()
         for row_index, row in enumerate(self.row_data):
-            self.context.current_row = row.row_num
-
-            if self.context.current_row in self.context.errors.keys():
+            if row.row_num in self.context.errors.keys():
                 # LMDTODO: This is an O(n) operation.  If instead the fact of the row having an error was part of the
                 # row data, this would be O(1).  We should probably do that instead, and definitely if any row metadata
                 # is on the row besides the original row number.  The thing in the special field in row could be an obj.
                 continue    # Only trap the first error per row
             # NOw that we know the row number run the step and handle exceptions.
             try:
-                # LMDTODO: pass a deepcopy of row
-                new_row = step(row, context=self.context)
+                new_row = step(deepcopy(row), context=self.context)
                 # Ensure the original row_num is preserved with the new row
                 # returned from the step
-                if isinstance(new_row, PhaseRecord):
-                    new_row.row_num = self.context.current_row
+                if PHASER_ROW_NUM in new_row and not isinstance(new_row[PHASER_ROW_NUM], int):
+                    raise PhaserError(f"Field {PHASER_ROW_NUM} must be int but it is {type(new_row[PHASER_ROW_NUM])}")
+                if PHASER_ROW_NUM in new_row and new_row[PHASER_ROW_NUM] != row.row_num:
+                    raise PhaserError(f"Field {PHASER_ROW_NUM}={row.row_num} changed to {new_row.row_num} during row_step")
+                if PHASER_ROW_NUM not in new_row:
+                    new_row[PHASER_ROW_NUM] = row.row_num
+                if isinstance(new_row, Record):
+                    # If we're getting a Record back, the row_num should be unchanged unless somebody is doing
+                    # something weird.
+                    if new_row.row_num != row.row_num:
+                        raise PhaserError(f"Row number {row.row_num} changed to {new_row.row_num} during row_step")
                     new_data.append(new_row)
                 else:
-                    new_data.append(PhaseRecord(self.context.current_row, new_row))
+                    new_data.append(Record(row.row_num, new_row))
             except Exception as exc:
                 self.process_exception(exc, step, row)
                 if not isinstance(exc, DropRowException):
@@ -90,7 +104,6 @@ class PhaseBase(ABC):
         self.row_data = new_data
 
     def execute_batch_step(self, step):
-        self.context.current_row = 'batch'
         try:
             new_row_values = step(self.row_data, context=self.context)
             row_size_diff = len(self.row_data) - len(new_row_values)
@@ -98,12 +111,11 @@ class PhaseBase(ABC):
                 self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
-            self.row_data = PhaseRecords([row for row in new_row_values])
+            self.row_data = Records([row for row in new_row_values])
         except Exception as exc:
             self.process_exception(exc, step, None)
 
     def execute_context_step(self, step):
-        self.context.current_row = 'context'
         try:
             step(self.context)
         except DropRowException as dre:
@@ -236,7 +248,7 @@ class Phase(PhaseBase):
         if isinstance(self.columns, Column):
             self.columns = [self.columns]
 
-        self.row_data = PhaseRecords()
+        self.row_data = Records()
         self.headers = None
 
     def run(self):
@@ -296,7 +308,7 @@ class Phase(PhaseBase):
 
             renamed_data.append({rename_me(key): value for key, value in row.items()})
 
-        self.row_data = PhaseRecords(renamed_data)
+        self.row_data = Records(renamed_data)
         self.headers = [rename_me(name) for name in self.headers if name is not None]
 
     def prepare_for_save(self):
@@ -315,44 +327,11 @@ class Phase(PhaseBase):
     def check_headers_consistent(self):
         for row in self.row_data:
             for field_name in row.keys():
-                if field_name not in self.headers:
+                if field_name not in self.headers and field_name != PHASER_ROW_NUM:
                     # TODO: Fix -- context adds warnings to the 'current_row'
                     # record, not the record associated with the row passed in
                     # here. In this method, all of the errors are logged on the
                     # last row of the data, because current_row is not changed.
                     self.context.add_warning('consistency_check', row,
-                        f"At some point, {field_name} was added to the row_data and not declared a header")
+                        f"New field '{field_name}' was added to the row_data and not declared a header")
 
-
-class PhaseRecords(UserList):
-    """ PhaseRecords holds the records or rows loaded into a phase, together with row numbers (indexed from 1) """
-    def __init__(self, *args):
-        super().__init__(*args)
-        # Slicing a UserList results in constructing a brand new list, which
-        # would reset the row_num for our records if we were to recreated them
-        # from scratch. But if the elements of the incoming list are already
-        # `PhaseRecord`s, then just leave them alone.
-        # This is also generally helpful in steps where the record is mutated
-        # and returned rather than being constructed new.
-        self.data = [
-            PhaseRecords._recordize(index+1, record)
-            for index, record in enumerate(self.data)
-        ]
-
-    def _recordize(index, record):
-        if isinstance(record, PhaseRecord):
-            return record
-        return PhaseRecord(index, record)
-
-    # Transform back into native list(dict)
-    def to_records(self):
-        return [ r.data for r in self.data ]
-
-
-class PhaseRecord(UserDict):
-    def __init__(self, row_num, record):
-        super().__init__(record)
-        self.row_num = row_num
-
-    def __repr__(self):
-        return f"(row_num={self.row_num}, data={super().__repr__()})"
