@@ -3,7 +3,7 @@ from pathlib import Path
 from collections import defaultdict
 from phaser import ReshapePhase, read_csv, Pipeline, dataframe_step, batch_step, PHASER_ROW_NUM
 
-current_path = Path(__file__).parent
+fixture_path = Path(__file__).parent / 'fixture_files'
 
 
 @batch_step
@@ -21,7 +21,7 @@ def merge_by_location(row_data, context):
 
 def test_reshape():
     phase = ReshapePhase("myreshape", steps=[merge_by_location])
-    phase.load_data(read_csv(current_path / 'fixture_files' / 'locations.csv'))
+    phase.load_data(read_csv(fixture_path / 'locations.csv'))
     phase.run()
     assert len(phase.row_data) == 2
     assert phase.row_data == [
@@ -38,7 +38,7 @@ def df_transform(df, context):
 def test_dataframe_phase(tmpdir):
 
     phase = ReshapePhase("PhaseWithDFStep", steps=[df_transform])
-    phase.load_data(read_csv(current_path / 'fixture_files' / 'locations.csv'))
+    phase.load_data(read_csv(fixture_path / 'locations.csv'))
     results = phase.run()
     assert len(results) == 2
     assert results == [
@@ -51,7 +51,7 @@ def test_dataframe_phase_in_pipeline(tmpdir):
     phase = ReshapePhase("PhaseWithDFStep", steps=[df_transform])
 
     class MyPandasPipeline(Pipeline):
-        source = current_path / 'fixture_files' / 'locations.csv'
+        source = fixture_path / 'locations.csv'
         phases = [phase]
 
     pipeline = MyPandasPipeline(working_dir=tmpdir)
@@ -64,6 +64,12 @@ def test_dataframe_phase_in_pipeline(tmpdir):
         line = f.readline()
         assert line == "main engineering,10.9 μR/h,22,2\n"
 
+@dataframe_step
+def explode_step(df):
+    df['languages'] = df['languages'].str.split(',')
+    df = df.explode('languages')
+    return df.rename(columns={'languages': 'language'})
+
 
 def test_reshape_explode(tmpdir):
     """ This test illustrates pandas explode, which is fun.  Also note it would be useful to have a multi-value
@@ -71,28 +77,32 @@ def test_reshape_explode(tmpdir):
     to have the column convert type on loading, but also so we can save correctly (see
     [issue](https://github.com/lisad/phaser/issues/46) )  The file created in here should be converted to a fixture
     when that would be useful for testing MultiValueColumn """
-    @dataframe_step
-    def explode_step(df):
-        df['languages'] = df['languages'].str.split(',')
-        df = df.explode('languages')
-        return df.rename(columns={'languages': 'language'})
-
     phase = ReshapePhase("explode", steps=[explode_step])
-    with (open(tmpdir / 'languages.csv', 'w') as csv):
-        csv.write("crew id,languages\n")
-        csv.write('1,"Standard"\n')
-        csv.write('2,"Standard,Vulcan,Romulan"\n')
-        csv.write('3,"Standard,Klingon"\n')
 
-    phase.load_data(read_csv(tmpdir / 'languages.csv'))
+    phase.load_data(read_csv(fixture_path / 'languages.csv'))
     results = phase.run()
     assert len(results) == 6
     assert results[5]['language'] == "Klingon"
 
 
 def test_reshape_renumber():
-    assert False
+    phase = ReshapePhase(name='explode', steps=[explode_step])
+    phase.load_data(read_csv(fixture_path / 'languages.csv'))
+    results = phase.run()
+    row_nums = [record.row_num for record in results]
+    assert len(set(row_nums)) == len(row_nums)
 
+
+@pytest.mark.skip("Another case to test and fix for setting row numbers and make them go up")
 def test_add_rows_add_numbers():
+    @batch_step
+    def add_row(batch, context):
+        batch.append({'deck': 5, 'location': 'secret lounge'})
+        return batch
+
     # Test that numbering of new rows goes up
-    assert False
+    phase = ReshapePhase(name='add_stuff', steps=[add_row, add_row])
+    phase.load_data([{'deck': 10, 'location': '10 Forward'}])
+    results = phase.run()
+    row_nums = [record.row_num for record in results]
+    assert len(set(row_nums)) == len(row_nums)

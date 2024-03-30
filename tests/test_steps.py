@@ -28,7 +28,7 @@ def test_simple_batch_step():
     assert phase.row_data == [{'value': 1, 'sum': 1}, {'value': 2, 'sum': 3}]
 
 
-def test_batch_step_cant_drop_row():
+def test_batch_step_cant_use_drop_row_exception():
     @batch_step
     def try_something_nonsensical(batch, context):
         raise DropRowException("How could this even work")
@@ -54,6 +54,21 @@ def test_batch_step_missing_param():
     phase.load_data([{'a': 'b'}])
     phase.run_steps()
     assert phase.row_data == [{'a': 'c'}]
+
+
+@pytest.mark.skip("Needs to be fixed - when we add a row to a Records instance it should have a row number")
+def test_batch_step_can_add_row():
+    @batch_step
+    def add_row(batch, context):
+        batch.append({'deck': 5, 'location': 'secret lounge'})
+        return batch
+
+    phase = Phase(steps=[add_row])
+    phase.load_data([{'deck': 10, 'location': '10 Forward'}])
+    phase.run_steps()
+    assert phase.row_data[0].row_num == 1
+    assert phase.row_data[1]['deck'] == 5
+    assert phase.row_data[1].row_num == 2
 
 
 def test_context_available_to_step():
@@ -243,13 +258,13 @@ def test_phase_with_context_step_keeps_numbers():
         assert 1 > 0
 
     row_num_gen = phaser.records.row_num_generator()
+    # PIpeline will set up Records that converts __phaser_row_num__ into record.row_num.  Replicate that setup
+    # so we can see that it keeps that setup.
     data_with_row_numbers = [
         {'id': 3, 'age': 48, PHASER_ROW_NUM: 3}
     ]
     data = phaser.records.Records(data_with_row_numbers, row_num_gen)
     phase = Phase("test", steps=[a_step])
-    # PIpeline will set up Records that converts __phaser_row_num__ into record.row_num.  Replicate that setup
-    # so we can see that it keeps that setup.
     phase.load_data(data)
     # Before running, the 2nd row, index 1, should keep the # 3... and after running also
     assert phase.row_data[0].row_num == 3

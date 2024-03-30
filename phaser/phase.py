@@ -103,7 +103,7 @@ class PhaseBase(ABC):
                 self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
-            self.row_data = Records([row for row in new_row_values])
+            self.row_data = Records([row for row in new_row_values])  #See test_batch_step_can_add_row
         except Exception as exc:
             self.process_exception(exc, step, None)
 
@@ -319,7 +319,7 @@ class Phase(PhaseBase):
     def check_headers_consistent(self):
         for row in self.row_data:
             for field_name in row.keys():
-                if field_name not in self.headers and field_name != PHASER_ROW_NUM:
+                if field_name not in self.headers:
                     # TODO: Fix -- context adds warnings to the 'current_row'
                     # record, not the record associated with the row passed in
                     # here. In this method, all of the errors are logged on the
