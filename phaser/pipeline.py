@@ -27,8 +27,8 @@ class Context:
         self.reset_events()
         self.variables = variables or {}
         self.current_row = None
-        self.sources = {}
-        self.outputs = []
+        # Stores sources and outputs as ReadWriteObjects
+        self.rwos = {}
         self.working_dir = working_dir
 
     def reset_events(self):
@@ -70,16 +70,20 @@ class Context:
     def has_errors(self):
         return self.errors != {}
 
-    def add_output(self, name, data):
+    def set_output(self, name, data):
         # At present outputs must be in record format and save to CSV, but this should be expanded.
-        self.outputs.append(ReadWriteObject(name, data, to_save=True))
+        if name in self.rwos:
+            logger.warning("Overwriting while adding output '%s'", name)
+        self.rwos[name] = ReadWriteObject(name, data, to_save=True)
 
     def set_source(self, name, data):
-        self.sources[name] = ReadWriteObject(name, data, to_save=False)
+        if name in self.rwos:
+            logger.warning("Overwriting while setting source '%s'", name)
+        self.rwos[name] = ReadWriteObject(name, data, to_save=False)
 
     def get_source(self, name):
-        if name in self.sources.keys():
-            return self.sources[name].data
+        if name in self.rwos:
+            return self.rwos[name].data
         raise PhaserError(f"Source not loaded before being used: {name}")
 
 
@@ -170,7 +174,7 @@ class Pipeline:
         """ Check that all required sources have been initialized."""
         missing_sources = []
         for source in self.sources_needing_initialization:
-            if not source in self.context.sources:
+            if not source in self.context.rwos:
                 missing_sources.append(source)
 
         if len(missing_sources) > 0:
@@ -193,6 +197,7 @@ class Pipeline:
         phase.load_data(data)
         results = phase.run()
         self.save(results, destination)
+        self.check_extra_outputs(phase)
         self.save_extra_outputs()
         logger.info(f"{phase.name} saved output to {destination}")
         self.report_errors_and_warnings(phase.name)
@@ -217,8 +222,18 @@ class Pipeline:
         for row_num, error in self.context.errors.items():
             print(f"ERROR row: {row_num}, message: '{error['message']}'")
 
+    def check_extra_outputs(self, phase):
+        """ Check that any extra outputs the phase declared have been added into the context.
+        Throws a PhaserError if any do not exist, as that is a programming error that should be fixed."""
+        missing = []
+        for name in Pipeline._find_extra_outputs(phase):
+            if name not in self.context.rwos:
+                missing.append(name)
+        if len(missing) > 0:
+            raise PhaserError(f"Phase {phase.name} missing extra_outputs: {missing}")
+
     def save_extra_outputs(self):
-        for item in self.context.outputs:
+        for item in self.context.rwos.values():
             # Since context is passed from Phase to Phase, only save the new ones with to_save=True
             if item.to_save:
                 filename = self.working_dir / f"{item.name}.csv"
