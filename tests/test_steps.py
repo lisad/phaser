@@ -6,6 +6,7 @@ from phaser import (check_unique, Phase, row_step, batch_step, context_step, Pip
                     PHASER_ROW_NUM)
 import phaser
 from fixtures import test_data_phase_class
+from steps import sum_bonuses
 
 current_path = Path(__file__).parent
 
@@ -56,7 +57,7 @@ def test_batch_step_missing_param():
     assert phase.row_data == [{'a': 'c'}]
 
 
-@pytest.mark.skip("Needs to be fixed - when we add a row to a Records instance it should have a row number")
+#@pytest.mark.skip("Needs to be fixed - when we add a row to a Records instance it should have a row number")
 def test_batch_step_can_add_row():
     @batch_step
     def add_row(batch, context):
@@ -207,12 +208,6 @@ def test_context_step_cant_return_random_stuff():
     assert "return a value" in exc_info.value.message
 
 
-@dataframe_step
-def sum_bonuses(df, context):
-    df['total'] = df.sum(axis=1, numeric_only=True)
-    return df
-
-
 def test_dataframe_step():
     phase = Phase(steps=[sum_bonuses])
     phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000},
@@ -270,3 +265,4 @@ def test_phase_with_context_step_keeps_numbers():
     assert phase.row_data[0].row_num == 3
     phase.run()
     assert phase.row_data[0].row_num == 3
+

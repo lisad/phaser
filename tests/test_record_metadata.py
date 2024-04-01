@@ -78,7 +78,7 @@ def accidentally_resets_row_nums(batch, **kwargs):
     [
         ([remove_even_rows], [1, 3, 5]),
         ([sum_a_column], [1, 4, 5]),
-        ([accidentally_resets_row_nums], [1, 2, 3]),
+        ([accidentally_resets_row_nums], [7, 8, 9]),  # If the row numbers are gone, these look like *new* rows
     ]
 )
 def test_batch_step_preserves_row_num(steps, expected_row_nums):

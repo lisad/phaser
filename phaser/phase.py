@@ -65,12 +65,11 @@ class PhaseBase(ABC):
             else:
                 raise PhaserError(f"Unknown step type {step_type}")
 
-
     def execute_row_step(self, step):
         """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
         numbering and error reporting.
         """
-        new_data = Records()
+        new_data = Records(number_from=next(self.row_data.row_num_gen))
         for row_index, row in enumerate(self.row_data):
             if row.row_num in self.context.errors.keys():
                 # LMDTODO: This is an O(n) operation.  If instead the fact of the row having an error was part of the
@@ -103,7 +102,8 @@ class PhaseBase(ABC):
                 self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
-            self.row_data = Records([row for row in new_row_values])  #See test_batch_step_can_add_row
+            preserve_row_num = next(self.row_data.row_num_gen)
+            self.row_data = Records([row for row in new_row_values], number_from=preserve_row_num)
         except Exception as exc:
             self.process_exception(exc, step, None)
 
@@ -240,7 +240,7 @@ class Phase(PhaseBase):
         if isinstance(self.columns, Column):
             self.columns = [self.columns]
 
-        self.row_data = Records()
+        self.row_data = None
         self.headers = None
 
     def run(self):
