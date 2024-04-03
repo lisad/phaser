@@ -4,6 +4,7 @@ from functools import wraps
 import pandas as pd
 from .pipeline import DataErrorException, DataException, DropRowException, PhaserError
 from .column import Column
+from .records import Records
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
@@ -70,7 +71,7 @@ def dataframe_step(step_function):
         if not isinstance(result, pd.DataFrame):
             raise PhaserError(
                 f"Step {step_function} returned a {result.__class__} rather than a pandas DataFrame")
-        return result.to_dict('records')
+        return Records([row for row in result.to_dict('records')])
     return _df_step_wrapper
 
 

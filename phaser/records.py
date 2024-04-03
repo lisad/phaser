@@ -8,8 +8,8 @@ from .exceptions import PhaserError
 PHASER_ROW_NUM = '__phaser_row_num__'
 
 
-def row_num_generator():
-    value = 1
+def row_num_generator(start_from=1):
+    value = start_from
     while True:
         yield value
         value += 1
@@ -26,7 +26,9 @@ class Records(UserList):
         >>> str(Records([{'id': 18, 'val': 'a', PHASER_ROW_NUM: '2'}]))
         "[(row_num=2, data={'id': 18, 'val': 'a'})]"
         """
-        row_num_gen = kwargs.get('row_num_generator', row_num_generator())
+        number_from = kwargs.get('number_from', 1)
+        self.row_num_gen = row_num_generator(start_from=number_from)
+
         super().__init__(args[0] if args else None)
         # Slicing a UserList results in constructing a brand new list, which
         # would reset the row_num for our records if we were to recreated them
@@ -35,7 +37,7 @@ class Records(UserList):
         # This is also generally helpful in steps where the record is mutated
         # and returned rather than being constructed new.
         self.data = [
-            Records._recordize(row_num_gen, record)
+            self._recordize(record)
             for index, record in enumerate(self.data)
         ]
 
@@ -50,13 +52,13 @@ class Records(UserList):
         else:
             raise PhaserError("Records initialized without data")
 
-    @classmethod
-    def _recordize(cls, number_generator, record):
+    def _recordize(self, record):
         if isinstance(record, Record):
             return record
         if PHASER_ROW_NUM in record:
             return Record(int(record.pop(PHASER_ROW_NUM)), record)
-        return Record(next(number_generator), record)
+        next_num = next(self.row_num_gen)
+        return Record(next_num, record)
 
     # Transform back into native list(dict)
     def to_records(self):

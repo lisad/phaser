@@ -4,7 +4,7 @@ import os
 from pathlib import PosixPath
 from .io import read_csv, save_csv
 from .exceptions import *
-from .records import Records, Record, row_num_generator
+from .records import Records, Record
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -131,7 +131,6 @@ class Pipeline:
         self.phases = phases or self.__class__.phases
         self.phase_instances = []
         self.context = Context(working_dir=self.working_dir)
-        self.row_num_gen = row_num_generator()
         # Collect the extra sources and outputs from the phases so they can be
         # reconciled and initialized as necessary.  Extra sources that match
         # with extra outputs do not need to be initialized, but extra sources
@@ -209,11 +208,9 @@ class Pipeline:
 
     def run_phase(self, phase, source, destination):
         logger.info(f"Loading input from {source} for {phase.name}")
-        data = Records(self.load(source), self.row_num_gen)
-        print("pipeline loaded data: ", data)
+        data = Records(self.load(source))
         phase.load_data(data)
         results = phase.run()
-        print("pipeline jsut before save: ", results)
         self.save(results.for_save(), destination)
         self.save_extra_outputs()
         logger.info(f"{phase.name} saved output to {destination}")

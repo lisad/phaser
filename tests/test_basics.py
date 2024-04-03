@@ -1,8 +1,11 @@
-from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, DataException
-import pytest  # noqa # pylint: disable=unused-import
 import os
+import pandas as pd
 from pathlib import Path
+import pytest  # noqa # pylint: disable=unused-import
+
+from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, DataException, dataframe_step
 from fixtures import reconcile_phase_class, null_step_phase
+from steps import adds_row, sum_bonuses
 
 current_path = Path(__file__).parent
 
@@ -140,3 +143,10 @@ def test_phase_saved_even_if_error(tmpdir):
     with pytest.raises(DataException):
         pipeline.run_phase(phase, tmpdir / 'negative-level.csv', tmpdir / 'test-saved-despite-error.csv')
     assert os.path.exists(os.path.join(tmpdir, 'test-saved-despite-error.csv'))
+
+
+def test_phase_running_batch_step_increments_numbers():
+    phase = Phase()
+    phase.load_data([{'id': 1, 'name': 'Fred'}])
+    phase.execute_batch_step(adds_row)
+    assert phase.row_data[1].row_num == 2

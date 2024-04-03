@@ -1,5 +1,5 @@
 import pytest
-from phaser import Phase, row_step, check_unique
+from phaser import Phase, row_step, check_unique, batch_step
 
 @row_step
 def null_step(row, **kwargs):
