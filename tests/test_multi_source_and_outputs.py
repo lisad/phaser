@@ -52,4 +52,4 @@ def test_pipeline(tmpdir):
     assert "Reporting for phase Validation" in stdout
     assert "Employee Garak has no ID and inactive" in stdout
     assert "Reporting for phase Transformation" in stdout
-    assert "WARNING row: context, message: 'At some point, Full name was added to the row_data and not declared a header'" in stdout
+    assert "'Full name' was added to the row_data and not declared a header'" in stdout

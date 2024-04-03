@@ -36,6 +36,11 @@ def warn_if_lower_decks_and_return_row(row, context):
     return row
 
 
+@row_step
+def has_lounge(row, context):
+    return {**row, has_lounge: True}
+
+
 def variance(array):
     mean = sum(array) / len(array)
     return sum((value - mean) ** 2 for value in array) / len(array)
@@ -122,6 +127,7 @@ def test_drop_row_info():
 
     phase.run_steps()
     assert len(phase.context.dropped_rows) == 1
+    print(phase.context.dropped_rows)
     assert phase.context.dropped_rows[2]['step'] == 'check_deck_is_21'
 
 
@@ -129,7 +135,7 @@ def test_batch_step_error():
     phase = Phase(steps=[error_tachyon_level_variance])
     phase.load_data([{'tachyon_level': 513}, {'tachyon_level': 532}])
     phase.run_steps()
-    assert phase.context.errors['batch']['step'] == 'error_tachyon_level_variance'
+    assert phase.context.errors['none']['step'] == 'error_tachyon_level_variance'
 
 
 def test_batch_step_warning():
@@ -137,8 +143,8 @@ def test_batch_step_warning():
     phase.load_data([{'tachyon_level': 513}, {'tachyon_level': 532}])
 
     phase.run_steps()
-    assert phase.context.warnings['batch'][0]['step'] == 'warn_tachyon_level_variance'
-    assert phase.context.warnings['batch'][0]['row'] is None
+    assert phase.context.warnings['none'][0]['step'] == 'warn_tachyon_level_variance'
+    assert phase.context.warnings['none'][0]['row'] is None
 
 
 @pytest.mark.skip("Will test for error reporting format when we have output going to logger")
@@ -148,3 +154,14 @@ def test_row_error_formatting():
 
     phase.run_steps()
     # phase.report_errors_and_warnings()  Errors and warning reporting moved to pipeline
+
+
+@pytest.mark.skip("Not sure how we should deal with this - maybe leave in warning but remove in reporting")
+def test_extra_fields_warn_once():
+    # If we warn every time an extra field is added, this could be NxM warnings
+    # we could store them differently to detect - although it is nice to know at least one row the warning
+    # was added and in what step
+    phase = Phase(steps=[has_lounge])
+    phase.load_data([{'deck': 1}, {'deck': 2}])
+    phase.run()
+    assert len(phase.context.warnings) == 1

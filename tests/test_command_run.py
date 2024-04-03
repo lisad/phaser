@@ -3,6 +3,7 @@ import filecmp
 from pathlib import Path
 import pytest
 import phaser.cli
+from phaser import read_csv, PHASER_ROW_NUM
 
 current_path = Path(__file__).parent
 
@@ -17,8 +18,10 @@ def test_runs_a_pipeline(tmpdir):
     source = current_path / "fixture_files" / "runner-test.csv"
     args = parser.parse_args(f"passthrough {tmpdir} {source}".split())
     command.execute(args)
-    # Check that the output in the tmpdir is exactly the same as the input
-    assert filecmp.cmp(Path(tmpdir) / "passthrough_output_runner-test.csv", source)
+    output = read_csv(tmpdir / "passthrough_output_runner-test.csv")
+    for row in output:
+        del row[PHASER_ROW_NUM]
+    assert output == read_csv(source)
 
 @pytest.mark.parametrize("pipeline,exception",
     [
