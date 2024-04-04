@@ -14,21 +14,64 @@ CONTEXT_STEP = "CONTEXT_STEP"
 PROBE_VALUE = "__PROBE__"
 
 
-def row_step(step_function):
+def row_step(func=None, *, extra_sources=[], extra_outputs=[]):
     """ This decorator is used to indicate a step that should run on each row of a data set.
     It adds a "probe" response to the step that allows the phase running logic to know this.
     """
-    @wraps(step_function)
-    def _row_step_wrapper(row, context=None, __probe__=None):
-        if __probe__ == PROBE_VALUE:
-            return ROW_STEP  # Allows Phase to probe a step for how to call it
-        result = step_function(row, context=context)
-        if result is None:
-            raise PhaserError("Step should return row.")
-        if not isinstance(result, Mapping):
-            raise PhaserError(f"Step should return row in dict format, not {result}")
-        return result
-    return _row_step_wrapper
+    def _row_step_argument_wrapper(step_function):
+        signature = inspect.signature(step_function)
+        parameters = signature.parameters
+        # Check that the step_function signature matches what is expected if
+        # extra_sources or extra_outputs have been specified.
+        if extra_sources or extra_outputs:
+            missing_sources = [
+                source
+                for source in extra_sources
+                if source not in parameters
+            ]
+            missing_outputs = [
+                output
+                for output in extra_outputs
+                if output not in parameters
+            ]
+            if missing_sources or missing_outputs:
+                missing_sources.extend(missing_outputs)
+                raise PhaserError(f"{step_function.__name__}() missing parameter: {', '.join(map(str, missing_sources))}")
+
+
+        @wraps(step_function)
+        def _row_step_wrapper(row, context=None, outputs={}, __probe__=None):
+            if __probe__ == PROBE_VALUE:
+                return ROW_STEP  # Allows Phase to probe a step for how to call it
+            print(f"ROW STEP WRAPPER {outputs=} {id(outputs)}")
+            kwargs = {}
+            if 'context' in parameters:
+                kwargs['context'] = context
+            for source in (extra_sources or []):
+                kwargs[source] = context.get_source(source)
+            for out in extra_outputs:
+                if out in outputs:
+                    kwargs[out] = outputs[out]
+                else:
+                    # TODO: Raise exception if phase did not pass in an output
+                    pass
+
+            print(f"calling {step_function} with {row=} and {kwargs=}")
+            # TODO: Figure out how to apply any default values, or use an
+            # inspect.BoundArguments.apply_defaults to call the function.
+            result = step_function(row, **kwargs)
+            # result = step_function(row, context=context)
+            if result is None:
+                raise PhaserError("Step should return row.")
+            if not isinstance(result, Mapping):
+                raise PhaserError(f"Step should return row in dict format, not {result}")
+            return result
+        return _row_step_wrapper
+
+    if func is None:
+        return _row_step_argument_wrapper
+    else:
+        return _row_step_argument_wrapper(func)
 
 
 def batch_step(step_function):

@@ -3,7 +3,7 @@ import logging
 import os
 from pathlib import PosixPath
 import traceback
-from .io import read_csv, save_csv
+from .io import read_csv, save_csv, IOObject
 from .exceptions import *
 from .records import Records, Record
 from .constants import *
@@ -90,11 +90,13 @@ class Context:
     def has_errors(self):
         return self.errors != {}
 
-    def set_output(self, name, data):
+    def set_output(self, name, output):
         # At present outputs must be in record format and save to CSV, but this should be expanded.
         if name in self.rwos:
             logger.warning("Overwriting while adding output '%s'", name)
-        self.rwos[name] = ReadWriteObject(name, data, to_save=True)
+        if not isinstance(output, IOObject):
+            raise PhaserError(f"outputs must be set to an IOObject. set_output({name}, {output})")
+        self.rwos[name] = ReadWriteObject(name, output, to_save=True)
 
     def set_source(self, name, data):
         if name in self.rwos:
@@ -171,32 +173,6 @@ class Pipeline:
         self.phase_instances = []
         self.verbose = verbose
         self.context = Context(working_dir=self.working_dir, verbose=self.verbose)
-        # Collect the extra sources and outputs from the phases so they can be
-        # reconciled and initialized as necessary.  Extra sources that match
-        # with extra outputs do not need to be initialized, but extra sources
-        # that do not come from phases must be initialized so that phases can
-        # access their data.
-        self.extra_sources = [
-            source for phase in self.phases for source in Pipeline._find_extra_sources(phase)
-        ]
-        self.extra_outputs = [
-            output for phase in self.phases for output in Pipeline._find_extra_outputs(phase)
-        ]
-        self.sources_needing_initialization = [
-            source
-            for source in self.extra_sources
-            if source not in self.extra_outputs
-        ]
-
-    def _find_extra_sources(phase):
-        if hasattr(phase, 'extra_sources'):
-            return phase.extra_sources
-        return []
-
-    def _find_extra_outputs(phase):
-        if hasattr(phase, 'extra_outputs'):
-            return phase.extra_outputs
-        return []
 
     def init_source(self, name, source):
         """ Initializes a named source based on the kind of 'source' passed in.
@@ -226,7 +202,33 @@ class Pipeline:
             self.phase_instances.append(phase_instance)
 
     def validate_sources(self):
-        """ Check that all required sources have been initialized."""
+        """ Check that all required sources have been initialized.
+
+        This must be done after setup_phases has been run so that the
+        extra_sources and extra_outputs are properly instantiated with the
+        instance of each phase.  Since the extras can be declared on the
+        instance or at the class level, the instance must be created and
+        initialized to use the right data.
+        """
+        # TODO: Figure out how to work this logic so that the CLI can ask
+        # a pipeline for the needed sources before the pipeline is run.
+
+        # Collect the extra sources and outputs from the phases so they can be
+        # reconciled and initialized as necessary.  Extra sources that match
+        # with extra outputs do not need to be initialized, but extra sources
+        # that do not come from phases must be initialized so that phases can
+        # access their data.
+        self.extra_sources = [
+            source for phase in self.phase_instances for source in phase.extra_sources
+        ]
+        self.extra_outputs = [
+            output.name for phase in self.phase_instances for output in phase.extra_outputs
+        ]
+        self.sources_needing_initialization = [
+            source
+            for source in self.extra_sources
+            if source not in self.extra_outputs
+        ]
         missing_sources = []
         for source in self.sources_needing_initialization:
             if not source in self.context.rwos:
@@ -286,8 +288,8 @@ class Pipeline:
         """ Check that any extra outputs the phase declared have been added into the context.
         Throws a PhaserError if any do not exist, as that is a programming error that should be fixed."""
         missing = []
-        for name in Pipeline._find_extra_outputs(phase):
-            if name not in self.context.rwos:
+        for output in phase.extra_outputs:
+            if output.name not in self.context.rwos:
                 missing.append(name)
         if len(missing) > 0:
             raise PhaserError(f"Phase {phase.name} missing extra_outputs: {missing}")
@@ -299,7 +301,7 @@ class Pipeline:
                 filename = self.working_dir / f"{item.name}.csv"
                 if os.path.exists(filename):
                     raise PhaserError(f"Output with name '{filename}' exists.  Aborting before overwrite.")
-                save_csv(filename, item.data)
+                item.data.save(filename)
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
 
