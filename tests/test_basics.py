@@ -150,3 +150,39 @@ def test_phase_running_batch_step_increments_numbers():
     phase.load_data([{'id': 1, 'name': 'Fred'}])
     phase.execute_batch_step(adds_row)
     assert phase.row_data[1].row_num == 2
+
+
+def test_phase_with_dataframe_step_keeps_numbers():
+    @dataframe_step
+    def just_return_df(df, context):
+        return df
+
+    phase = Phase()
+    phase.load_data([{'__phaser_row_num__': 5, 'commission': 10000, 'performance': 5000}])
+    assert phase.row_data[0].row_num == 5
+    phase.execute_batch_step(just_return_df)
+    assert phase.row_data[0].row_num == 5
+
+
+@dataframe_step
+def add_row_via_df(df, context):
+    new_row = [20000, 8000, None]
+    additional = pd.DataFrame([new_row], columns=df.columns)
+    new_df = pd.concat([df, additional])
+    return new_df
+
+
+def test_phase_with_dataframe_step_number_goes_up():
+    phase = Phase()
+    phase.load_data([{'commission': 10000, 'performance': 5000}, {'commission': 5000, 'performance': 10000}])
+    phase.execute_batch_step(add_row_via_df)
+    assert phase.row_data[0].row_num == 1
+    assert phase.row_data[2].row_num == 3
+
+
+def test_with_loaded_row_num_used_as_max():
+    phase = Phase()
+    phase.load_data([{'__phaser_row_num__': 8, 'commission': 10000, 'performance': 5000}])
+    phase.execute_batch_step(add_row_via_df)
+    assert phase.row_data[0].row_num == 8
+    assert phase.row_data[1].row_num == 9

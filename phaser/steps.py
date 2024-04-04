@@ -1,8 +1,9 @@
 import inspect
 from collections.abc import Mapping, Sequence
-from functools import wraps
+from functools import wraps, partial
 import pandas as pd
-from .pipeline import DataErrorException, DataException, DropRowException, PhaserError
+from .exceptions import DataErrorException, DropRowException, PhaserError
+from .pipeline import PHASER_ROW_NUM
 from .column import Column
 from .records import Records
 
@@ -55,13 +56,18 @@ def batch_step(step_function):
     return _batch_step_wrapper
 
 
-def dataframe_step(step_function):
+def dataframe_step(step_function=None, pass_row_nums=True):
+    if step_function is None:
+        return partial(dataframe_step, pass_row_nums=pass_row_nums)
+
     @wraps(step_function)
     def _df_step_wrapper(row_data, context=None, __probe__=None):
         if __probe__ == PROBE_VALUE:
             return DATAFRAME_STEP
         try:
             dataframe = pd.DataFrame.from_records(row_data)
+            if pass_row_nums:
+                dataframe[PHASER_ROW_NUM] = [row.row_num for row in row_data]
             if 'context' in str(inspect.signature(step_function)):
                 result = step_function(dataframe, context=context)
             else:
@@ -71,7 +77,7 @@ def dataframe_step(step_function):
         if not isinstance(result, pd.DataFrame):
             raise PhaserError(
                 f"Step {step_function} returned a {result.__class__} rather than a pandas DataFrame")
-        return Records([row for row in result.to_dict('records')])
+        return result.to_dict(orient='records')
     return _df_step_wrapper
 
 
