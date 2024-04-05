@@ -43,7 +43,6 @@ def row_step(func=None, *, extra_sources=[], extra_outputs=[]):
         def _row_step_wrapper(row, context=None, outputs={}, __probe__=None):
             if __probe__ == PROBE_VALUE:
                 return ROW_STEP  # Allows Phase to probe a step for how to call it
-            print(f"ROW STEP WRAPPER {outputs=} {id(outputs)}")
             kwargs = {}
             if 'context' in parameters:
                 kwargs['context'] = context
@@ -56,7 +55,6 @@ def row_step(func=None, *, extra_sources=[], extra_outputs=[]):
                     # TODO: Raise exception if phase did not pass in an output
                     pass
 
-            print(f"calling {step_function} with {row=} and {kwargs=}")
             # TODO: Figure out how to apply any default values, or use an
             # inspect.BoundArguments.apply_defaults to call the function.
             result = step_function(row, **kwargs)
