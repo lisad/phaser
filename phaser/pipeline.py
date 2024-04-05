@@ -96,12 +96,14 @@ class Context:
             logger.warning("Overwriting while adding output '%s'", name)
         if not isinstance(output, IOObject):
             raise PhaserError(f"outputs must be set to an IOObject. set_output({name}, {output})")
-        self.rwos[name] = ReadWriteObject(name, output, to_save=True)
+        output.to_save = True
+        self.rwos[name] = output
 
-    def set_source(self, name, data):
+    def set_source(self, name, source):
         if name in self.rwos:
             logger.warning("Overwriting while setting source '%s'", name)
-        self.rwos[name] = ReadWriteObject(name, data, to_save=False)
+        source.to_save = False
+        self.rwos[name] = source
 
     def get_source(self, name):
         if name in self.rwos:
@@ -148,13 +150,6 @@ class Context:
             raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
 
 
-class ReadWriteObject:
-    def __init__(self, name, data=None, to_save=True):
-        self.name = name
-        self.format = 'csv'
-        self.data = data
-        self.to_save = to_save
-
 class Pipeline:
     """ Pipeline handles running phases in order.  It also handles I/O and marshalling what
     outputs from phases get used as inputs in later phases.  """
@@ -174,18 +169,31 @@ class Pipeline:
         self.verbose = verbose
         self.context = Context(working_dir=self.working_dir, verbose=self.verbose)
 
-    def init_source(self, name, source):
+        self.setup_phases()
+        self.setup_extras()
+
+    def init_source(self, name, source_path):
         """ Initializes a named source based on the kind of 'source' passed in.
 
-        :param source: must be a os.PathLike file in csv format and will be read entirely into memory
+        :param name: An IOObject that specifies the name and type of the source
+        :param source_path: must be a os.PathLike file in csv format and will be read entirely into memory
         """
-        # TODO: Check that file exists first?
-        data = read_csv(source)
-        self.context.set_source(name, data)
+        source = next((s for s in self.extra_sources if isinstance(s, IOObject) and s.name == name), None)
+        if not source:
+            raise PhaserError(f"Unable to find source {name} to initialize")
+
+        source.load(source_path)
+        self.context.set_source(name, source)
 
     def setup_phases(self):
         """ Instantiates phases passed as classes, assigns unique names to phases, and passes
          Context in also. """
+
+        # Prevent us from re-instantiating the phases if they have been set up
+        # already.
+        if self.phase_instances:
+            return
+
         phase_names = []
         for phase in self.phases:
             phase_instance = phase
@@ -201,36 +209,35 @@ class Pipeline:
             phase_instance.name = name
             self.phase_instances.append(phase_instance)
 
+    def setup_extras(self):
+        # Phases must be instantiated, because that is how any configuration set
+        # on the class of the phase is set on the instance. Otherwise, we would
+        # need to check for sources and outputs on the classes and the
+        # instancees.
+        self.extra_sources = [
+            source for phase in self.phase_instances for source in phase.extra_sources
+        ]
+
     def validate_sources(self):
-        """ Check that all required sources have been initialized.
-
-        This must be done after setup_phases has been run so that the
-        extra_sources and extra_outputs are properly instantiated with the
-        instance of each phase.  Since the extras can be declared on the
-        instance or at the class level, the instance must be created and
-        initialized to use the right data.
-        """
-        # TODO: Figure out how to work this logic so that the CLI can ask
-        # a pipeline for the needed sources before the pipeline is run.
-
+        """ Check that all required sources have been initialized."""
         # Collect the extra sources and outputs from the phases so they can be
         # reconciled and initialized as necessary.  Extra sources that match
         # with extra outputs do not need to be initialized, but extra sources
         # that do not come from phases must be initialized so that phases can
         # access their data.
-        self.extra_sources = [
-            source for phase in self.phase_instances for source in phase.extra_sources
-        ]
-        self.extra_outputs = [
+        # TODO: This logic should check that expected outputs come from sources
+        # from prior phases. As written an output could be specified in a phase
+        # that will run after a phase that needs its source.
+        extra_output_names = [
             output.name for phase in self.phase_instances for output in phase.extra_outputs
         ]
-        self.sources_needing_initialization = [
-            source
+        sources_needing_initialization = [
+            (source if isinstance(source, str) else source.name)
             for source in self.extra_sources
-            if source not in self.extra_outputs
+            if (source if isinstance(source, str) else source.name) not in extra_output_names
         ]
         missing_sources = []
-        for source in self.sources_needing_initialization:
+        for source in sources_needing_initialization:
             if not source in self.context.rwos:
                 missing_sources.append(source)
 
@@ -238,7 +245,6 @@ class Pipeline:
             raise PhaserError(f"{len(missing_sources)} sources need initialization: {missing_sources}")
 
     def run(self):
-        self.setup_phases()
         self.validate_sources()
         if self.source is None:
             raise ValueError("Pipeline source may not be None")
@@ -301,7 +307,7 @@ class Pipeline:
                 filename = self.working_dir / f"{item.name}.csv"
                 if os.path.exists(filename):
                     raise PhaserError(f"Output with name '{filename}' exists.  Aborting before overwrite.")
-                item.data.save(filename)
+                item.save(filename)
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
 

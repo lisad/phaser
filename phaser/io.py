@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from collections import UserDict, UserList
 from collections.abc import Mapping, Sequence
 import math
 from clevercsv import stream_dicts, stream_table, DictWriter
@@ -118,6 +117,7 @@ class IOObject(ABC):
         if data and not isinstance(data, data_type):
             raise PhaserError(f"{self.__class__} initialized with wrong data structure. Must be a {data_type}")
         self.data = data
+        self.to_save = False
 
     @abstractmethod
     def load(self, source):
@@ -132,7 +132,7 @@ class IOObject(ABC):
         read back in by the load function."""
         pass
 
-class ExtraRecords(IOObject, UserList):
+class ExtraRecords(IOObject):
     """ A holder of data that either comes from an extra source is will be added
     to as an extra output. Its data is in the form of a sequence, most likely
     a list of dicts and represents data that is meant to be appended to or
@@ -147,7 +147,7 @@ class ExtraRecords(IOObject, UserList):
         if self.data:
             save_csv(dest, self.data)
 
-class ExtraMapping(IOObject, UserDict):
+class ExtraMapping(IOObject):
     """ A holder of data that either comes from an extra source is will be added
     to as an extra output. Its data is in the form of a mapping, most likely
     a dict and represents data that is meant to be accessed by a key."""

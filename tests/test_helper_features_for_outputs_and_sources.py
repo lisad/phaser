@@ -17,7 +17,8 @@ from phaser.io import read_csv, save_csv, ExtraMapping
 @row_step(extra_outputs=[ 'sibling_counts' ])
 def increment_counts(row, sibling_counts):
     parent_id = row['parent_id']
-    sibling_counts[parent_id] = sibling_counts.get(parent_id, 0) + 1
+    # sibling_counts[parent_id] = sibling_counts.get(parent_id, 0) + 1
+    sibling_counts[parent_id] += 1
     return row
 
 class CountParents(Phase):

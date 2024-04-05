@@ -51,7 +51,7 @@ def row_step(func=None, *, extra_sources=[], extra_outputs=[]):
                 kwargs[source] = context.get_source(source)
             for out in extra_outputs:
                 if out in outputs:
-                    kwargs[out] = outputs[out]
+                    kwargs[out] = outputs[out].data
                 else:
                     # TODO: Raise exception if phase did not pass in an output
                     pass
