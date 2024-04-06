@@ -233,13 +233,13 @@ class Pipeline:
         these fit very nicely into the standard levels allowing familiar customization.  """
         print(f"Reporting for phase {phase_name}")
         for row_num, info in self.context.dropped_rows.items():
-            print(f"DROPPED row: {row_num}, message: '{info['message']}'")
+            print(f"DROP ROW in step {info['step']}, row {row_num}: message: '{info['message']}'")
         # Unlike errors and dropped rows, there can be multiple warnings per row
         for row_num, warnings in self.context.warnings.items():
             for warning in warnings:
-                print(f"WARNING row: {row_num}, message: '{warning['message']}'")
+                print(f"WARNING in step {warning['step']}, row {row_num}, message: '{warning['message']}'")
         for row_num, error in self.context.errors.items():
-            print(f"ERROR row: {row_num}, message: '{error['message']}'")
+            print(f"ERROR in step {error['step']}, row {row_num}, message: '{error['message']}'")
 
     def check_extra_outputs(self, phase):
         """ Check that any extra outputs the phase declared have been added into the context.
