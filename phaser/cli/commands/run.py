@@ -60,5 +60,5 @@ class RunPipelineCommand(Command):
         source = args.source
 
         print(f"Running pipeline '{Pipeline.__name__}'")
-        pipeline = Pipeline(working_dir, source)
+        pipeline = Pipeline(working_dir, source, verbose=args.verbose)
         pipeline.run()

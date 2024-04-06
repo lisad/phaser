@@ -94,8 +94,6 @@ def main(argv):
         command["instance"].execute(args)
     except phaser.DataException as e:
         print("\nPipeline run failed while processing data.  Errors and row numbers causing errors have been reported.")
-        if args.verbose:
-            traceback.print_exc()
     except phaser.PhaserError as e:
         print("\nPipeline run stopped due to logic error.")
         traceback.print_exc()

@@ -2,6 +2,8 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 import pandas as pd
 import logging
+import traceback
+
 from .column import make_strict_name, Column
 from .pipeline import (Pipeline, Context, DropRowException, WarningException, PhaserError,
                        PHASER_ROW_NUM)
@@ -116,6 +118,8 @@ class PhaseBase(ABC):
             self.process_exception(exc, step, None)
 
     def process_exception(self, exc, step, row):
+        # LMDTODO increasingly think we should move this method to Context - only the error_policy is
+        # linked to the Phase.
         """
         A method to delegate exception handling to.  This is not called within PhaseBase directly,
         but it is called in the subclasses when they run steps or methods.
@@ -138,16 +142,17 @@ class PhaseBase(ABC):
             # recorded error as well.
             message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
             logger.debug(f"Unknown exception handled in executing steps ({message}")
+            stack_info = traceback.format_exc() if self.context.verbose else None
 
             match self.error_policy:
                 case Pipeline.ON_ERROR_COLLECT:
-                    self.context.add_error(step, row, message)
+                    self.context.add_error(step, row, message, stack_info=stack_info)
                 case Pipeline.ON_ERROR_WARN:
-                    self.context.add_warning(step, row, message)
+                    self.context.add_warning(step, row, message, stack_info=stack_info)
                 case Pipeline.ON_ERROR_DROP_ROW:
                     self.context.add_dropped_row(step, row, message)
                 case Pipeline.ON_ERROR_STOP_NOW:
-                    self.context.add_error(step, row, message)
+                    self.context.add_error(step, row, message, stack_info=stack_info)
                     raise exc
                 case _:
                     raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
