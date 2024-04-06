@@ -7,33 +7,36 @@ transforms, sorting, validating and viewing changes to data.
 ## Goals and Scope
 
 This library is designed to help developers run a series of steps on _batch-oriented_,
-_record-oriented_, un-indexed data.  A batch of record-oriented data means a set of records
+_record-oriented_, un-indexed data.  A batch of record-oriented data is a set of records
 that are intended to be processed together, in which each record has more or less the same
 fields and those fields are the same type across records.  Often record-oriented data can
-be expressed in CSV files, where the first line
-contains the column names to associate with all the fields in rows in all the other lines.
+be expressed in CSV files, where the first line contains the column names.
+
 Record-oriented data can be stored or expressed in various formats and objects including:
+
 * CSV files
 * Excel files
 * Pandas dataframes
 * JSON files, provided the JSON format is a list of dicts
 
-In this project, record-orientation is somewhat forgiving.  The library does not insist that
-each row must have a value for every column.  When some records don't have some fields we can
-call that 'sparse' data. It may sometimes be represented in a format that isn't columnar
+In this project, record consistency is somewhat forgiving.  The library does not insist that
+each record must have a value for every column.  Some records may not have some fields, i.e. 'sparse' data.
+Sparse data may sometimes be represented in a format that isn't columnar
 (a JSON format might easily contain records in which only fields with values are listed).  Sparse
 record-oriented data should be trivial to handle in this library, although by default checkpoint
-data will be saved in a columnar way that shows all the null values.
+data will be saved in a columnar CSV that shows all the null values.
 
-The goals of Phaser are to offer an opinionated framework with a structure that
-* shortens the loop on debugging where a complex data integration is failing
+The goals of Phaser are to offer an opinionated framework for complex data pipelines with a structure that
+
+* shortens the loop on debugging where a record has the wrong data or a step is failing
 * empowers teams to work on the same code rather than only one assigned owner/expert
 * makes refactoring and extending data integration code easier
 * reduces error rates
 
 The mechanisms that we think will help phaser meet these goals:
+
 * make it easy to start using phaser without changing everything
-* default choices and tools that support shortened-loop debugging
+* provide defaults and tools that support shortened-loop debugging
 * encourage code organized in very testable steps and testable phases, via sample code and useful features
 * make it easy to add complexity over time and move gracefully from default to custom behaviour
 * make high-level code readable in one place, as when a Phase lists all of its steps declaratively
@@ -41,7 +44,9 @@ The mechanisms that we think will help phaser meet these goals:
 
 ## Simple example
 
-```
+```python
+from phaser import Phase, Column, FloatColumn, Pipeline
+
 class Validator(Phase):
     columns = [
         Column(name="Employee ID", rename="employeeNumber"),
@@ -88,6 +93,36 @@ run separately. A developer can run the Validator phase once then work on adding
 or narrow down an error in production by comparing the checkpoint output of each phase.  In addition, the code
 is readable and supports team collaboration.
 
+## Running
+
+Phaser can be launched from any python program by importing your pipeline, instantiating it with today's data
+file(s) and working directory, and running it.  Output will be saved in the working directory along with
+errors, warnings, and checkpoints (a copy of the data as it appeared at the end of each phase, so that
+changes can be traced back to the phase they occurred in)
+
+```python
+from tests.pipelines.employees import EmployeeReviewPipeline
+
+pipeline = EmployeeReviewPipeline(source='tests/fixture_files/employees.csv', working_dir='employee_output')
+pipeline.run()
+
+```
+
+The package also includes a command-line tool that can run an existing pipeline on a new source.  The same pipeline
+can be run from within the 'tests' directory if you have cloned the phaser repository, and produces its warnings and 
+errors with row numbers that persist throughout the pipeline.
+
+```
+ % python -m phaser run employees ~/phaser_output fixture_files/employees.csv
+
+Running pipeline 'EmployeeReviewPipeline'
+Reporting for phase Validator
+DROPPED row: 3, message: 'Employee Garak has no ID and inactive, dropping row'
+Reporting for phase Transformer
+WARNING row: 1, message: 'New field 'Full name' was added to the row_data and not declared a header'
+WARNING row: 1, message: 'New field 'salary' was added to the row_data and not declared a header'
+WARNING row: 1, message: 'New field 'Bonus percent' was added to the row_data and not declared a header'
+```
 
 ## Contributing
 
