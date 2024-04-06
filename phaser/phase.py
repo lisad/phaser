@@ -317,13 +317,14 @@ class Phase(PhaseBase):
                     del row[col]
 
     def check_headers_consistent(self):
+        added_header_names = set()
         for row in self.row_data:
             for field_name in row.keys():
-                if field_name not in self.headers:
+                if field_name not in self.headers and field_name not in added_header_names:
                     # TODO: Fix -- context adds warnings to the 'current_row'
                     # record, not the record associated with the row passed in
                     # here. In this method, all of the errors are logged on the
                     # last row of the data, because current_row is not changed.
                     self.context.add_warning('consistency_check', row,
                         f"New field '{field_name}' was added to the row_data and not declared a header")
-
+                    added_header_names.add(field_name)
