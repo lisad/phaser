@@ -106,12 +106,12 @@ class Context:
 
     def process_exception(self, exc, step, row, error_policy=ON_ERROR_COLLECT):
         """
-        A method to delegate exception handling to.  This is not called within PhaseBase directly,
-        but it is called in the subclasses when they run steps or methods.
+        A method to delegate exception handling to turn into error reporting in standardized way.  Called by
+        phase's step handlers when a phaser data exception or a coding exception occurs
         :param exc: The exception or error thrown
         :param step: What step this occurred in
         :param row: What row of the data this occurred in
-        :param error_policy: One of the error handling policies (ON_ERROR_COLLECT, ON_ERROR_STOP_NOW, etc.)
+        :param error_policy: The phase's chosen error handling policies (ON_ERROR_COLLECT, ON_ERROR_STOP_NOW, etc.)
         :return: Nothing
         """
         if isinstance(exc, PhaserError):

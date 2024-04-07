@@ -1,6 +1,6 @@
 import pytest
 from fixtures import reconcile_phase_class
-from phaser import Pipeline, Phase, row_step, batch_step, WarningException, ON_ERROR_DROP_ROW
+from phaser import Phase, row_step, batch_step, WarningException, ON_ERROR_DROP_ROW, ReshapePhase, DataErrorException
 
 
 @row_step
@@ -165,3 +165,29 @@ def test_extra_fields_warn_once():
     phase.load_data([{'deck': 1}, {'deck': 2}])
     phase.run()
     assert len(phase.context.warnings) == 1
+
+
+def test_row_step_in_reshape_can_report_row_num_error():
+    @row_step
+    def report_row_error(row, context):
+        if row['floor'] == 13:
+            raise DataErrorException("Floor cannot be #13")
+        return row
+
+    phase = ReshapePhase(steps=[report_row_error])
+    phase.load_data([{'floor': 1}, {'floor': 13}])
+    phase.run()
+    assert len(phase.context.errors) == 1
+    assert 'Floor cannot' in phase.context.errors[2]['message']
+
+
+def test_batch_step_can_return_row_num_in_error():
+    @batch_step
+    def report_row_error_in_batch(batch, context):
+        raise DataErrorException("Look I just know there's a problem in row 2", row=batch[1])
+
+    phase = Phase(steps=[report_row_error_in_batch])
+    phase.load_data([{'floor': 1}, {'floor': 13}])
+    phase.run()
+    assert len(phase.context.errors) == 1
+    assert 'just know' in phase.context.errors[2]['message']

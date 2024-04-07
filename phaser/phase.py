@@ -3,8 +3,7 @@ from copy import deepcopy
 import pandas as pd
 import logging
 from .column import make_strict_name, Column
-from .pipeline import (Pipeline, Context, DropRowException, WarningException, PhaserError,
-                       PHASER_ROW_NUM)
+from .pipeline import Context, DropRowException, DataException, PhaserError
 from .records import Records, Record
 from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step, DATAFRAME_STEP
 from .constants import *
@@ -110,6 +109,8 @@ class PhaseBase(ABC):
                 self.row_data = Records([row for row in new_row_values], number_from=preserve_row_num + 1)
             else:
                 self.row_data = Records([row for row in new_row_values], preserve_numbers=False)
+        except DataException as exc:
+            self.context.process_exception(exc, step, row=exc.row, error_policy=self.error_policy)
         except Exception as exc:
             self.context.process_exception(exc, step, row=None, error_policy=self.error_policy)
 
@@ -134,7 +135,7 @@ class ReshapePhase(PhaseBase):
     that a regular phase provides.
     """
 
-    def __init__(self, name, steps=None, context=None, error_policy=None):
+    def __init__(self, name=None, steps=None, context=None, error_policy=None):
         super().__init__(name, steps=steps, context=context, error_policy=error_policy)
         self.preserve_row_numbers = False
 
