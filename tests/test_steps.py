@@ -13,6 +13,22 @@ current_path = Path(__file__).parent
 
 # Tests of the operation of steps
 
+# Row steps
+
+def test_row_step_returns_new_dict():
+    @row_step
+    def my_row_step(row, context):
+        # By not returning the row but a dict with its values, convert the Record object into a simple dict
+        return {row.keys[0]: row.values()[0]}
+
+    phase = Phase(steps=[my_row_step])
+    phase.load_data([{'grade': 'A'}, {'grade': 'B'}])
+    phase.run_steps()
+    assert phase.row_data[0].row_num == 1
+    assert phase.row_data[0]['grade'] == 'A'
+
+# Batch steps
+
 
 def test_simple_batch_step():
     @batch_step
@@ -158,19 +174,22 @@ def test_check_unique_is_helpful_when_column_missing():
 # Testing builtin sort_by step
 
 
-def test_with_col_name():
+def test_sort_with_col_name():
     phase = Phase(steps=[sort_by("id")])
     phase.load_data([{'id': 1}, {'id': 3}, {'id': 2}, {'id': 0}])
     phase.run_steps()
     assert all([phase.row_data[i]['id'] == i for i in range(4)])
 
 
-def test_with_col_obj():
+def test_sort_with_col_obj():
     id_col = IntColumn(name='id')
     phase = Phase(columns=[id_col], steps=[sort_by(id_col)])
     phase.load_data([{'id': 1}, {'id': 3}, {'id': 2}, {'id': 0}])
     phase.run_steps()
     assert all([phase.row_data[i]['id'] == i for i in range(4)])
+
+
+# Testing context steps
 
 
 def test_context_step():
@@ -208,6 +227,29 @@ def test_context_step_cant_return_random_stuff():
     assert "return a value" in exc_info.value.message
 
 
+def test_context_step_keeps_numbers():
+    @context_step
+    def a_step(context):
+        assert 1 > 0
+
+    row_num_gen = phaser.records.row_num_generator()
+    # PIpeline will set up Records that converts __phaser_row_num__ into record.row_num.  Replicate that setup
+    # so we can see that it keeps that setup.
+    data_with_row_numbers = [
+        {'id': 3, 'age': 48, PHASER_ROW_NUM: 3}
+    ]
+    data = phaser.records.Records(data_with_row_numbers, row_num_gen)
+    phase = Phase("test", steps=[a_step])
+    phase.load_data(data)
+    # Before running, the 2nd row, index 1, should keep the # 3... and after running also
+    assert phase.row_data[0].row_num == 3
+    phase.run()
+    assert phase.row_data[0].row_num == 3
+
+
+# testing dataframe steps
+
+
 def test_dataframe_step():
     phase = Phase(steps=[sum_bonuses])
     phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000},
@@ -217,7 +259,7 @@ def test_dataframe_step():
 
 
 def test_dataframe_step_doesnt_declare_context():
-    @dataframe_step
+    @dataframe_step(pass_row_nums=False)
     def sum_bonuses_one_param(df):
         df['total'] = df.sum(axis=1, numeric_only=True)
         return df
@@ -245,24 +287,4 @@ def test_multiple_step_types():
     phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
     phase.run_steps()
     assert set(phase.row_data[0].keys()) == set(['eid', 'commission', 'performance', 'total', 'secret'])
-
-
-def test_phase_with_context_step_keeps_numbers():
-    @context_step
-    def a_step(context):
-        assert 1 > 0
-
-    row_num_gen = phaser.records.row_num_generator()
-    # PIpeline will set up Records that converts __phaser_row_num__ into record.row_num.  Replicate that setup
-    # so we can see that it keeps that setup.
-    data_with_row_numbers = [
-        {'id': 3, 'age': 48, PHASER_ROW_NUM: 3}
-    ]
-    data = phaser.records.Records(data_with_row_numbers, row_num_gen)
-    phase = Phase("test", steps=[a_step])
-    phase.load_data(data)
-    # Before running, the 2nd row, index 1, should keep the # 3... and after running also
-    assert phase.row_data[0].row_num == 3
-    phase.run()
-    assert phase.row_data[0].row_num == 3
 

@@ -28,6 +28,11 @@ class Records(UserList):
         """
         number_from = kwargs.get('number_from', 1)
         self.row_num_gen = row_num_generator(start_from=number_from)
+        self.max_row_num = number_from
+
+        # NOrmally records will try to prserve row numbers, but in reshape/explode phases, we may
+        # explicitly renumber all rows (preserve_numbers=False)
+        self.preserve_numbers = kwargs.get('preserve_numbers', True)
 
         super().__init__(args[0] if args else None)
         # Slicing a UserList results in constructing a brand new list, which
@@ -52,13 +57,29 @@ class Records(UserList):
         else:
             raise PhaserError("Records initialized without data")
 
+    def get_max_row_num(self):
+        return self.max_row_num
+
     def _recordize(self, record):
         if isinstance(record, Record):
+            if not self.preserve_numbers:
+                record.row_num = next(self.row_num_gen)
+                self.max_row_num = record.row_num
             return record
-        if PHASER_ROW_NUM in record:
-            return Record(int(record.pop(PHASER_ROW_NUM)), record)
-        next_num = next(self.row_num_gen)
-        return Record(next_num, record)
+
+        else:
+            if PHASER_ROW_NUM in record and self.preserve_numbers:
+                row_num = record.pop(PHASER_ROW_NUM)
+                if row_num is None:
+                    row_num = next(self.row_num_gen)
+                else:
+                    row_num = int(row_num)
+            else:
+                row_num = next(self.row_num_gen)
+
+            if row_num > self.max_row_num:
+                self.max_row_num = row_num
+            return Record(row_num, record)
 
     # Transform back into native list(dict)
     def to_records(self):

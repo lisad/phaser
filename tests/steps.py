@@ -7,7 +7,7 @@ def adds_row(batch, context):
     return batch
 
 
-@dataframe_step
+@dataframe_step(pass_row_nums=False)
 def sum_bonuses(df, context):
     df['total'] = df.sum(axis=1, numeric_only=True)
     return df
