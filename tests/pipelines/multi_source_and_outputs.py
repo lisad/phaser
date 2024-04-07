@@ -9,7 +9,8 @@ from phaser import (
     context_step,
     check_unique,
     DataErrorException,
-    DropRowException
+    DropRowException,
+    ON_ERROR_DROP_ROW
 )
 
 
@@ -115,7 +116,7 @@ class Validation(Phase):
         Column(name="Pay type",
                rename="payType",
                allowed_values=["hourly", "salary", "exception hourly", "monthly", "weekly", "daily"],
-               on_error=Pipeline.ON_ERROR_DROP_ROW,
+               on_error=ON_ERROR_DROP_ROW,
                save=False),
         Column(name="Pay period", rename="paidPer")
     ]

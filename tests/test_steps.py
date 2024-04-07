@@ -3,7 +3,7 @@ import pytest
 
 from phaser import (check_unique, Phase, row_step, batch_step, context_step, Pipeline, sort_by, IntColumn,
                     DataErrorException, DropRowException, PhaserError, read_csv, dataframe_step,
-                    PHASER_ROW_NUM)
+                    PHASER_ROW_NUM, ON_ERROR_STOP_NOW)
 import phaser
 from fixtures import test_data_phase_class
 from steps import sum_bonuses
@@ -118,7 +118,7 @@ def test_builtin_step():
 
 
 def test_check_unique_fails(test_data_phase_class):
-    phase = test_data_phase_class(error_policy=Pipeline.ON_ERROR_STOP_NOW)
+    phase = test_data_phase_class(error_policy=ON_ERROR_STOP_NOW)
     phase.load_data([{'id': '1'}, {'id': '1'}])
     with pytest.raises(DataErrorException):
         phase.run_steps()

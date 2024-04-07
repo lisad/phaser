@@ -13,7 +13,7 @@ exact decimal versions
 
 """
 from phaser import (Phase, Pipeline, Column, FloatColumn, row_step, check_unique,
-                    DataErrorException, DropRowException)
+                    DataErrorException, DropRowException, ON_ERROR_DROP_ROW)
 
 
 """
@@ -74,7 +74,7 @@ class Validator(Phase):
         Column(name="Pay type",
                rename="payType",
                allowed_values=["hourly", "salary", "exception hourly", "monthly", "weekly", "daily"],
-               on_error=Pipeline.ON_ERROR_DROP_ROW,
+               on_error=ON_ERROR_DROP_ROW,
                save=False),
         Column(name="Pay period", rename="paidPer")
     ]
