@@ -41,6 +41,11 @@ class RunPipelineCommand(Command):
         # the sole subclass of phaser.Pipeline is located and invoked with
         # additional command line arguments.
         pipeline_module = import_module(f"pipelines.{pipeline_name}")
+        verbose = False
+        try:
+            verbose = args.verbose
+        except:
+            pass
 
         def is_pipeline_class(m):
             # isinstance(attr, type) is the way to check that the attr is
@@ -60,5 +65,5 @@ class RunPipelineCommand(Command):
         source = args.source
 
         print(f"Running pipeline '{Pipeline.__name__}'")
-        pipeline = Pipeline(working_dir, source)
+        pipeline = Pipeline(working_dir, source, verbose=verbose)
         pipeline.run()

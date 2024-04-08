@@ -35,7 +35,8 @@ class Context:
     """ Context is created by the pipeline, and passed to each phase.  Thus, it can be used
     to carry extra data or variable values between phases if necessary. """
 
-    def __init__(self, variables=None, working_dir=None):
+    def __init__(self, variables=None, working_dir=None, verbose=False):
+        self.verbose = verbose
         self.reset_events()
         self.variables = variables or {}
         self.current_row = None
@@ -48,7 +49,7 @@ class Context:
         self.warnings = {}
         self.dropped_rows = {}
 
-    def add_error(self, step, row, message):
+    def add_error(self, step, row, message, stack_info=None):
         step_name = _stringify_step(step)
         index = _extract_row_num(row)
         if index in self.errors:
@@ -56,19 +57,19 @@ class Context:
             # LMDTODO This only captures one error per row number or one error for 'unknown'. that seems fine for
             # now because we stop processing errored rows, but eventually can be more complete
         else:
-            self.errors[index] = {'step': step_name, 'message': message, 'row': row}
+            self.errors[index] = {'step': step_name, 'message': message, 'row': row, 'stack_info': stack_info}
 
-    def add_warning(self, step, row, message):
+    def add_warning(self, step, row, message, stack_info=None):
         step_name = _stringify_step(step)
         index = _extract_row_num(row)
-        warning_data = {'step': step_name, 'message': message, 'row': row}
+        warning_data = {'step': step_name, 'message': message, 'row': row, 'stack_info': stack_info}
         # LMDTODO to simplify this, self.warnings can be a defaultdict with default to array
         if index in self.warnings:
             self.warnings[index].append(warning_data)
         else:
             self.warnings[index] = [warning_data]
 
-    def add_dropped_row(self, step, row, message):
+    def add_dropped_row(self, step, row, message, stack_info=None):
         step_name = _stringify_step(step)
         index = _extract_row_num(row)
         # LMDTODO: we should think about preventing rows from being dropped twice, although
@@ -78,7 +79,7 @@ class Context:
         if index in self. dropped_rows:
             raise PhaserError(f"Dropping same row ({index}) twice not handled properly yet")
         else:
-            self.dropped_rows[index] = {'step': step_name, 'message': message, 'row': row}
+            self.dropped_rows[index] = {'step': step_name, 'message': message, 'row': row, 'stack_info': stack_info}
 
     def add_variable(self, name, value):
         """ Add variables that are global to the pipeline and accessible to steps and internal methods """
@@ -126,7 +127,7 @@ class Pipeline:
     ON_ERROR_DROP_ROW = "ON_ERROR_DROP_ROW"
     ON_ERROR_STOP_NOW = "ON_ERROR_STOP_NOW"
 
-    def __init__(self, working_dir=None, source=None, phases=None):
+    def __init__(self, working_dir=None, source=None, phases=None, verbose=False):
         self.working_dir = working_dir or self.__class__.working_dir
         if self.working_dir and not os.path.exists(self.working_dir):
             raise ValueError(f"Working dir {self.working_dir} does not exist.")
@@ -134,7 +135,8 @@ class Pipeline:
         assert self.source is not None and self.working_dir is not None
         self.phases = phases or self.__class__.phases
         self.phase_instances = []
-        self.context = Context(working_dir=self.working_dir)
+        self.verbose = verbose
+        self.context = Context(working_dir=self.working_dir, verbose=self.verbose)
         # Collect the extra sources and outputs from the phases so they can be
         # reconciled and initialized as necessary.  Extra sources that match
         # with extra outputs do not need to be initialized, but extra sources
@@ -233,13 +235,18 @@ class Pipeline:
         these fit very nicely into the standard levels allowing familiar customization.  """
         print(f"Reporting for phase {phase_name}")
         for row_num, info in self.context.dropped_rows.items():
-            print(f"DROPPED row: {row_num}, message: '{info['message']}'")
+            print(f"DROP ROW in step {info['step']}, row {row_num}: message: '{info['message']}'")
+
         # Unlike errors and dropped rows, there can be multiple warnings per row
         for row_num, warnings in self.context.warnings.items():
             for warning in warnings:
-                print(f"WARNING row: {row_num}, message: '{warning['message']}'")
+                print(f"WARNING in step {warning['step']}, row {row_num}, message: '{warning['message']}'")
+                if warning['stack_info']:
+                    print(warning['stack_info'])
         for row_num, error in self.context.errors.items():
-            print(f"ERROR row: {row_num}, message: '{error['message']}'")
+            print(f"ERROR in step {error['step']}, row {row_num}, message: '{error['message']}'")
+            if error['stack_info']:
+                print(error['stack_info'])
 
     def check_extra_outputs(self, phase):
         """ Check that any extra outputs the phase declared have been added into the context.
