@@ -2,13 +2,13 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 import pandas as pd
 import logging
-import traceback
 
 from .column import make_strict_name, Column
 from .pipeline import (Pipeline, Context, DropRowException, WarningException, PhaserError,
                        PHASER_ROW_NUM)
 from .records import Records, Record
 from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step, DATAFRAME_STEP
+from .constants import *
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -20,7 +20,7 @@ class PhaseBase(ABC):
         self.name = name or self.__class__.__name__
         self.context = context or Context()
         self.steps = steps or self.__class__.steps
-        self.error_policy = error_policy or Pipeline.ON_ERROR_COLLECT
+        self.error_policy = error_policy or ON_ERROR_COLLECT
         self.headers = None
         self.row_data = None
         self.preserve_row_numbers = True
@@ -91,7 +91,7 @@ class PhaseBase(ABC):
                     # LMDTODO: write a test that confirms we can just return a new dict from a step
                     new_data.append(Record(row.row_num, new_row))
             except Exception as exc:
-                self.process_exception(exc, step, row)
+                self.context.process_exception(exc, step, row, error_policy=self.error_policy)
                 if not isinstance(exc, DropRowException):
                     new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
                     # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
@@ -112,7 +112,7 @@ class PhaseBase(ABC):
             else:
                 self.row_data = Records([row for row in new_row_values], preserve_numbers=False)
         except Exception as exc:
-            self.process_exception(exc, step, None)
+            self.context.process_exception(exc, step, row=None, error_policy=self.error_policy)
 
     def execute_context_step(self, step):
         try:
@@ -120,47 +120,7 @@ class PhaseBase(ABC):
         except DropRowException as dre:
             raise PhaserError("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:
-            self.process_exception(exc, step, None)
-
-    def process_exception(self, exc, step, row):
-        # LMDTODO increasingly think we should move this method to Context - only the error_policy is
-        # linked to the Phase.
-        """
-        A method to delegate exception handling to.  This is not called within PhaseBase directly,
-        but it is called in the subclasses when they run steps or methods.
-        :param exc: The exception or error thrown
-        :param step: What step this occurred in
-        :param row: What row of the data this occurred in
-        :return: Nothing
-        """
-        if isinstance(exc, PhaserError):
-            # PhaserError is raised in case of coding contract issues, so should bypass data exception handling.
-            raise exc
-        elif isinstance(exc, DropRowException):
-            self.context.add_dropped_row(step, row, exc.message)
-        elif isinstance(exc, WarningException):
-            self.context.add_warning(step, row, exc.message)
-        else:
-            e_name = exc.__class__.__name__
-            e_message = str(exc)
-            # TODO: Would be nice to include some traceback information in the
-            # recorded error as well.
-            message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
-            logger.debug(f"Unknown exception handled in executing steps ({message}")
-            stack_info = traceback.format_exc() if self.context.verbose else None
-
-            match self.error_policy:
-                case Pipeline.ON_ERROR_COLLECT:
-                    self.context.add_error(step, row, message, stack_info=stack_info)
-                case Pipeline.ON_ERROR_WARN:
-                    self.context.add_warning(step, row, message, stack_info=stack_info)
-                case Pipeline.ON_ERROR_DROP_ROW:
-                    self.context.add_dropped_row(step, row, message)
-                case Pipeline.ON_ERROR_STOP_NOW:
-                    self.context.add_error(step, row, message, stack_info=stack_info)
-                    raise exc
-                case _:
-                    raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
+            self.context.process_exception(exc, step, row=None, error_policy=self.error_policy)
 
 
 class ReshapePhase(PhaseBase):
@@ -211,11 +171,11 @@ class Phase(PhaseBase):
         no context is passed in, one will be created just for this Phase. The context will be passed to each step
         in case that step needs outside context.
     error_policy: str
-        The error handling policy to apply in this phase.  Default is Pipeline.ON_ERROR_COLLECT, which collects
+        The error handling policy to apply in this phase.  Default is ON_ERROR_COLLECT, which collects
         errors, up to one per row, and reports all errors at the end of running the phase.  Other options
-        are Pipeline.ON_ERROR_WARN, which adds warnings that will all be reported at the end,
-        Pipeline.ON_ERROR_DROP_ROW which means that a row causing an error will be dropped, and
-        Pipeline.ON_ERROR_STOP_NOW which aborts the phase mid-step rather than continue and collect more errors.
+        are ON_ERROR_WARN, which adds warnings that will all be reported at the end,
+        ON_ERROR_DROP_ROW which means that a row causing an error will be dropped, and
+        ON_ERROR_STOP_NOW which aborts the phase mid-step rather than continue and collect more errors.
         Any step that needs to apply different error handling than the phase's default can throw its own
         typed exception (see step documentation).
 

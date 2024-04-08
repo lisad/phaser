@@ -2,15 +2,14 @@ import inspect
 import logging
 import os
 from pathlib import PosixPath
+import traceback
 from .io import read_csv, save_csv
 from .exceptions import *
 from .records import Records, Record
+from .constants import *
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
-
-
-PHASER_ROW_NUM = '__phaser_row_num__'
 
 
 def _stringify_step(step):
@@ -76,7 +75,7 @@ class Context:
         # if rows are renumbered starting from 1, the same row num could be dropped twice.  we're collecting
         # more arguments towards robust, unique row numbers using generations or a sequence that does not
         # restart from 1.
-        if index in self. dropped_rows:
+        if index in self.dropped_rows:
             raise PhaserError(f"Dropping same row ({index}) twice not handled properly yet")
         else:
             self.dropped_rows[index] = {'step': step_name, 'message': message, 'row': row, 'stack_info': stack_info}
@@ -107,6 +106,45 @@ class Context:
             return self.rwos[name].data
         raise PhaserError(f"Source not loaded before being used: {name}")
 
+    def process_exception(self, exc, step, row, error_policy=ON_ERROR_COLLECT):
+        """
+        A method to delegate exception handling to.  This is not called within PhaseBase directly,
+        but it is called in the subclasses when they run steps or methods.
+        :param exc: The exception or error thrown
+        :param step: What step this occurred in
+        :param row: What row of the data this occurred in
+        :param error_policy: One of the error handling policies (ON_ERROR_COLLECT, ON_ERROR_STOP_NOW, etc.)
+        :return: Nothing
+        """
+        if isinstance(exc, PhaserError):
+            # PhaserError is raised in case of coding contract issues, so should bypass data exception handling.
+            raise exc
+        elif isinstance(exc, DropRowException):
+            self.add_dropped_row(step, row, exc.message)
+        elif isinstance(exc, WarningException):
+            self.add_warning(step, row, exc.message)
+        else:
+            self._handle_exception_using_policy(exc, step, row, error_policy)
+
+    def _handle_exception_using_policy(self, exc, step, row, error_policy):
+        e_name = exc.__class__.__name__
+        e_message = str(exc)
+        message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
+        logger.info(f"Unknown exception handled in executing steps ({message}")
+        stack_info = traceback.format_exc() if self.verbose else None
+
+        if error_policy == ON_ERROR_COLLECT:
+            self.add_error(step, row, message, stack_info=stack_info)
+        elif error_policy == ON_ERROR_WARN:
+            self.add_warning(step, row, message, stack_info=stack_info)
+        elif error_policy == ON_ERROR_DROP_ROW:
+            self.add_dropped_row(step, row, message)
+        elif error_policy == ON_ERROR_STOP_NOW:
+            self.add_error(step, row, message, stack_info=stack_info)
+            raise exc
+        else:
+            raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
+
 
 class ReadWriteObject:
     def __init__(self, name, data=None, to_save=True):
@@ -122,10 +160,6 @@ class Pipeline:
     source = None
     phases = []
 
-    ON_ERROR_WARN = "ON_ERROR_WARN"
-    ON_ERROR_COLLECT = "ON_ERROR_COLLECT"
-    ON_ERROR_DROP_ROW = "ON_ERROR_DROP_ROW"
-    ON_ERROR_STOP_NOW = "ON_ERROR_STOP_NOW"
 
     def __init__(self, working_dir=None, source=None, phases=None, verbose=False):
         self.working_dir = working_dir or self.__class__.working_dir

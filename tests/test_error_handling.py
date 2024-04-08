@@ -1,6 +1,6 @@
 import pytest
 from fixtures import reconcile_phase_class
-from phaser import Pipeline, Phase, row_step, batch_step, WarningException
+from phaser import Pipeline, Phase, row_step, batch_step, WarningException, ON_ERROR_DROP_ROW
 
 
 @row_step
@@ -122,7 +122,7 @@ def test_warning_and_return_modified_row():
 
 
 def test_drop_row_info():
-    phase = Phase(steps=[check_deck_is_21], error_policy=Pipeline.ON_ERROR_DROP_ROW)
+    phase = Phase(steps=[check_deck_is_21], error_policy=ON_ERROR_DROP_ROW)
     phase.load_data([{'deck': '21'}, {'deck': '5'}])
 
     phase.run_steps()
