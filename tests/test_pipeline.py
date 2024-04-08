@@ -9,7 +9,6 @@ current_path = Path(__file__).parent
 
 # LMDTODO: Move more pipeline tests out of test_basics and call that test_phase
 def test_number_go_up(tmpdir):
-    # Also we should have a test that loads in __phaser_row_num__ values already set
     pipeline = Pipeline(working_dir=tmpdir,
                         source=(current_path / 'fixture_files' / 'departments.csv'),
                         phases=[Phase(steps=[adds_row])])

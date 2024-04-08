@@ -23,6 +23,7 @@ class PhaseBase(ABC):
         self.error_policy = error_policy or Pipeline.ON_ERROR_COLLECT
         self.headers = None
         self.row_data = None
+        self.preserve_row_numbers = True
 
     def load_data(self, data):
         """ Call this method to pass record-oriented data to the Phase before calling 'run'
@@ -71,7 +72,7 @@ class PhaseBase(ABC):
         """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
         numbering and error reporting.
         """
-        new_data = Records(number_from=next(self.row_data.row_num_gen))
+        new_data = Records(number_from=self.row_data.get_max_row_num()+1)
         for row_index, row in enumerate(self.row_data):
             if row.row_num in self.context.errors.keys():
                 # LMDTODO: This is an O(n) operation.  If instead the fact of the row having an error was part of the
@@ -104,8 +105,12 @@ class PhaseBase(ABC):
                 self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
-            preserve_row_num = next(self.row_data.row_num_gen)
-            self.row_data = Records([row for row in new_row_values], number_from=preserve_row_num)
+
+            if self.preserve_row_numbers:
+                preserve_row_num = self.row_data.get_max_row_num()
+                self.row_data = Records([row for row in new_row_values], number_from=preserve_row_num + 1)
+            else:
+                self.row_data = Records([row for row in new_row_values], preserve_numbers=False)
         except Exception as exc:
             self.process_exception(exc, step, None)
 
@@ -172,6 +177,7 @@ class ReshapePhase(PhaseBase):
 
     def __init__(self, name, steps=None, context=None, error_policy=None):
         super().__init__(name, steps=steps, context=context, error_policy=error_policy)
+        self.preserve_row_numbers = False
 
     def run(self):
         # Break down run into load, steps, error handling, save and delegate
@@ -275,6 +281,7 @@ class Phase(PhaseBase):
             column.check_required(self.headers)
         # Then going row by row allows us to re-use row-based error/reporting work
         self.execute_row_step(cast_each_column_value)
+
 
     def rename_columns(self):
         """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred
