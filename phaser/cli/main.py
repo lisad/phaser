@@ -92,7 +92,12 @@ def main(argv):
     command = commands.get(args.command)
     try:
         command["instance"].execute(args)
-    except:
+    except phaser.DataException as e:
+        print("\nPipeline run failed while processing data.  Errors and row numbers causing errors have been reported.")
+    except phaser.PhaserError as e:
+        print("\nPipeline run stopped due to logic error.")
+        traceback.print_exc()
+    except Exception as e:
         print(f"ERROR running '{args.command}': {sys.exception()}")
         if args.verbose:
             traceback.print_exc()

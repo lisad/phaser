@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from copy import deepcopy
 import pandas as pd
 import logging
+
 from .column import make_strict_name, Column
 from .pipeline import (Pipeline, Context, DropRowException, WarningException, PhaserError,
                        PHASER_ROW_NUM)
