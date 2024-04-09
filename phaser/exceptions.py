@@ -3,8 +3,10 @@ class DataException(Exception):
     """ DataException subclasses are thrown when processing data, to trigger the phaser library code to follow
      error-handling policy, often with respect to the row the issue occurs in."""
 
-    def __init__(self, message):
+    def __init__(self, message, **kwargs):
         self.message = message
+        self.row = kwargs.pop('row') if 'row' in kwargs else None
+
 
     def __str__(self):
         return self.message

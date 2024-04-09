@@ -37,7 +37,7 @@ def df_transform(df, context):
 
 def test_dataframe_phase(tmpdir):
 
-    phase = ReshapePhase("PhaseWithDFStep", steps=[df_transform])
+    phase = ReshapePhase(name="PhaseWithDFStep", steps=[df_transform])
     phase.load_data(read_csv(fixture_path / 'locations.csv'))
     results = phase.run()
     assert len(results) == 2
