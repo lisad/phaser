@@ -57,19 +57,20 @@ def row_step(func=None, *, extra_sources=None, extra_outputs=None):
             kwargs = {}
             if 'context' in parameters:
                 kwargs['context'] = context
-            for source in (extra_sources or []):
+            for source in extra_sources:
                 kwargs[source] = context.get_source(source)
             for out in extra_outputs:
                 if out in outputs:
                     kwargs[out] = outputs[out].data
                 else:
-                    # TODO: Raise exception if phase did not pass in an output
-                    pass
+                    raise PhaserError(f"Missing expected output '{out.name}' in step {step_function.__name__}")
 
-            # TODO: Figure out how to apply any default values, or use an
-            # inspect.BoundArguments.apply_defaults to call the function.
-            result = step_function(row, **kwargs)
-            # result = step_function(row, context=context)
+            # We are using a BoundArguments object to make sure apply any
+            # default values to parameters. This is easier than running through
+            # the parameter logic ourselves.
+            bound_args = signature.bind(row, **kwargs)
+            bound_args.apply_defaults()
+            result = step_function(*bound_args.args, **bound_args.kwargs)
             if result is None:
                 raise PhaserError("Step should return row.")
             if not isinstance(result, Mapping):
