@@ -71,7 +71,7 @@ class PhaseBase(ABC):
             elif step_type == DATAFRAME_STEP:
                 self.execute_batch_step(step, outputs)
             elif step_type == CONTEXT_STEP:
-                self.execute_context_step(step)
+                self.execute_context_step(step, outputs)
             else:
                 raise PhaserError(f"Unknown step type {step_type}")
 
@@ -126,9 +126,9 @@ class PhaseBase(ABC):
         except Exception as exc:
             self.context.process_exception(exc, step, row=None, error_policy=self.error_policy)
 
-    def execute_context_step(self, step):
+    def execute_context_step(self, step, outputs={}):
         try:
-            step(self.context)
+            step(self.context, outputs=outputs)
         except DropRowException as dre:
             raise PhaserError("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:

@@ -328,6 +328,47 @@ def test_context_step_keeps_numbers():
     phase.run()
     assert phase.row_data[0].row_num == 3
 
+def test_extra_sources_to_context_step():
+    @context_step(extra_sources=['extra'])
+    def append_extra_to_context(context, extra):
+        sink = context.get('sink')
+        for k, v in extra.items():
+            sink[k] = v
+
+    extra = ExtraMapping('extra', {12: 'A dozen', 13: "Baker's dozen"})
+    phase = Phase(
+        steps=[append_extra_to_context],
+        extra_sources=[extra],
+    )
+    phase.context.set_source('extra', extra)
+    phase.context.add_variable('sink', {})
+    phase.load_data([{'number': 12}, {'number': 13}])
+    phase.run_steps()
+    assert phase.context.get('sink') == {12: 'A dozen', 13: "Baker's dozen"}
+
+def test_extra_outputs_from_context_step():
+    @context_step(extra_outputs=['extra'])
+    def collect_extra_from_context(context, extra):
+        extra[12] = 'A dozen'
+        extra[13] = "Baker's dozen"
+
+    extra = ExtraMapping('extra', {})
+    phase = Phase(
+        steps=[collect_extra_from_context],
+        extra_outputs=[extra],
+        error_policy=ON_ERROR_STOP_NOW,
+    )
+    phase.load_data([
+        {'number': 12, 'extra': 'A dozen'},
+        {'number': 13, 'extra': "Baker's dozen"},
+    ])
+    phase.run_steps()
+    # This is a hack that depends on knowing that outputs are available as
+    # sources in the context.
+    assert phase.context.get_source('extra') == {
+        12: 'A dozen',
+        13: "Baker's dozen",
+    }
 
 # testing dataframe steps
 
