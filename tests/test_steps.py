@@ -4,6 +4,7 @@ import pytest
 from phaser import (check_unique, Phase, row_step, batch_step, context_step, Pipeline, sort_by, IntColumn,
                     DataErrorException, DropRowException, PhaserError, read_csv, dataframe_step,
                     PHASER_ROW_NUM, ON_ERROR_STOP_NOW)
+from phaser.io import ExtraMapping
 import phaser
 from fixtures import test_data_phase_class
 from steps import sum_bonuses
@@ -26,6 +27,61 @@ def test_row_step_returns_new_dict():
     phase.run_steps()
     assert phase.row_data[0].row_num == 1
     assert phase.row_data[0]['grade'] == 'A'
+
+@row_step
+def replace_value_fm_context(row, context):
+    row['secret'] = context.get('secret')
+    return row
+
+
+def test_context_available_to_step():
+    transformer = Phase(steps=[replace_value_fm_context])
+    transformer.context.add_variable('secret', "I'm always angry")
+    transformer.load_data([{'id': 1, 'secret': 'unknown'}])
+    transformer.run_steps()
+    assert transformer.row_data[0]['secret'] == "I'm always angry"
+
+def test_extra_sources_to_row_step():
+    @row_step(extra_sources=['extra'])
+    def append_extra_to_row(row, extra):
+        row['extra'] = extra[row['number']]
+        return row
+
+    extra = ExtraMapping('extra', {12: 'A dozen', 13: "Baker's dozen"})
+    phase = Phase(
+        steps=[append_extra_to_row],
+        extra_sources=[extra],
+    )
+    phase.context.set_source('extra', extra)
+    phase.load_data([{'number': 12}, {'number': 13}])
+    phase.run_steps()
+    assert phase.row_data == [
+        {'number': 12, 'extra': 'A dozen'},
+        {'number': 13, 'extra': "Baker's dozen"},
+    ]
+
+def test_extra_outputs_to_row_step():
+    @row_step(extra_outputs=['extra'])
+    def collect_extra_from_row(row, extra):
+        extra[row['number']] = row['extra']
+        return row
+
+    extra = ExtraMapping('extra', {})
+    phase = Phase(
+        steps=[collect_extra_from_row],
+        extra_outputs=[extra],
+    )
+    phase.load_data([
+        {'number': 12, 'extra': 'A dozen'},
+        {'number': 13, 'extra': "Baker's dozen"},
+    ])
+    phase.run_steps()
+    # This is a hack that depends on knowing that outputs are available as
+    # sources in the context.
+    assert phase.context.get_source('extra') == {
+        12: 'A dozen',
+        13: "Baker's dozen",
+    }
 
 # Batch steps
 
@@ -88,25 +144,6 @@ def test_batch_step_can_add_row():
     assert phase.row_data[1].row_num == 2
 
 
-def test_context_available_to_step():
-    @row_step
-    def replace_value_fm_context(row, context):
-        row['secret'] = context.get('secret')
-        return row
-
-
-@row_step
-def replace_value_fm_context(row, context):
-    row['secret'] = context.get('secret')
-    return row
-
-
-def test_context_available_to_step():
-    transformer = Phase(steps=[replace_value_fm_context])
-    transformer.context.add_variable('secret', "I'm always angry")
-    transformer.load_data([{'id': 1, 'secret': 'unknown'}])
-    transformer.run_steps()
-    assert transformer.row_data[0]['secret'] == "I'm always angry"
 
 # Tests of the check_unique step
 
