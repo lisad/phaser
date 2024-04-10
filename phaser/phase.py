@@ -67,9 +67,9 @@ class PhaseBase(ABC):
             if step_type == ROW_STEP:
                 self.execute_row_step(step, outputs)
             elif step_type == BATCH_STEP:
-                self.execute_batch_step(step)
+                self.execute_batch_step(step, outputs)
             elif step_type == DATAFRAME_STEP:
-                self.execute_batch_step(step)
+                self.execute_batch_step(step, outputs)
             elif step_type == CONTEXT_STEP:
                 self.execute_context_step(step)
             else:
@@ -78,7 +78,7 @@ class PhaseBase(ABC):
         for name, output in outputs.items():
             self.context.set_output(name, output)
 
-    def execute_row_step(self, step, outputs):
+    def execute_row_step(self, step, outputs={}):
         """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
         numbering and error reporting.
         """
@@ -107,9 +107,9 @@ class PhaseBase(ABC):
                     # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
         self.row_data = new_data
 
-    def execute_batch_step(self, step):
+    def execute_batch_step(self, step, outputs={}):
         try:
-            new_row_values = step(self.row_data, context=self.context)
+            new_row_values = step(self.row_data, context=self.context, outputs=outputs)
             row_size_diff = len(self.row_data) - len(new_row_values)
             if row_size_diff > 0:
                 self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")

@@ -144,6 +144,51 @@ def test_batch_step_can_add_row():
     assert phase.row_data[1].row_num == 2
 
 
+def test_extra_sources_to_batch_step():
+    @batch_step(extra_sources=['extra'])
+    def append_extra_to_batch(batch, extra):
+        for row in batch:
+            row['extra'] = extra[row['number']]
+        return batch
+
+    extra = ExtraMapping('extra', {12: 'A dozen', 13: "Baker's dozen"})
+    phase = Phase(
+        steps=[append_extra_to_batch],
+        extra_sources=[extra],
+    )
+    phase.context.set_source('extra', extra)
+    phase.load_data([{'number': 12}, {'number': 13}])
+    phase.run_steps()
+    assert phase.row_data == [
+        {'number': 12, 'extra': 'A dozen'},
+        {'number': 13, 'extra': "Baker's dozen"},
+    ]
+
+def test_extra_outputs_to_batch_step():
+    @batch_step(extra_outputs=['extra'])
+    def collect_extra_from_batch(batch, extra):
+        for row in batch:
+            extra[row['number']] = row['extra']
+        return batch
+
+    extra = ExtraMapping('extra', {})
+    phase = Phase(
+        steps=[collect_extra_from_batch],
+        extra_outputs=[extra],
+        error_policy=ON_ERROR_STOP_NOW,
+    )
+    phase.load_data([
+        {'number': 12, 'extra': 'A dozen'},
+        {'number': 13, 'extra': "Baker's dozen"},
+    ])
+    phase.run_steps()
+    # This is a hack that depends on knowing that outputs are available as
+    # sources in the context.
+    assert phase.context.get_source('extra') == {
+        12: 'A dozen',
+        13: "Baker's dozen",
+    }
+
 
 # Tests of the check_unique step
 
@@ -325,3 +370,46 @@ def test_multiple_step_types():
     phase.run_steps()
     assert set(phase.row_data[0].keys()) == set(['eid', 'commission', 'performance', 'total', 'secret'])
 
+def test_extra_sources_to_df_step():
+    @dataframe_step(extra_sources=['extra'])
+    def append_extra_to_df(df, extra):
+        df['extra'] = df['number'].map(lambda x: extra[x])
+        return df
+
+    extra = ExtraMapping('extra', {12: 'A dozen', 13: "Baker's dozen"})
+    phase = Phase(
+        steps=[append_extra_to_df],
+        extra_sources=[extra],
+    )
+    phase.context.set_source('extra', extra)
+    phase.load_data([{'number': 12}, {'number': 13}])
+    phase.run_steps()
+    assert phase.row_data == [
+        {'number': 12, 'extra': 'A dozen'},
+        {'number': 13, 'extra': "Baker's dozen"},
+    ]
+
+def test_extra_outputs_from_df_step():
+    @dataframe_step(extra_outputs=['extra'])
+    def collect_extra_from_df(df, extra):
+        for row, num in enumerate(df['number'].values):
+            extra[num] = df['extra'].at[row]
+        return df
+
+    extra = ExtraMapping('extra', {})
+    phase = Phase(
+        steps=[collect_extra_from_df],
+        extra_outputs=[extra],
+        error_policy=ON_ERROR_STOP_NOW,
+    )
+    phase.load_data([
+        {'number': 12, 'extra': 'A dozen'},
+        {'number': 13, 'extra': "Baker's dozen"},
+    ])
+    phase.run_steps()
+    # This is a hack that depends on knowing that outputs are available as
+    # sources in the context.
+    assert phase.context.get_source('extra') == {
+        12: 'A dozen',
+        13: "Baker's dozen",
+    }

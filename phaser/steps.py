@@ -27,7 +27,7 @@ def row_step(func=None, *, extra_sources=None, extra_outputs=None):
     extra_sources = extra_sources or []
     extra_outputs = extra_outputs or []
 
-    def _row_step_argument_wrapper(step_function):
+    def _step_argument_wrapper(step_function):
         signature = inspect.signature(step_function)
         parameters = signature.parameters
         # Check that the step_function signature matches what is expected if
@@ -63,7 +63,7 @@ def row_step(func=None, *, extra_sources=None, extra_outputs=None):
                 if out in outputs:
                     kwargs[out] = outputs[out].data
                 else:
-                    raise PhaserError(f"Missing expected output '{out.name}' in step {step_function.__name__}")
+                    raise PhaserError(f"Missing expected output '{out}' in step {step_function.__name__}")
 
             # We are using a BoundArguments object to make sure apply any
             # default values to parameters. This is easier than running through
@@ -79,60 +79,148 @@ def row_step(func=None, *, extra_sources=None, extra_outputs=None):
         return _row_step_wrapper
 
     if func is None:
-        return _row_step_argument_wrapper
+        return _step_argument_wrapper
     else:
-        return _row_step_argument_wrapper(func)
+        return _step_argument_wrapper(func)
 
 
-def batch_step(step_function):
+def batch_step(func=None, *, extra_sources=None, extra_outputs=None):
     """ This decorator allows the Phase run logic to determine that this step needs to run on the
     whole batch by adding a 'probe' response
     """
-    @wraps(step_function)
-    def _batch_step_wrapper(batch, context=None, __probe__=None):
-        if __probe__ == PROBE_VALUE:
-            return BATCH_STEP
-        try:
-            # LMDTODO: Discovered in testing that if the step function doesn't declare the context in its params,
-            # when the calling code tries to pass it a batch AND a context, it doesn't even run and its hard to see why.
-            # See test test_batch_step_missing_param. The TODO is to fix this for the other step types as well.
-            if 'context' in inspect.signature(step_function).parameters.keys():
-                result = step_function(batch, context=context)
-            else:
-                result = step_function(batch)
-        except DropRowException as exc:
-            raise PhaserError("DropRowException can't be handled in batch steps ") from exc
-        if not isinstance(result, Sequence):
-            raise PhaserError(
-                f"Step {step_function} returned a {result.__class__} rather than a list of rows")
-        return result
-    return _batch_step_wrapper
 
+    # Initialize extra_sources and extra_outputs to a default new list if none
+    # was passed in. Do not use default parameters, since the default value is
+    # evaluated only once and would therefore use the same underlying mutable
+    # list for subsequent calls to the function.
+    # Reference: https://docs.python.org/3/tutorial/controlflow.html#default-argument-values
+    extra_sources = extra_sources or []
+    extra_outputs = extra_outputs or []
 
-def dataframe_step(step_function=None, pass_row_nums=True):
-    if step_function is None:
-        return partial(dataframe_step, pass_row_nums=pass_row_nums)
+    def _step_argument_wrapper(step_function):
+        signature = inspect.signature(step_function)
+        parameters = signature.parameters
+        # Check that the step_function signature matches what is expected if
+        # extra_sources or extra_outputs have been specified.
+        if extra_sources or extra_outputs:
+            missing_sources = [
+                source
+                for source in extra_sources
+                if source not in parameters
+            ]
+            missing_outputs = [
+                output
+                for output in extra_outputs
+                if output not in parameters
+            ]
+            if missing_sources or missing_outputs:
+                missing_sources.extend(missing_outputs)
+                raise PhaserError(f"{step_function.__name__}() missing parameter: {', '.join(map(str, missing_sources))}")
 
-    @wraps(step_function)
-    def _df_step_wrapper(row_data, context=None, __probe__=None):
-        if __probe__ == PROBE_VALUE:
-            return DATAFRAME_STEP
-        try:
-            dataframe = pd.DataFrame.from_records(row_data)
-            if pass_row_nums:
-                dataframe[PHASER_ROW_NUM] = [row.row_num for row in row_data]
-            if 'context' in str(inspect.signature(step_function)):
-                result = step_function(dataframe, context=context)
-            else:
-                result = step_function(dataframe)
-        except DropRowException as exc:
-            raise PhaserError("DropRowException can't be handled in steps operating on bulk data ") from exc
-        if not isinstance(result, pd.DataFrame):
-            raise PhaserError(
-                f"Step {step_function} returned a {result.__class__} rather than a pandas DataFrame")
-        return result.to_dict(orient='records')
-    return _df_step_wrapper
+        @wraps(step_function)
+        def _batch_step_wrapper(batch, context=None, outputs=None, __probe__=None):
+            if __probe__ == PROBE_VALUE:
+                return BATCH_STEP
+            try:
+                outputs = outputs or {}
+                kwargs = {}
+                if 'context' in parameters:
+                    kwargs['context'] = context
+                for source in extra_sources:
+                    kwargs[source] = context.get_source(source)
+                for out in extra_outputs:
+                    if out in outputs:
+                        kwargs[out] = outputs[out].data
+                    else:
+                        raise PhaserError(f"Missing expected output '{out}' in step {step_function.__name__}")
 
+                # We are using a BoundArguments object to make sure apply any
+                # default values to parameters. This is easier than running through
+                # the parameter logic ourselves.
+                bound_args = signature.bind(batch, **kwargs)
+                bound_args.apply_defaults()
+                result = step_function(*bound_args.args, **bound_args.kwargs)
+            except DropRowException as exc:
+                raise PhaserError("DropRowException can't be handled in batch steps ") from exc
+            if not isinstance(result, Sequence):
+                raise PhaserError(
+                    f"Step {step_function} returned a {result.__class__} rather than a list of rows")
+            return result
+        return _batch_step_wrapper
+
+    if func is None:
+        return _step_argument_wrapper
+    else:
+        return _step_argument_wrapper(func)
+
+def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_outputs=None):
+    # Initialize extra_sources and extra_outputs to a default new list if none
+    # was passed in. Do not use default parameters, since the default value is
+    # evaluated only once and would therefore use the same underlying mutable
+    # list for subsequent calls to the function.
+    # Reference: https://docs.python.org/3/tutorial/controlflow.html#default-argument-values
+    extra_sources = extra_sources or []
+    extra_outputs = extra_outputs or []
+
+    def _step_argument_wrapper(step_function):
+        signature = inspect.signature(step_function)
+        parameters = signature.parameters
+        # Check that the step_function signature matches what is expected if
+        # extra_sources or extra_outputs have been specified.
+        if extra_sources or extra_outputs:
+            missing_sources = [
+                source
+                for source in extra_sources
+                if source not in parameters
+            ]
+            missing_outputs = [
+                output
+                for output in extra_outputs
+                if output not in parameters
+            ]
+            if missing_sources or missing_outputs:
+                missing_sources.extend(missing_outputs)
+                raise PhaserError(f"{step_function.__name__}() missing parameter: {', '.join(map(str, missing_sources))}")
+
+        @wraps(step_function)
+        def _df_step_wrapper(row_data, context=None, outputs=None, __probe__=None):
+            if __probe__ == PROBE_VALUE:
+                return DATAFRAME_STEP
+            try:
+                dataframe = pd.DataFrame.from_records(row_data)
+                if pass_row_nums:
+                    dataframe[PHASER_ROW_NUM] = [row.row_num for row in row_data]
+
+                outputs = outputs or {}
+                kwargs = {}
+                if 'context' in parameters:
+                    kwargs['context'] = context
+                for source in extra_sources:
+                    kwargs[source] = context.get_source(source)
+                for out in extra_outputs:
+                    if out in outputs:
+                        kwargs[out] = outputs[out].data
+                    else:
+                        raise PhaserError(f"Missing expected output '{out}' in step {step_function.__name__}")
+
+                # We are using a BoundArguments object to make sure apply any
+                # default values to parameters. This is easier than running through
+                # the parameter logic ourselves.
+                bound_args = signature.bind(dataframe, **kwargs)
+                bound_args.apply_defaults()
+                result = step_function(*bound_args.args, **bound_args.kwargs)
+            except DropRowException as exc:
+                raise PhaserError("DropRowException can't be handled in steps operating on bulk data ") from exc
+            if not isinstance(result, pd.DataFrame):
+                raise PhaserError(
+                    f"Step {step_function} returned a {result.__class__} rather than a pandas DataFrame")
+            return result.to_dict(orient='records')
+        return _df_step_wrapper
+
+    if func is None:
+        return _step_argument_wrapper
+    else:
+        return _step_argument_wrapper(func)
 
 def context_step(step_function):
     @wraps(step_function)
