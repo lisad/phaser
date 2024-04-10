@@ -14,10 +14,19 @@ CONTEXT_STEP = "CONTEXT_STEP"
 PROBE_VALUE = "__PROBE__"
 
 
-def row_step(func=None, *, extra_sources=[], extra_outputs=[]):
+def row_step(func=None, *, extra_sources=None, extra_outputs=None):
     """ This decorator is used to indicate a step that should run on each row of a data set.
     It adds a "probe" response to the step that allows the phase running logic to know this.
     """
+
+    # Initialize extra_sources and extra_outputs to a default new list if none
+    # was passed in. Do not use default parameters, since the default value is
+    # evaluated only once and would therefore use the same underlying mutable
+    # list for subsequent calls to the function.
+    # Reference: https://docs.python.org/3/tutorial/controlflow.html#default-argument-values
+    extra_sources = extra_sources or []
+    extra_outputs = extra_outputs or []
+
     def _row_step_argument_wrapper(step_function):
         signature = inspect.signature(step_function)
         parameters = signature.parameters
@@ -40,9 +49,11 @@ def row_step(func=None, *, extra_sources=[], extra_outputs=[]):
 
 
         @wraps(step_function)
-        def _row_step_wrapper(row, context=None, outputs={}, __probe__=None):
+        def _row_step_wrapper(row, context=None, outputs=None, __probe__=None):
             if __probe__ == PROBE_VALUE:
                 return ROW_STEP  # Allows Phase to probe a step for how to call it
+
+            outputs = outputs or {}
             kwargs = {}
             if 'context' in parameters:
                 kwargs['context'] = context
