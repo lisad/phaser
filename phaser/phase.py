@@ -128,7 +128,11 @@ class PhaseBase(ABC):
 
     def execute_context_step(self, step, outputs={}):
         try:
-            step(self.context, outputs=outputs)
+            # This looks like an odd construct, passing in the context as the
+            # target of the step as well as a kwarg. But it helps to make the
+            # step function logic more straightforward at the slight addition of
+            # complexity at the call site, here.
+            step(self.context, context=self.context, outputs=outputs)
         except DropRowException as dre:
             raise PhaserError("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:
