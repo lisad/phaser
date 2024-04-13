@@ -1,3 +1,4 @@
+from collections import defaultdict
 import inspect
 import logging
 import os
@@ -34,51 +35,84 @@ class Context:
     """ Context is created by the pipeline, and passed to each phase.  Thus, it can be used
     to carry extra data or variable values between phases if necessary. """
 
-    def __init__(self, variables=None, working_dir=None, verbose=False):
+    ERROR = "ERROR"
+    WARNING = "WARNING"
+    DROPPED_ROW = "DROPPED_ROW"
+
+    def __init__(self, variables=None, working_dir=None, error_policy=ON_ERROR_COLLECT, verbose=False):
         self.verbose = verbose
-        self.reset_events()
+        # Messages or events (errors, warnings, etc) will be indexed by phase, then row number.  The type (error,
+        # warning, or dropped row) will be a type on the dict of event information
+        self.events = defaultdict(lambda: defaultdict(list))
+        self.current_phase = 'Unknown'
         self.variables = variables or {}
         self.current_row = None
         # Stores sources and outputs as ReadWriteObjects
         self.rwos = {}
         self.working_dir = working_dir
+        self.error_policy = error_policy
+        self.current_phase = 'Unknown'
 
-    def reset_events(self):
-        self.errors = {}
-        self.warnings = {}
-        self.dropped_rows = {}
+    def _get_phase_name(self, phase):
+        if phase is None:
+            return self.current_phase
+        return phase.name
 
-    def add_error(self, step, row, message, stack_info=None):
-        step_name = _stringify_step(step)
-        index = _extract_row_num(row)
-        if index in self.errors:
-            raise PhaserError(f"Reporting 2 errors on same row ({index}) not handled yet")
-            # LMDTODO This only captures one error per row number or one error for 'unknown'. that seems fine for
-            # now because we stop processing errored rows, but eventually can be more complete
+    def add_event(self, event_info):
+        if event_info['type'] not in [Context.ERROR, Context.WARNING, Context.DROPPED_ROW]:
+            raise PhaserError("Error or other row event not correct type")
+        event_info['row_num'] = _extract_row_num(event_info['row'])
+        event_info['step_name'] = _stringify_step(event_info.pop('step'))
+        event_info['phase_name'] = self._get_phase_name(event_info.pop('phase'))
+        self.events[event_info['phase_name']][event_info['row_num']].append(event_info)
+
+    def add_error(self, step, row, message, stack_info=None, phase=None):
+        self.add_event({
+            'type': Context.ERROR,
+            'phase': phase,
+            'step': step,
+            'row': row,
+            'message': message,
+            'stack_info': stack_info
+        })
+
+    def add_warning(self, step, row, message, stack_info=None, phase=None):
+        self.add_event({
+            'type': Context.WARNING,
+            'phase': phase,
+            'step': step,
+            'row': row,
+            'message': message,
+            'stack_info': stack_info
+        })
+
+    def add_dropped_row(self, step, row, message, stack_info=None, phase=None):
+        self.add_event({
+            'type': Context.DROPPED_ROW,
+            'phase': phase,
+            'step': step,
+            'row': row,
+            'message': message,
+            'stack_info': stack_info
+        })
+
+    def row_has_errors(self, row_num):
+        for phase, events in self.events.items():
+            if row_num in events and any(event['type'] == Context.ERROR for event in events[row_num]):
+                return True
+        return False
+
+    def phase_has_errors(self, phase_name):
+        for event_list in self.events[phase_name].values():
+            if any(event['type'] == Context.ERROR for event in event_list):
+                return True
+        return False
+
+    def get_events(self, phase=None, row_num=None):
+        if row_num and phase:
+            return self.events[phase.name][row_num]
         else:
-            self.errors[index] = {'step': step_name, 'message': message, 'row': row, 'stack_info': stack_info}
-
-    def add_warning(self, step, row, message, stack_info=None):
-        step_name = _stringify_step(step)
-        index = _extract_row_num(row)
-        warning_data = {'step': step_name, 'message': message, 'row': row, 'stack_info': stack_info}
-        # LMDTODO to simplify this, self.warnings can be a defaultdict with default to array
-        if index in self.warnings:
-            self.warnings[index].append(warning_data)
-        else:
-            self.warnings[index] = [warning_data]
-
-    def add_dropped_row(self, step, row, message, stack_info=None):
-        step_name = _stringify_step(step)
-        index = _extract_row_num(row)
-        # LMDTODO: we should think about preventing rows from being dropped twice, although
-        # if rows are renumbered starting from 1, the same row num could be dropped twice.  we're collecting
-        # more arguments towards robust, unique row numbers using generations or a sequence that does not
-        # restart from 1.
-        if index in self.dropped_rows:
-            raise PhaserError(f"Dropping same row ({index}) twice not handled properly yet")
-        else:
-            self.dropped_rows[index] = {'step': step_name, 'message': message, 'row': row, 'stack_info': stack_info}
+            raise PhaserError("Case not handled yet, not sure how this code is going to shake out")
 
     def add_variable(self, name, value):
         """ Add variables that are global to the pipeline and accessible to steps and internal methods """
@@ -86,9 +120,6 @@ class Context:
 
     def get(self, name):
         return self.variables.get(name)
-
-    def has_errors(self):
-        return self.errors != {}
 
     def set_output(self, name, output):
         # At present outputs must be in record format and save to CSV, but this should be expanded.
@@ -110,7 +141,7 @@ class Context:
             return self.rwos[name].data
         raise PhaserError(f"Source not loaded before being used: {name}")
 
-    def process_exception(self, exc, step, row, error_policy=ON_ERROR_COLLECT):
+    def process_exception(self, exc, phase, step, row):
         """
         A method to delegate exception handling to turn into error reporting in standardized way.  Called by
         phase's step handlers when a phaser data exception or a coding exception occurs
@@ -124,27 +155,30 @@ class Context:
             # PhaserError is raised in case of coding contract issues, so should bypass data exception handling.
             raise exc
         elif isinstance(exc, DropRowException):
-            self.add_dropped_row(step, row, exc.message)
+            self.add_dropped_row(step, row, exc.message, phase=phase)
         elif isinstance(exc, WarningException):
-            self.add_warning(step, row, exc.message)
+            # LMDTODO: This can be combined with the case of ON_ERROR_WARN below to include stack trace
+            self.add_warning(step, row, exc.message, phase=phase)
         else:
-            self._handle_exception_using_policy(exc, step, row, error_policy)
+            self._handle_exception_using_policy(exc, phase, step, row, self.error_policy)
 
-    def _handle_exception_using_policy(self, exc, step, row, error_policy):
+    def _handle_exception_using_policy(self, exc, phase, step, row, error_policy):
         e_name = exc.__class__.__name__
         e_message = str(exc)
         message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
         logger.info(f"Unknown exception handled in executing steps ({message}")
         stack_info = traceback.format_exc() if self.verbose else None
 
+        # LMDTODO this can now be refactored to use add_event
+
         if error_policy == ON_ERROR_COLLECT:
-            self.add_error(step, row, message, stack_info=stack_info)
+            self.add_error(step, row, message, stack_info=stack_info, phase=phase)
         elif error_policy == ON_ERROR_WARN:
-            self.add_warning(step, row, message, stack_info=stack_info)
+            self.add_warning(step, row, message, stack_info=stack_info, phase=phase)
         elif error_policy == ON_ERROR_DROP_ROW:
-            self.add_dropped_row(step, row, message)
+            self.add_dropped_row(step, row, message, phase=self)
         elif error_policy == ON_ERROR_STOP_NOW:
-            self.add_error(step, row, message, stack_info=stack_info)
+            self.add_error(step, row, message, stack_info=stack_info, phase=phase)
             raise exc
         else:
             raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
@@ -255,6 +289,7 @@ class Pipeline:
             next_source = destination
 
     def run_phase(self, phase, source, destination):
+        self.context.current_phase = phase.name
         logger.info(f"Loading input from {source} for {phase.name}")
         data = Records(self.load(source))
         phase.load_data(data)
@@ -264,31 +299,21 @@ class Pipeline:
         self.save_extra_outputs()
         logger.info(f"{phase.name} saved output to {destination}")
         self.report_errors_and_warnings(phase.name)
-        if self.context.has_errors():
-            raise DataException(f"Phase '{phase.name}' failed with {len(self.context.errors.keys())} errors.")
-        else:
-            self.context.reset_events()
+        if self.context.phase_has_errors(phase.name):
+            raise DataException(f"Phase '{phase.name}' failed with errors.")
 
     def report_errors_and_warnings(self, phase_name):
-        """ TODO: different formats, flexibility
+        """ TODO: different formats, flexibility:
         For CLI operation we want to report errors to the CLI, but for unsupervised operation these should go
         to logs.  Python logging does allow users of a library to send log messages to more than one place while
         customizing log level desired, and we could have drop-row messages as info and warning as warn level so
         these fit very nicely into the standard levels allowing familiar customization.  """
         print(f"Reporting for phase {phase_name}")
-        for row_num, info in self.context.dropped_rows.items():
-            print(f"DROP ROW in step {info['step']}, row {row_num}: message: '{info['message']}'")
-
-        # Unlike errors and dropped rows, there can be multiple warnings per row
-        for row_num, warnings in self.context.warnings.items():
-            for warning in warnings:
-                print(f"WARNING in step {warning['step']}, row {row_num}, message: '{warning['message']}'")
-                if warning['stack_info']:
-                    print(warning['stack_info'])
-        for row_num, error in self.context.errors.items():
-            print(f"ERROR in step {error['step']}, row {row_num}, message: '{error['message']}'")
-            if error['stack_info']:
-                print(error['stack_info'])
+        for row_num, event_list in self.context.events[phase_name].items():
+            for event in event_list:
+                print(f"{event['type']} in step {event['step_name']}, row {row_num}: message: '{event['message']}'")
+                if event['stack_info']:
+                    print(event['stack_info'])
 
     def check_extra_outputs(self, phase):
         """ Check that any extra outputs the phase declared have been added into the context.
@@ -296,7 +321,7 @@ class Pipeline:
         missing = []
         for output in phase.extra_outputs:
             if output.name not in self.context.rwos:
-                missing.append(name)
+                missing.append(output.name)
         if len(missing) > 0:
             raise PhaserError(f"Phase {phase.name} missing extra_outputs: {missing}")
 

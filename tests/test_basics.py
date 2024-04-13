@@ -111,10 +111,10 @@ def test_column_error_adds_warning():
     phase = Phase("test", columns=[col])
     phase.load_data([{'level': -1}])
     phase.do_column_stuff()
-    warnings_for_row = list(phase.context.warnings.values())[0]
-    assert len(warnings_for_row) == 1
-    assert "level" in warnings_for_row[0]['message']
-    assert warnings_for_row[0]['step'] == 'cast_each_column_value'
+    events_for_row = phase.context.get_events(phase=phase, row_num=1)
+    assert len(events_for_row) == 1
+    assert "level" in events_for_row[0]['message']
+    assert events_for_row[0]['step_name'] == 'cast_each_column_value'
 
 
 @pytest.mark.skip("User can write steps that violate the column contracts, and save the output. we should fix that.")

@@ -1,6 +1,6 @@
 import pytest
 from fixtures import reconcile_phase_class
-from phaser import Phase, row_step, batch_step, WarningException, ON_ERROR_DROP_ROW, ReshapePhase, DataErrorException
+from phaser import Phase, row_step, batch_step, WarningException, DropRowException, ReshapePhase, DataErrorException
 
 
 @row_step
@@ -13,6 +13,12 @@ def check_deck_is_21(row, context):
     assert row['deck'] == '21'
     return row
 
+
+@row_step
+def drop_if_deck_is_not_21(row, context):
+    if row['deck'] != '21':
+        raise DropRowException("Deck # should be 21")
+    return row
 
 @row_step
 def check_room_is_hologram_room(row, context):
@@ -68,10 +74,10 @@ def test_error_provides_info(reconcile_phase_class):
     phase.load_data([{'deck': '21'}])
 
     phase.run_steps()
-    error = phase.context.errors[1]
+    error = phase.context.get_events(phase=phase, row_num=1)[0]
     assert error['row'].row_num == 1
     assert error['row']['deck'] == '21'
-    assert error['step'] == 'assert_false'
+    assert error['step_name'] == 'assert_false'
     assert error['message'] == "AssertionError raised (assert False)"
 
 
@@ -82,9 +88,10 @@ def test_row_processing_continues():
     phase.load_data([{'deck': '13'}, {'deck': '21'}])
 
     phase.run_steps()
-    assert len(phase.context.errors) == 2
-    assert phase.context.errors[1]['step'] == 'check_deck_is_21'   # First row fails on the first step
-    assert phase.context.errors[2]['step'] == 'assert_false'  # 2nd row fails on 2nd step
+    error2 = phase.context.get_events(phase=phase, row_num=2)[0]
+    error1 = phase.context.get_events(phase=phase, row_num=1)[0]
+    assert error1['step_name'] == 'check_deck_is_21'   # First row fails on the first step
+    assert error2['step_name'] == 'assert_false'  # 2nd row fails on 2nd step
 
 
 def test_row_processing_skips_row():
@@ -94,8 +101,8 @@ def test_row_processing_skips_row():
     phase.load_data([{'deck': '13', 'room': 'lounge'}, {'deck': '21', 'room': 'hologram'}])
 
     phase.run_steps()
-    assert len(phase.context.errors) == 1
-    assert phase.context.errors[1]['step'] == 'check_deck_is_21'
+    the_error = phase.context.get_events(phase=phase, row_num=1)[0]
+    assert the_error['step_name'] == 'check_deck_is_21'
 
 
 def test_warning_contains_info():
@@ -103,10 +110,9 @@ def test_warning_contains_info():
     phase.load_data([{'deck': '21', 'incident': 'security'}, {'deck': '5', 'incident': 'security'}])
 
     phase.run_steps()
-    assert len(phase.context.warnings) == 1
-    the_warning = phase.context.warnings[2][0]
+    the_warning = phase.context.get_events(phase=phase, row_num=2)[0]
     assert the_warning['row']['deck'] == '5'
-    assert the_warning['step'] == 'warn_if_lower_decks'
+    assert the_warning['step_name'] == 'warn_if_lower_decks'
     assert the_warning['message'] == "Lower decks should not be in this dataset"
 
 
@@ -114,28 +120,27 @@ def test_warning_and_return_modified_row():
     phase = Phase(steps=[warn_if_lower_decks_and_return_row])
     phase.load_data([{'deck': '21', 'incident': 'security'}, {'deck': '5', 'incident': 'security'}])
     phase.run_steps()
-    assert len(phase.context.warnings) == 1
-    the_warning = phase.context.warnings[2][0]
+    the_warning = phase.context.get_events(phase=phase, row_num=2)[0]
     assert the_warning['row']['deck'] == 10
-    assert the_warning['step'] == 'lower_decks_warning'
+    assert the_warning['step_name'] == 'lower_decks_warning'
     assert phase.row_data[1]['incident'] == "Nothing happened"
 
 
 def test_drop_row_info():
-    phase = Phase(steps=[check_deck_is_21], error_policy=ON_ERROR_DROP_ROW)
+    phase = Phase(steps=[drop_if_deck_is_not_21])
     phase.load_data([{'deck': '21'}, {'deck': '5'}])
 
     phase.run_steps()
-    assert len(phase.context.dropped_rows) == 1
-    print(phase.context.dropped_rows)
-    assert phase.context.dropped_rows[2]['step'] == 'check_deck_is_21'
+    row_events = phase.context.get_events(phase=phase, row_num=2)
+    assert row_events[0]['step_name'] == 'drop_if_deck_is_not_21'
 
 
 def test_batch_step_error():
     phase = Phase(steps=[error_tachyon_level_variance])
     phase.load_data([{'tachyon_level': 513}, {'tachyon_level': 532}])
     phase.run_steps()
-    assert phase.context.errors['none']['step'] == 'error_tachyon_level_variance'
+    row_events = phase.context.get_events(phase=phase, row_num='none')
+    assert row_events[0]['step_name'] == 'error_tachyon_level_variance'
 
 
 def test_batch_step_warning():
@@ -143,8 +148,9 @@ def test_batch_step_warning():
     phase.load_data([{'tachyon_level': 513}, {'tachyon_level': 532}])
 
     phase.run_steps()
-    assert phase.context.warnings['none'][0]['step'] == 'warn_tachyon_level_variance'
-    assert phase.context.warnings['none'][0]['row'] is None
+    row_events = phase.context.get_events(phase=phase, row_num='none')
+    assert row_events[0]['step_name'] == 'warn_tachyon_level_variance'
+    assert row_events[0]['row'] is None
 
 
 @pytest.mark.skip("Will test for error reporting format when we have output going to logger")
@@ -177,8 +183,9 @@ def test_row_step_in_reshape_can_report_row_num_error():
     phase = ReshapePhase(steps=[report_row_error])
     phase.load_data([{'floor': 1}, {'floor': 13}])
     phase.run()
-    assert len(phase.context.errors) == 1
-    assert 'Floor cannot' in phase.context.errors[2]['message']
+    row_events = phase.context.get_events(phase=phase, row_num=2)
+    assert len(row_events) == 1
+    assert 'Floor cannot' in row_events[0]['message']
 
 
 def test_batch_step_can_return_row_num_in_error():
@@ -189,5 +196,6 @@ def test_batch_step_can_return_row_num_in_error():
     phase = Phase(steps=[report_row_error_in_batch])
     phase.load_data([{'floor': 1}, {'floor': 13}])
     phase.run()
-    assert len(phase.context.errors) == 1
-    assert 'just know' in phase.context.errors[2]['message']
+    error = phase.context.get_events(phase=phase, row_num=2)[0]
+    assert 'just know' in error['message']
+    assert error['type'] == 'ERROR'

@@ -243,7 +243,7 @@ def test_column_can_drop_row():
     phase = Phase(columns=[col])
     phase.load_data([{'Shoe size': '42'}, {'Shoe size': None}])
     phase.do_column_stuff()
-    assert len(phase.context.errors) == 0
+    assert phase.context.phase_has_errors(phase) is False
     assert len(phase.row_data) == 1
     assert phase.row_data[0]['Shoe size'] == 42
 

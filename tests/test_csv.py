@@ -27,9 +27,8 @@ def test_extra_field_in_csv(tmpdir):
     phase.load_data(data)
     phase.do_column_stuff()
 
-    assert len(phase.context.warnings) == 1
-    print(phase.context.warnings)
-    assert 'Extra value found' in phase.context.warnings[1][0]['message']
+    warning = phase.context.get_events(phase=phase, row_num=1)[0]
+    assert 'Extra value found' in warning['message']
 
 
 @pytest.mark.skip("It would be nice to identify rows with not enough fields...")

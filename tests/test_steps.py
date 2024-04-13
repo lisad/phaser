@@ -174,9 +174,9 @@ def test_extra_outputs_to_batch_step():
     extra = ExtraMapping('extra', {})
     phase = Phase(
         steps=[collect_extra_from_batch],
-        extra_outputs=[extra],
-        error_policy=ON_ERROR_STOP_NOW,
+        extra_outputs=[extra]
     )
+    phase.context.error_policy=ON_ERROR_STOP_NOW
     phase.load_data([
         {'number': 12, 'extra': 'A dozen'},
         {'number': 13, 'extra': "Baker's dozen"},
@@ -200,7 +200,8 @@ def test_builtin_step():
 
 
 def test_check_unique_fails(test_data_phase_class):
-    phase = test_data_phase_class(error_policy=ON_ERROR_STOP_NOW)
+    phase = test_data_phase_class()
+    phase.context.error_policy = ON_ERROR_STOP_NOW
     phase.load_data([{'id': '1'}, {'id': '1'}])
     with pytest.raises(DataErrorException):
         phase.run_steps()
@@ -355,9 +356,9 @@ def test_extra_outputs_from_context_step():
     extra = ExtraMapping('extra', {})
     phase = Phase(
         steps=[collect_extra_from_context],
-        extra_outputs=[extra],
-        error_policy=ON_ERROR_STOP_NOW,
+        extra_outputs=[extra]
     )
+    phase.context.error_policy=ON_ERROR_STOP_NOW
     phase.load_data([
         {'number': 12, 'extra': 'A dozen'},
         {'number': 13, 'extra': "Baker's dozen"},
@@ -440,9 +441,9 @@ def test_extra_outputs_from_df_step():
     extra = ExtraMapping('extra', {})
     phase = Phase(
         steps=[collect_extra_from_df],
-        extra_outputs=[extra],
-        error_policy=ON_ERROR_STOP_NOW,
+        extra_outputs=[extra]
     )
+    phase.context.error_policy=ON_ERROR_STOP_NOW
     phase.load_data([
         {'number': 12, 'extra': 'A dozen'},
         {'number': 13, 'extra': "Baker's dozen"},
