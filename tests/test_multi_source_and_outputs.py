@@ -44,9 +44,14 @@ def test_pipeline(tmpdir):
 
     manager_data = read_csv(tmpdir / 'managers.csv')
     assert len(manager_data) == 2
+    # TODO: Allow ExtraMappings to specify the names for keys and values
+    # assert manager_data == [
+    #     { 'manager_id': '4', 'num_employees': '1' },
+    #     { 'manager_id': '2', 'num_employees': '2' },
+    # ]
     assert manager_data == [
-        { 'manager_id': '4', 'num_employees': '1' },
-        { 'manager_id': '2', 'num_employees': '2' },
+        { 'key': '4', 'value': '1' },
+        { 'key': '2', 'value': '2' },
     ]
 
     assert "Reporting for phase Validation" in stdout

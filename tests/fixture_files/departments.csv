@@ -1,6 +1,6 @@
-id,name
-1,Finance
-2,Marketing
-3,Engineering
-4,People
-5,Sales
+key,value
+Finance,1
+Marketing,2
+Engineering,3
+People,4
+Sales,5

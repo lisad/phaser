@@ -6,12 +6,12 @@ from phaser import (
     FloatColumn,
     IntColumn,
     row_step,
-    context_step,
     check_unique,
     DataErrorException,
     DropRowException,
     ON_ERROR_DROP_ROW
 )
+from phaser.io import ExtraMapping
 
 
 """
@@ -62,25 +62,11 @@ def calculate_bonus_percent(row, **kwargs):
         row["Bonus percent"] = row['bonusAmount'] / row['salary']
     return row
 
-@context_step
-def index_departments(context):
-    """ Transforms the 'departments' source from a list of records as it came
-    from the loaded file into a dictionary of name to record."""
-    # TODO: Make this functionality be a built-in feature of Phaser
-    lookup_departments = context.get_source('departments')
-    departments = {
-        r['name']: r for r in lookup_departments
-    }
-    # Overwrite the existing departments source. Is this ok?
-    context.set_source('departments', departments)
-
-@row_step
-def add_department_id(row, context):
-    lookup_departments = context.get_source('departments')
-    department_names = lookup_departments.keys()
+@row_step(extra_sources = ['departments'])
+def add_department_id(row, departments, context):
     if row['department']:
-        if row['department'] in department_names:
-            row['department_id'] = lookup_departments[row['department']]['id']
+        if row['department'] in departments:
+            row['department_id'] = departments[row['department']]
         else:
             context.add_warning(add_department_id, row,
                 f"Department name {row['department']} invalid for employee ID {row['Employee ID']}")
@@ -90,22 +76,13 @@ def add_department_id(row, context):
 
     return row
 
-@row_step
-def identify_managers(row, context):
-    managers = context.get('managers')
+@row_step(extra_outputs = ['managers'])
+def identify_managers(row, managers):
+    # managers = context.get('managers')
     manager_id = row['manager_id']
     if manager_id:
         managers[manager_id] += 1
     return row
-
-@context_step
-def reformat_managers(context):
-    managers = context.get('managers')
-    rows = [
-        { 'manager_id': key, 'num_employees': value }
-        for key, value in managers.items()
-    ]
-    context.set_output('managers', rows)
 
 class Validation(Phase):
     columns = [
@@ -137,25 +114,18 @@ class Transformation(Phase):
         calculate_annual_salary,
         calculate_bonus_percent,
         identify_managers,
-        reformat_managers,
     ]
     extra_outputs = [
-        'managers'
+        ExtraMapping('managers', defaultdict(int))
     ]
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        # Initialize a dict to hold the manager counts
-        self.context.add_variable('managers', defaultdict(int))
 
 
 class Enrichment(Phase):
     steps = [
-        index_departments,
         add_department_id,
     ]
     extra_sources = [
-        'departments'
+        ExtraMapping('departments')
     ]
 
 

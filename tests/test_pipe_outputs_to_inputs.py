@@ -6,70 +6,39 @@ import pytest
 from pathlib import Path
 from phaser import (
     Column,
-    context_step,
     IntColumn,
+    ON_ERROR_STOP_NOW,
     Phase,
     Pipeline,
     row_step,
 )
-from phaser.io import read_csv, save_csv
+from phaser.io import read_csv, save_csv, ExtraMapping
 
-@row_step
-def increment_counts(row, context):
+@row_step(extra_outputs=[ 'sibling_counts' ])
+def increment_counts(row, sibling_counts):
     parent_id = row['parent_id']
-    counts = context.get('counts')
-    counts[parent_id] += 1
+    sibling_counts[parent_id] += 1
     return row
 
-# TODO: this is an annoying and repetitive reshaping of data that needs to be
-# done for creating outputs and for reading in sources. Add functionality to
-# Phaser to make this be easier to manage. Perhaps an annotation for the step or
-# the phase?
-def counts_to_output(counts):
-    return [
-        { 'parent_id': key, 'sibling_count': value }
-        for key, value in counts.items()
-    ]
-
-# TODO: Same comment as for `counts_to_outputs` -- build features into Phaser to
-# make this not have to be written all the time.
-def source_to_counts(rows):
-    return {
-        row['parent_id']: row['sibling_count'] for row in rows
-    }
-
-@context_step
-def output_counts(context):
-    counts = context.get('counts')
-    context.set_output('sibling_counts', counts_to_output(counts))
-
 class CountParents(Phase):
+    error_policy = ON_ERROR_STOP_NOW
     columns = [
         IntColumn('id'),
         Column('name'),
         IntColumn('parent_id'),
     ]
-    extra_outputs = [ 'sibling_counts' ]
-    steps = [ increment_counts, output_counts ]
+    extra_outputs = [ ExtraMapping('sibling_counts', defaultdict(int)) ]
+    steps = [ increment_counts ]
 
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.context.add_variable('counts', defaultdict(int))
-
-@context_step
-def prep_counts(context):
-    source = context.get_source('sibling_counts')
-    context.add_variable('counts', source_to_counts(source))
-
-@row_step
-def merge_counts(row, context):
-    counts = context.get('counts')
+@row_step(extra_sources=[ 'sibling_counts' ])
+def merge_counts(row, sibling_counts):
     parent_id = row['parent_id']
-    count = counts[parent_id]
+    count = sibling_counts[parent_id]
     row['siblings'] = count-1
     return row
 
 class EnrichSiblings(Phase):
+    error_policy = ON_ERROR_STOP_NOW
     columns = [
         IntColumn('id'),
         Column('name'),
@@ -77,7 +46,7 @@ class EnrichSiblings(Phase):
         IntColumn('siblings', required=False),
     ]
     extra_sources = [ 'sibling_counts' ]
-    steps = [ prep_counts, merge_counts ]
+    steps = [ merge_counts ]
 
 class PipePipeline(Pipeline):
     phases = [ CountParents, EnrichSiblings ]

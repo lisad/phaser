@@ -15,11 +15,13 @@ logger.addHandler(logging.NullHandler())
 
 class PhaseBase(ABC):
 
-    def __init__(self, name, steps=None, context=None, error_policy=None):
+    def __init__(self, name, steps=None, context=None, error_policy=None, extra_sources=None, extra_outputs=None):
         self.name = name or self.__class__.__name__
         self.context = context or Context()
         self.steps = steps or self.__class__.steps
-        self.error_policy = error_policy or ON_ERROR_COLLECT
+        self.error_policy = error_policy or getattr(self.__class__, 'error_policy', ON_ERROR_COLLECT)
+        self.extra_sources = extra_sources or getattr(self.__class__, 'extra_sources', [])
+        self.extra_outputs = extra_outputs or getattr(self.__class__, 'extra_outputs', [])
         self.headers = None
         self.row_data = None
         self.preserve_row_numbers = True
@@ -54,20 +56,29 @@ class PhaseBase(ABC):
     def run_steps(self):
         if self.row_data is None or self.row_data == []:
             raise PhaserError("No data loaded yet")
+
+        outputs = {
+            output.name: output
+            for output in self.extra_outputs
+        }
+
         for step in self.steps:
             step_type = step(None, __probe__=PROBE_VALUE)
             if step_type == ROW_STEP:
-                self.execute_row_step(step)
+                self.execute_row_step(step, outputs)
             elif step_type == BATCH_STEP:
-                self.execute_batch_step(step)
+                self.execute_batch_step(step, outputs)
             elif step_type == DATAFRAME_STEP:
-                self.execute_batch_step(step)
+                self.execute_batch_step(step, outputs)
             elif step_type == CONTEXT_STEP:
-                self.execute_context_step(step)
+                self.execute_context_step(step, outputs)
             else:
                 raise PhaserError(f"Unknown step type {step_type}")
 
-    def execute_row_step(self, step):
+        for name, output in outputs.items():
+            self.context.set_output(name, output)
+
+    def execute_row_step(self, step, outputs={}):
         """ Internal method. Each step that is run on a row is run through this method in order to do consistent error
         numbering and error reporting.
         """
@@ -80,7 +91,7 @@ class PhaseBase(ABC):
                 continue    # Only trap the first error per row
             # NOw that we know the row number run the step and handle exceptions.
             try:
-                new_row = step(deepcopy(row), context=self.context)
+                new_row = step(deepcopy(row), context=self.context, outputs=outputs)
                 if isinstance(new_row, Record):
                     # Ensure the original row_num is preserved with the new row returned from the step
                     if new_row.row_num != row.row_num:
@@ -96,9 +107,9 @@ class PhaseBase(ABC):
                     # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
         self.row_data = new_data
 
-    def execute_batch_step(self, step):
+    def execute_batch_step(self, step, outputs={}):
         try:
-            new_row_values = step(self.row_data, context=self.context)
+            new_row_values = step(self.row_data, context=self.context, outputs=outputs)
             row_size_diff = len(self.row_data) - len(new_row_values)
             if row_size_diff > 0:
                 self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
@@ -115,9 +126,13 @@ class PhaseBase(ABC):
         except Exception as exc:
             self.context.process_exception(exc, step, row=None, error_policy=self.error_policy)
 
-    def execute_context_step(self, step):
+    def execute_context_step(self, step, outputs={}):
         try:
-            step(self.context)
+            # This looks like an odd construct, passing in the context as the
+            # target of the step as well as a kwarg. But it helps to make the
+            # step function logic more straightforward at the slight addition of
+            # complexity at the call site, here.
+            step(self.context, context=self.context, outputs=outputs)
         except DropRowException as dre:
             raise PhaserError("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:
@@ -136,8 +151,8 @@ class ReshapePhase(PhaseBase):
     that a regular phase provides.
     """
 
-    def __init__(self, name=None, steps=None, context=None, error_policy=None):
-        super().__init__(name, steps=steps, context=context, error_policy=error_policy)
+    def __init__(self, name=None, steps=None, context=None, error_policy=None, extra_sources=None, extra_outputs=None):
+        super().__init__(name, steps=steps, context=context, error_policy=error_policy, extra_sources=extra_sources, extra_outputs=extra_outputs)
         self.preserve_row_numbers = False
 
     def run(self):
@@ -204,10 +219,10 @@ class Phase(PhaseBase):
     steps = []
     columns = []
 
-    def __init__(self, name=None, steps=None, columns=None, context=None, error_policy=None):
+    def __init__(self, name=None, steps=None, columns=None, context=None, error_policy=None, extra_sources=None, extra_outputs=None):
         """ Instantiate (or subclass) a Phase with an ordered list of steps (they will be called in this order) and
         with an ordered list of columns (they will do their checks and type casting in this order).  """
-        super().__init__(name, steps=steps, context=context, error_policy=error_policy)
+        super().__init__(name, steps=steps, context=context, error_policy=error_policy, extra_sources=extra_sources, extra_outputs=extra_outputs)
         self.columns = columns or self.__class__.columns
         if isinstance(self.columns, Column):
             self.columns = [self.columns]
@@ -241,7 +256,7 @@ class Phase(PhaseBase):
         for column in self.columns:
             column.check_required(self.headers)
         # Then going row by row allows us to re-use row-based error/reporting work
-        self.execute_row_step(cast_each_column_value)
+        self.execute_row_step(cast_each_column_value, None)
 
 
     def rename_columns(self):

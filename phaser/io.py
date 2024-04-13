@@ -1,6 +1,8 @@
+from abc import ABC, abstractmethod
+from collections.abc import Mapping, Sequence
 import math
 from clevercsv import stream_dicts, stream_table, DictWriter
-from phaser.exceptions import DataErrorException
+from phaser.exceptions import DataErrorException, PhaserError
 
 
 def read_csv(source):
@@ -107,3 +109,61 @@ def save_csv(filename, row_data):
         w.writeheader()
         w.writerow(first)
         w.writerows(iterator)
+
+class IOObject(ABC):
+    def __init__(self, name, data_type, data=None):
+        self.name = name
+        self.data_type = data_type
+        if data and not isinstance(data, data_type):
+            raise PhaserError(f"{self.__class__} initialized with wrong data structure. Must be a {data_type}")
+        self.data = data
+        self.to_save = False
+
+    @abstractmethod
+    def load(self, source):
+        """ Load data from the source, overwriting any data that may be stored
+        in the object already. The source should be in a format that was written
+        by the save function."""
+        pass
+
+    @abstractmethod
+    def save(self, dest):
+        """ Save data to the destination in a format that is appropriate to be
+        read back in by the load function."""
+        pass
+
+class ExtraRecords(IOObject):
+    """ A holder of data that either comes from an extra source is will be added
+    to as an extra output. Its data is in the form of a sequence, most likely
+    a list of dicts and represents data that is meant to be appended to or
+    processed over."""
+    def __init__(self, name, data=None):
+        super().__init__(name, Sequence, data)
+
+    def load(self, source):
+        self.data = read_csv(source)
+
+    def save(self, dest):
+        if self.data:
+            save_csv(dest, self.data)
+
+class ExtraMapping(IOObject):
+    """ A holder of data that either comes from an extra source is will be added
+    to as an extra output. Its data is in the form of a mapping, most likely
+    a dict and represents data that is meant to be accessed by a key."""
+    def __init__(self, name, data=None):
+        super().__init__(name, Mapping, data)
+
+    def load(self, source):
+        in_data = read_csv(source)
+        self.data = {
+            row['key']: row['value'] for row in in_data
+        }
+
+    def save(self, dest):
+        if self.data:
+            out_data = [
+                { 'key': key, 'value': value }
+                for key, value in self.data.items()
+            ]
+            save_csv(dest, out_data)
