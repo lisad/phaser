@@ -84,3 +84,20 @@ def test_do_not_save_nans(tmpdir):
     save_csv(tmpdir / 'save_nans.csv', data)
     result = read_text(tmpdir / 'save_nans.csv')
     assert "nan" not in result.lower()
+
+@pytest.mark.skip("clevercsv parsing failures")
+@pytest.mark.parametrize("text, expected",
+    [
+        ("id\n3\n", [{'id':'3'}]),
+        # This one results in [{'id':'abc'},{None:['def']}]
+        ("id\nabc def\n", [{'id':'abc def'}]),
+        ("on_call\nJulian\n", [{'on_call':'Julian'}]),
+        # This one results in a NoDetectionResult exception
+        ("on_call\nJulian Bashir\n", [{'on_call':'Julian Bashir'}]),
+    ]
+)
+def test_single_row_col_csv(tmpdir, text, expected):
+    path = tmpdir / "data.csv"
+    write_text(path, text)
+    data = read_csv(path)
+    assert data == expected
