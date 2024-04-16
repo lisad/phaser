@@ -51,7 +51,6 @@ class Context:
         self.rwos = {}
         self.working_dir = working_dir
         self.error_policy = error_policy
-        self.current_phase = 'Unknown'
 
     def _get_phase_name(self, phase):
         if phase is None:
