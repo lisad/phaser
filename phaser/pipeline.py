@@ -251,8 +251,7 @@ class Pipeline:
             source for phase in self.phase_instances for source in phase.extra_sources
         ]
 
-    def validate_sources(self):
-        """ Check that all required sources have been initialized."""
+    def sources_needing_initialization(self):
         # Collect the extra sources and outputs from the phases so they can be
         # reconciled and initialized as necessary.  Extra sources that match
         # with extra outputs do not need to be initialized, but extra sources
@@ -264,13 +263,16 @@ class Pipeline:
         extra_output_names = [
             output.name for phase in self.phase_instances for output in phase.extra_outputs
         ]
-        sources_needing_initialization = [
+        return [
             (source if isinstance(source, str) else source.name)
             for source in self.extra_sources
             if (source if isinstance(source, str) else source.name) not in extra_output_names
         ]
+
+    def validate_sources(self):
+        """ Check that all required sources have been initialized."""
         missing_sources = []
-        for source in sources_needing_initialization:
+        for source in self.sources_needing_initialization():
             if not source in self.context.rwos:
                 missing_sources.append(source)
 
