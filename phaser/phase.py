@@ -15,11 +15,10 @@ logger.addHandler(logging.NullHandler())
 
 class PhaseBase(ABC):
 
-    def __init__(self, name, steps=None, context=None, error_policy=None, extra_sources=None, extra_outputs=None):
+    def __init__(self, name, steps=None, context=None, extra_sources=None, extra_outputs=None):
         self.name = name or self.__class__.__name__
         self.context = context or Context()
         self.steps = steps or self.__class__.steps
-        self.error_policy = error_policy or getattr(self.__class__, 'error_policy', ON_ERROR_COLLECT)
         self.extra_sources = extra_sources or getattr(self.__class__, 'extra_sources', [])
         self.extra_outputs = extra_outputs or getattr(self.__class__, 'extra_outputs', [])
         self.headers = None
@@ -54,6 +53,8 @@ class PhaseBase(ABC):
         pass
 
     def run_steps(self):
+        # If in tests or when phase is being driven directly not via pipeline, setup context.current_phase
+        self.context.current_phase = self.name
         if self.row_data is None or self.row_data == []:
             raise PhaserError("No data loaded yet")
 
@@ -83,13 +84,9 @@ class PhaseBase(ABC):
         numbering and error reporting.
         """
         new_data = Records(number_from=self.row_data.get_max_row_num()+1)
-        for row_index, row in enumerate(self.row_data):
-            if row.row_num in self.context.errors.keys():
-                # LMDTODO: This is an O(n) operation.  If instead the fact of the row having an error was part of the
-                # row data, this would be O(1).  We should probably do that instead, and definitely if any row metadata
-                # is on the row besides the original row number.  The thing in the special field in row could be an obj.
-                continue    # Only trap the first error per row
-            # NOw that we know the row number run the step and handle exceptions.
+        for row in self.row_data:
+            if self.context.row_has_errors(row.row_num):
+                continue    # Skip rows that have already caused errors, on subsequent steps
             try:
                 new_row = step(deepcopy(row), context=self.context, outputs=outputs)
                 if isinstance(new_row, Record):
@@ -101,7 +98,7 @@ class PhaseBase(ABC):
                     # LMDTODO: write a test that confirms we can just return a new dict from a step
                     new_data.append(Record(row.row_num, new_row))
             except Exception as exc:
-                self.context.process_exception(exc, step, row, error_policy=self.error_policy)
+                self.context.process_exception(exc, self, step, row)
                 if not isinstance(exc, DropRowException):
                     new_data.append(row)  # If we are continuing, keep the row in the data unchanged unless it's a
                     # DropRowException. (If the caller wants to change the row and also throw an exception, they can't)
@@ -122,9 +119,9 @@ class PhaseBase(ABC):
             else:
                 self.row_data = Records([row for row in new_row_values], preserve_numbers=False)
         except DataException as exc:
-            self.context.process_exception(exc, step, row=exc.row, error_policy=self.error_policy)
+            self.context.process_exception(exc, self, step, row=exc.row)
         except Exception as exc:
-            self.context.process_exception(exc, step, row=None, error_policy=self.error_policy)
+            self.context.process_exception(exc, self, step, row=None)
 
     def execute_context_step(self, step, outputs={}):
         try:
@@ -136,7 +133,7 @@ class PhaseBase(ABC):
         except DropRowException as dre:
             raise PhaserError("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:
-            self.context.process_exception(exc, step, row=None, error_policy=self.error_policy)
+            self.context.process_exception(exc, self, step, row=None)
 
 
 class ReshapePhase(PhaseBase):
@@ -151,8 +148,8 @@ class ReshapePhase(PhaseBase):
     that a regular phase provides.
     """
 
-    def __init__(self, name=None, steps=None, context=None, error_policy=None, extra_sources=None, extra_outputs=None):
-        super().__init__(name, steps=steps, context=context, error_policy=error_policy, extra_sources=extra_sources, extra_outputs=extra_outputs)
+    def __init__(self, name=None, steps=None, context=None, extra_sources=None, extra_outputs=None):
+        super().__init__(name, steps=steps, context=context, extra_sources=extra_sources, extra_outputs=extra_outputs)
         self.preserve_row_numbers = False
 
     def run(self):
@@ -219,10 +216,10 @@ class Phase(PhaseBase):
     steps = []
     columns = []
 
-    def __init__(self, name=None, steps=None, columns=None, context=None, error_policy=None, extra_sources=None, extra_outputs=None):
+    def __init__(self, name=None, steps=None, columns=None, context=None, extra_sources=None, extra_outputs=None):
         """ Instantiate (or subclass) a Phase with an ordered list of steps (they will be called in this order) and
         with an ordered list of columns (they will do their checks and type casting in this order).  """
-        super().__init__(name, steps=steps, context=context, error_policy=error_policy, extra_sources=extra_sources, extra_outputs=extra_outputs)
+        super().__init__(name, steps=steps, context=context, extra_sources=extra_sources, extra_outputs=extra_outputs)
         self.columns = columns or self.__class__.columns
         if isinstance(self.columns, Column):
             self.columns = [self.columns]
@@ -252,6 +249,7 @@ class Phase(PhaseBase):
             return new_row
 
         # Header work is done first
+        self.context.current_phase = self.name
         self.rename_columns()
         for column in self.columns:
             column.check_required(self.headers)
