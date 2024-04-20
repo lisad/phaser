@@ -198,6 +198,10 @@ class Pipeline:
         self.source = source or self.__class__.source
         assert self.source is not None and self.working_dir is not None
         self.phases = phases or self.__class__.phases
+        try:
+            iter(self.phases)
+        except TypeError:
+            self.phases = [self.phases]
         self.phase_instances = []
         self.verbose = verbose
         self.context = Context(working_dir=self.working_dir, verbose=self.verbose)
@@ -229,18 +233,22 @@ class Pipeline:
 
         phase_names = []
         for phase in self.phases:
-            phase_instance = phase
-            if inspect.isclass(phase):
-                phase_instance = phase(context=self.context)
-            else:
-                phase.context = self.context
-            name = phase_instance.name
-            i = 1
-            while name in phase_names:
-                name = f"{phase.name}-{i}"
-                i = i + 1
-            phase_instance.name = name
-            self.phase_instances.append(phase_instance)
+            try:
+                phase_instance = phase
+                if inspect.isclass(phase):
+                    phase_instance = phase(context=self.context)
+                else:
+                    phase.context = self.context
+                name = phase_instance.name
+                i = 1
+                while name in phase_names:
+                    name = f"{phase.name}-{i}"
+                    i = i + 1
+                phase_instance.name = name
+                self.phase_instances.append(phase_instance)
+            except Exception as exc:
+                raise PhaserError(f"Error setting up {phase} instance") from exc
+
 
     def setup_extras(self):
         # Phases must be instantiated, because that is how any configuration set
@@ -288,16 +296,19 @@ class Pipeline:
             next_source = destination
 
     def run_phase(self, phase, source, destination):
-        self.context.current_phase = phase.name
-        logger.info(f"Loading input from {source} for {phase.name}")
-        data = Records(self.load(source))
-        phase.load_data(data)
-        results = phase.run()
-        self.save(results.for_save(), destination)
-        self.check_extra_outputs(phase)
-        self.save_extra_outputs()
-        logger.info(f"{phase.name} saved output to {destination}")
-        self.report_errors_and_warnings(phase.name)
+        try:
+            self.context.current_phase = phase.name
+            logger.info(f"Loading input from {source} for {phase.name}")
+            data = Records(self.load(source))
+            phase.load_data(data)
+            results = phase.run()
+            self.save(results.for_save(), destination)
+            self.check_extra_outputs(phase)
+            self.save_extra_outputs()
+            logger.info(f"{phase.name} saved output to {destination}")
+            self.report_errors_and_warnings(phase.name)
+        except Exception as exc:
+            raise PhaserError(f"Error in pipeline running {phase.name}") from exc
         if self.context.phase_has_errors(phase.name):
             raise DataException(f"Phase '{phase.name}' failed with errors.")
 
