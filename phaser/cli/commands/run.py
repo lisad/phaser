@@ -21,6 +21,7 @@ directory and source arguments:
 
 from importlib import import_module
 from inspect import getmembers, getmodule
+from pathlib import Path
 
 import phaser
 from phaser.cli import Command
@@ -31,21 +32,16 @@ class RunPipelineCommand(Command):
         parser.add_argument("working_dir", help="directory to output phase results")
         parser.add_argument("source", help="file to use as initial source")
 
-# TODO: figure out how to get additionaal needed sources from a pipeline and add
-# them as required arguments
+    def has_incremental_arguments(self, args):
+        return True
 
-    def execute(self, args):
+    def add_incremental_arguments(self, args, parser):
         pipeline_name = args.pipeline_name
         # Pipelines are expected to be defined in a module in the `pipelines`
         # package. The module name is given as the command line argument, and
         # the sole subclass of phaser.Pipeline is located and invoked with
         # additional command line arguments.
         pipeline_module = import_module(f"pipelines.{pipeline_name}")
-        verbose = False
-        try:
-            verbose = args.verbose
-        except:
-            pass
 
         def is_pipeline_class(m):
             # isinstance(attr, type) is the way to check that the attr is
@@ -61,9 +57,22 @@ class RunPipelineCommand(Command):
         # pipelines is a tuple of names and values. We want the value which is
         # a class object.
         Pipeline = pipelines[0][1]
-        working_dir = args.working_dir
+
+        verbose = args.verbose
+        working_dir = Path(args.working_dir)
         source = args.source
 
-        print(f"Running pipeline '{Pipeline.__name__}'")
-        pipeline = Pipeline(working_dir, source, verbose=verbose)
-        pipeline.run()
+        self.pipeline = Pipeline(working_dir, source, verbose=verbose)
+
+        self.sources_needing_initialization = self.pipeline.sources_needing_initialization()
+        for source in self.sources_needing_initialization:
+            parser.add_argument(f"--{source}", help=f"path to source file for {source}", required=True)
+
+    def execute(self, args):
+        # Convert a argparse.Namespace object to a dict for subscript access
+        args = vars(args)
+        for source in self.sources_needing_initialization:
+            self.pipeline.init_source(source, args[source])
+
+        print(f"Running pipeline '{self.pipeline.__class__.__name__}'")
+        self.pipeline.run()

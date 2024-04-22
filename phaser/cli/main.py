@@ -84,14 +84,18 @@ def main(argv):
         command["parser"] = subparser
         command["instance"].add_arguments(subparser)
 
-    args = parser.parse_args(argv)
+    (args, extras) = parser.parse_known_args(argv)
     if not args.command:
         parser.print_help()
         sys.exit(2)
 
     command = commands.get(args.command)
+    cmd = command["instance"]
+    if cmd.has_incremental_arguments(args):
+        cmd.add_incremental_arguments(args, command["parser"])
+        args = parser.parse_args(argv)
     try:
-        command["instance"].execute(args)
+        cmd.execute(args)
     except phaser.DataException as e:
         print("\nPipeline run failed while processing data.  Errors and row numbers causing errors have been reported.")
     except phaser.PhaserError as e:
