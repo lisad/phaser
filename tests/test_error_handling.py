@@ -1,6 +1,11 @@
+from pathlib import Path
+
 import pytest
 from fixtures import reconcile_phase_class
-from phaser import Phase, row_step, batch_step, WarningException, DropRowException, ReshapePhase, DataErrorException
+from phaser import Phase, row_step, batch_step, WarningException, DropRowException, ReshapePhase, DataErrorException, \
+    Pipeline, ON_ERROR_WARN, ON_ERROR_STOP_NOW
+
+current_path = Path(__file__).parent
 
 
 @row_step
@@ -188,14 +193,30 @@ def test_row_step_in_reshape_can_report_row_num_error():
     assert 'Floor cannot' in row_events[0]['message']
 
 
-def test_batch_step_can_return_row_num_in_error():
-    @batch_step
-    def report_row_error_in_batch(batch, context):
-        raise DataErrorException("Look I just know there's a problem in row 2", row=batch[1])
+@batch_step
+def report_row_error_in_batch(batch, context):
+    raise DataErrorException("Look I just know there's a problem in row 2", row=batch[1])
 
+
+def test_batch_step_can_return_row_num_in_error():
     phase = Phase(steps=[report_row_error_in_batch])
     phase.load_data([{'floor': 1}, {'floor': 13}])
     phase.run()
     error = phase.context.get_events(phase=phase, row_num=2)[0]
     assert 'just know' in error['message']
     assert error['type'] == 'ERROR'
+
+
+def test_pipeline_error_policy(tmpdir):
+    # WIth error policy Warning, the pipeline completes. Then with error policy STOP, the pipeline raises.
+    pipeline = Pipeline(working_dir=tmpdir,
+                        source=(current_path / 'fixture_files' / 'departments.csv'),
+                        phases=[Phase(steps=[report_row_error_in_batch])],
+                        error_policy=ON_ERROR_WARN)
+    pipeline.run()
+    pipeline = Pipeline(working_dir=tmpdir,
+                        source=(current_path / 'fixture_files' / 'departments.csv'),
+                        phases=[Phase(steps=[report_row_error_in_batch])],
+                        error_policy=ON_ERROR_STOP_NOW)
+    with pytest.raises(DataErrorException):
+        pipeline.run()

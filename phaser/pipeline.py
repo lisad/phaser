@@ -50,7 +50,7 @@ class Context:
         # Stores sources and outputs as ReadWriteObjects
         self.rwos = {}
         self.working_dir = working_dir
-        self.error_policy = error_policy
+        self.error_policy = error_policy or ON_ERROR_COLLECT
 
     def _get_phase_name(self, phase):
         if phase is None:
@@ -191,7 +191,7 @@ class Pipeline:
     phases = []
 
 
-    def __init__(self, working_dir=None, source=None, phases=None, verbose=False):
+    def __init__(self, working_dir=None, source=None, phases=None, verbose=False, error_policy=None):
         self.working_dir = working_dir or self.__class__.working_dir
         if self.working_dir and not os.path.exists(self.working_dir):
             raise ValueError(f"Working dir {self.working_dir} does not exist.")
@@ -204,7 +204,7 @@ class Pipeline:
             self.phases = [self.phases]
         self.phase_instances = []
         self.verbose = verbose
-        self.context = Context(working_dir=self.working_dir, verbose=self.verbose)
+        self.context = Context(working_dir=self.working_dir, verbose=self.verbose, error_policy=error_policy)
 
         self.setup_phases()
         self.setup_extras()
@@ -310,7 +310,9 @@ class Pipeline:
             logger.info(f"{phase.name} saved output to {destination}")
             self.report_errors_and_warnings(phase.name)
         except Exception as exc:
-            raise PhaserError(f"Error in pipeline running {phase.name}") from exc
+            self.context.process_exception(exc, phase, 'None', None)
+            if self.context.error_policy in [ON_ERROR_STOP_NOW, ON_ERROR_COLLECT]:
+                raise PhaserError(f"Error in pipeline running {phase.name}") from exc
         if self.context.phase_has_errors(phase.name):
             raise DataException(f"Phase '{phase.name}' failed with errors.")
 
