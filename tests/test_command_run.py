@@ -9,6 +9,7 @@ current_path = Path(__file__).parent
 
 def __build_command():
     parser = argparse.ArgumentParser()
+    parser.add_argument("-", "--verbose", action="store_true")
     command = phaser.cli.commands.RunPipelineCommand()
     command.add_arguments(parser)
     return (parser, command)
@@ -16,7 +17,8 @@ def __build_command():
 def test_runs_a_pipeline(tmpdir):
     (parser, command) = __build_command()
     source = current_path / "fixture_files" / "runner-test.csv"
-    args = parser.parse_args(f"passthrough {tmpdir} {source}".split())
+    (args, extra) = parser.parse_known_args(f"passthrough {tmpdir} {source}".split())
+    command.add_incremental_arguments(args, parser)
     command.execute(args)
     output = read_csv(tmpdir / "passthrough_output_runner-test.csv")
     for row in output:
@@ -31,11 +33,12 @@ def test_runs_a_pipeline(tmpdir):
         ("multiplepipelines", Exception),
     ]
 )
-def test_failure_scenarios_p(tmpdir, pipeline, exception):
+def test_failure_scenarios(tmpdir, pipeline, exception):
     (parser, command) = __build_command()
     source = current_path / "fixture_files" / "crew.csv"
-    args = parser.parse_args(f"{pipeline} {tmpdir} {source}".split())
+    (args, extra) = parser.parse_known_args(f"{pipeline} {tmpdir} {source}".split())
     with pytest.raises(exception):
+        command.add_incremental_arguments(args, parser)
         command.execute(args)
 
 def test_overrides_working_directory():
