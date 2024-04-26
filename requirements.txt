@@ -1,3 +1,5 @@
 clevercsv
 pandas
 pytest
+sphinx
+myst-parser

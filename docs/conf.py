@@ -16,6 +16,11 @@ release = '0.1'
 
 extensions = [
     "sphinx.ext.autodoc",
+    "myst_parser",
+]
+
+myst_enable_extensions = [
+    "colon_fence",
 ]
 
 templates_path = ['_templates']
