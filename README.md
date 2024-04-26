@@ -138,7 +138,7 @@ Then run:
 
 ## Features
 
-A phaser Pipeline organizes one or more Phases and does I/O, marshalling source data and
+A phaser [](#Pipeline) organizes one or more Phases and does I/O, marshalling source data and
 checkpoint data between Phases.  It will
 
 * load source data from files or a previous phase

@@ -1,16 +1,16 @@
 """ phaser - a library to simplify automated batch-oriented complex data integration pipelines
 
-Pipeline : organizes a data pipeline into multiple phases, each with checkpoints so that the pipeline can be
+`Pipeline` : organizes a data pipeline into multiple phases, each with checkpoints so that the pipeline can be
 continued from any phase.
 
-Phase : Organizes the work of a complicated pipeline into a smaller unit. It still contains multiple steps and
+`Phase` : Organizes the work of a complicated pipeline into a smaller unit. It still contains multiple steps and
 column definitions/fixes, but it can be run standalone from its input data and have its output examined as both
 a checkpoint and input to the next phase.
 
 PipelineErrorException, DropRowException, WarningException : these exceptions can be used in custom steps to
 define what should happen when the exception is raised.
 
-row_step, batch_step : These are decorators used to wrap custom steps so they can be called by a Phase with the
+`row_step`, `batch_step` : These are decorators used to wrap custom steps so they can be called by a Phase with the
 right input data, and check the output and handle exceptions.
 
 check_unique, sort_by : Built-in steps that can be declared to operate on a column, and included in the steps of

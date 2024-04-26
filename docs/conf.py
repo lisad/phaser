@@ -26,6 +26,8 @@ myst_enable_extensions = [
 templates_path = ['_templates']
 exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 
+# This allows for cross-referencing code in docstrings by wrapping in ticks: `
+default_role = "any"
 
 
 # -- Options for HTML output -------------------------------------------------
