@@ -320,7 +320,6 @@ def make_strict_name(name):
 
 
 def call_method_on(obj, method):
-    # LMDTODO Move to a utils location?
     def is_builtin_function_or_descriptor(thing):
         return isinstance(thing, (types.BuiltinFunctionType, types.BuiltinMethodType))
 

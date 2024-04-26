@@ -95,7 +95,6 @@ class PhaseBase(ABC):
                         raise PhaserError(f"Row number {row.row_num} changed to {new_row.row_num} during row_step")
                     new_data.append(new_row)
                 else:
-                    # LMDTODO: write a test that confirms we can just return a new dict from a step
                     new_data.append(Record(row.row_num, new_row))
             except Exception as exc:
                 self.context.process_exception(exc, self, step, row)

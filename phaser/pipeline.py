@@ -150,34 +150,39 @@ class Context:
         :param error_policy: The phase's chosen error handling policies (ON_ERROR_COLLECT, ON_ERROR_STOP_NOW, etc.)
         :return: Nothing
         """
-        if isinstance(exc, PhaserError):
-            # PhaserError is raised in case of coding contract issues, so should bypass data exception handling.
-            raise exc
-        elif isinstance(exc, DropRowException):
-            self.add_dropped_row(step, row, exc.message, phase=phase)
-        elif isinstance(exc, WarningException):
-            # LMDTODO: This can be combined with the case of ON_ERROR_WARN below to include stack trace
-            self.add_warning(step, row, exc.message, phase=phase)
-        else:
-            self._handle_exception_using_policy(exc, phase, step, row, self.error_policy)
 
-    def _handle_exception_using_policy(self, exc, phase, step, row, error_policy):
+        # PhaserError is raised in case of coding contract issues, so should bypass the error handling that's
+        # appropriate for errors in data.
+        if isinstance(exc, PhaserError):
+            raise exc
+
         e_name = exc.__class__.__name__
         e_message = str(exc)
         message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
         logger.info(f"Unknown exception handled in executing steps ({message}")
         stack_info = traceback.format_exc() if self.verbose else None
+        event_info = {'phase': phase,
+                      'step': step,
+                      'row': row,
+                      'message': message,
+                      'stack_info': stack_info
+                    }
 
-        # LMDTODO this can now be refactored to use add_event
+        # If the exception tells us how to handle it, that's more specific so do that first.
+        if isinstance(exc, DropRowException):
+            self.add_event({'type': Context.DROPPED_ROW, **event_info})
+        elif isinstance(exc, WarningException):
+            self.add_event({'type': Context.WARNING, **event_info})
 
-        if error_policy == ON_ERROR_COLLECT:
-            self.add_error(step, row, message, stack_info=stack_info, phase=phase)
-        elif error_policy == ON_ERROR_WARN:
-            self.add_warning(step, row, message, stack_info=stack_info, phase=phase)
-        elif error_policy == ON_ERROR_DROP_ROW:
-            self.add_dropped_row(step, row, message, phase=self)
-        elif error_policy == ON_ERROR_STOP_NOW:
-            self.add_error(step, row, message, stack_info=stack_info, phase=phase)
+        # Otherwise, decide how to handle exception based on error_policy
+        elif self.error_policy == ON_ERROR_COLLECT:
+            self.add_event({'type': Context.ERROR, **event_info})
+        elif self.error_policy == ON_ERROR_WARN:
+            self.add_event({'type': Context.WARNING, **event_info})
+        elif self.error_policy == ON_ERROR_DROP_ROW:
+            self.add_event({'type': Context.DROPPED_ROW, **event_info})
+        elif self.error_policy == ON_ERROR_STOP_NOW:
+            self.add_event({'type': Context.ERROR, **event_info})
             raise exc
         else:
             raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc

@@ -1,11 +1,28 @@
+import os
 from pathlib import Path
 import pytest
 from phaser import Pipeline, Phase, batch_step, PhaserError
+from fixtures import reconcile_phase_class, null_step_phase
 
 current_path = Path(__file__).parent
 
 
-# LMDTODO: Move more pipeline tests out of test_basics and call that test_phase
+def test_pipeline(tmpdir, null_step_phase, reconcile_phase_class):
+    # This pipeline should run two phases (one an instance, one a class) and have both outputs
+    p = Pipeline(phases=[null_step_phase, reconcile_phase_class],
+                 source=current_path / 'fixture_files' / 'crew.csv',
+                 working_dir=tmpdir)
+    p.run()
+    assert os.path.exists(os.path.join(tmpdir, 'do_nothing_output_crew.csv'))
+    assert os.path.exists(os.path.join(tmpdir, 'Reconciler_output_crew.csv'))
+
+
+def test_pipeline_source_none(tmpdir, reconcile_phase_class):
+    with pytest.raises(AssertionError):
+        p = Pipeline(phases=[reconcile_phase_class], working_dir=tmpdir)
+        p.run()
+
+
 def test_number_go_up(tmpdir):
     @batch_step
     def adds_row(batch, context):
