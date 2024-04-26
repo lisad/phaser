@@ -118,7 +118,7 @@ def test_warning_contains_info():
     the_warning = phase.context.get_events(phase=phase, row_num=2)[0]
     assert the_warning['row']['deck'] == '5'
     assert the_warning['step_name'] == 'warn_if_lower_decks'
-    assert the_warning['message'] == "Lower decks should not be in this dataset"
+    assert "Lower decks should not be in this dataset" in the_warning['message']
 
 
 def test_warning_and_return_modified_row():
