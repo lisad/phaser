@@ -25,12 +25,16 @@ from pathlib import Path
 
 import phaser
 from phaser.cli import Command
+from phaser.constants import *
 
 class RunPipelineCommand(Command):
     def add_arguments(self, parser):
         parser.add_argument("pipeline_name", help="pipeline to run")
         parser.add_argument("working_dir", help="directory to output phase results")
         parser.add_argument("source", help="file to use as initial source")
+        parser.add_argument('--error-policy',
+                            help="An error policy provided here will override the pipeline's default policy.",
+                            choices=[ON_ERROR_WARN, ON_ERROR_COLLECT, ON_ERROR_DROP_ROW, ON_ERROR_STOP_NOW])
 
     def has_incremental_arguments(self, args):
         return True
@@ -56,13 +60,16 @@ class RunPipelineCommand(Command):
             raise Exception(f"Found {len(pipelines)} Pipelines declared in module '{pipeline_module}'. Need only 1.")
         # pipelines is a tuple of names and values. We want the value which is
         # a class object.
+        # LMDTODO DIscuss with Jeff - this doesn't feel like it belongs in a method called "add_incremental_arguments"
+        # it feels more like how the command should initialize or execute
         Pipeline = pipelines[0][1]
 
         verbose = args.verbose
         working_dir = Path(args.working_dir)
         source = args.source
+        error_policy = args.error_policy
 
-        self.pipeline = Pipeline(working_dir, source, verbose=verbose)
+        self.pipeline = Pipeline(working_dir, source, verbose=verbose, error_policy=error_policy)
 
         self.sources_needing_initialization = self.pipeline.sources_needing_initialization()
         for source in self.sources_needing_initialization:
