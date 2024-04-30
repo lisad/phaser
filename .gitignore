@@ -157,3 +157,4 @@ cython_debug/
 # this library to source control.  TBH I don't know why it's "not recommended"
 # according to GH's template .gitignore but we could always get more nuanced later. -Lisa
 .idea/
+docs/_build/*
