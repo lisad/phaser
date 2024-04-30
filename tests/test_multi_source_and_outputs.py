@@ -15,11 +15,7 @@ def test_pipeline(tmpdir):
     department_source = current_path / "fixture_files" / "departments.csv"
     pipeline = EmployeeReviewPipeline(source=source, working_dir=tmpdir)
     pipeline.init_source('departments', department_source)
-    f = io.StringIO()
-    with redirect_stdout(f):
-        # Having to grab stdout is probably temporary until we make pipeline more versatile in reporting errors
-        pipeline.run()
-    stdout = f.getvalue()
+    pipeline.run()
 
     assert os.path.exists(tmpdir / 'Validation_output_more-employees.csv')
     assert os.path.exists(tmpdir / 'Transformation_output_more-employees.csv')
@@ -54,7 +50,8 @@ def test_pipeline(tmpdir):
         { 'key': '2', 'value': '2' },
     ]
 
-    assert "Reporting for phase Validation" in stdout
-    assert "Employee Garak has no ID and inactive" in stdout
-    assert "Reporting for phase Transformation" in stdout
-    assert "'Full name' was added to the row_data and not declared a header'" in stdout
+    file_data = open(pipeline.errors_and_warnings_file, 'r').read()
+    assert "Beginning errors and warnings for Validation" in file_data
+    assert "Employee Garak has no ID and inactive" in file_data
+    assert "Beginning errors and warnings for Transformation" in file_data
+    assert "'Full name' was added to the row_data and not declared a header'" in file_data

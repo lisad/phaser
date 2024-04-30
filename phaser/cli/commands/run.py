@@ -61,7 +61,7 @@ class RunPipelineCommand(Command):
         # pipelines is a tuple of names and values. We want the value which is
         # a class object.
         # LMDTODO DIscuss with Jeff - this doesn't feel like it belongs in a method called "add_incremental_arguments"
-        # it feels more like how the command should initialize or execute
+        # we should separate out "initialize pipeline" as a method of this object, called by main before this is called
         Pipeline = pipelines[0][1]
 
         verbose = args.verbose

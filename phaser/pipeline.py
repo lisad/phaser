@@ -2,12 +2,14 @@ from collections import defaultdict
 import inspect
 import logging
 import os
-from pathlib import PosixPath
+from datetime import datetime
+from pathlib import Path, PosixPath
 import traceback
 from .io import read_csv, save_csv, IOObject
 from .exceptions import *
 from .records import Records, Record
 from .constants import *
+
 
 logger = logging.getLogger('phaser')
 logger.addHandler(logging.NullHandler())
@@ -187,7 +189,6 @@ class Context:
         else:
             raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
 
-
 class Pipeline:
     """ Pipeline handles running phases in order.  It also handles I/O and marshalling what
     outputs from phases get used as inputs in later phases.  """
@@ -202,6 +203,11 @@ class Pipeline:
             raise ValueError(f"Working dir {self.working_dir} does not exist.")
         self.source = source or self.__class__.source
         assert self.source is not None and self.working_dir is not None
+
+        timestamp = datetime.today().strftime("%y%m%d-%H%M%S")
+        self.prev_run_dir = Path(self.working_dir / f"prev-{timestamp}")
+        self.errors_and_warnings_file = self.working_dir / "errors_and_warnings.txt"
+
         self.phases = phases or self.__class__.phases
         try:
             iter(self.phases)
@@ -297,6 +303,7 @@ class Pipeline:
         if self.source is None:
             raise ValueError("Pipeline source may not be None")
         next_source = self.source
+        self.move_previous_file(self.errors_and_warnings_file)
         for phase in self.phase_instances:
             destination = self.get_destination(phase)
             self.run_phase(phase, next_source, destination)
@@ -327,12 +334,16 @@ class Pipeline:
         to logs.  Python logging does allow users of a library to send log messages to more than one place while
         customizing log level desired, and we could have drop-row messages as info and warning as warn level so
         these fit very nicely into the standard levels allowing familiar customization.  """
-        print(f"Reporting for phase {phase_name}")
-        for row_num, event_list in self.context.events[phase_name].items():
-            for event in event_list:
-                print(f"{event['type']} in step {event['step_name']}, row {row_num}: message: '{event['message']}'")
-                if event['stack_info']:
-                    print(event['stack_info'])
+        with open(self.errors_and_warnings_file, 'a') as f:
+            f.write("-------------\n")
+            f.write(f"Beginning errors and warnings for {phase_name}\n")
+            f.write("-------------\n")
+            for row_num, event_list in self.context.events[phase_name].items():
+                for event in event_list:
+                    f.write(f"{event['type']} in step {event['step_name']}, row {row_num}: " +
+                            f"message: '{event['message']}'\n")
+                    if event['stack_info']:
+                        f.write(event['stack_info'])
 
     def check_extra_outputs(self, phase):
         """ Check that any extra outputs the phase declared have been added into the context.
@@ -349,8 +360,7 @@ class Pipeline:
             # Since context is passed from Phase to Phase, only save the new ones with to_save=True
             if item.to_save:
                 filename = self.working_dir / f"{item.name}.csv"
-                if os.path.exists(filename):
-                    raise PhaserError(f"Output with name '{filename}' exists.  Aborting before overwrite.")
+                self.move_previous_file(filename)
                 item.save(filename)
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
@@ -360,20 +370,20 @@ class Pipeline:
         Phaser default is to read data from a CSV file. """
         return read_csv(source)
 
+    def move_previous_file(self, file_path):
+        if Path(file_path).is_file():
+            # Move data from previous runs to snapshot dir
+            if not self.prev_run_dir.is_dir():
+                print(f"Moving files from previous runs to {self.prev_run_dir}")
+                self.prev_run_dir.mkdir(exist_ok=False)
+            os.rename(file_path, self.prev_run_dir / os.path.basename(os.path.normpath(file_path)))
+
     def save(self, results, destination):
         """ This method saves the result of the Phase operating on the batch, in phaser's preferred format.
         It should be easy to override this method to save in a different way, using pandas' to_csv, to_excel, to_json
         or a different output entirely.
-
-        CSV defaults chosen:
-        * separator character is ','
-        * encoding is UTF-8
-        * compression will be attempted if filename ends in 'zip', 'gzip', 'tar' etc
         """
-
-        # Use the raw list(dict) form of the data, because DataFrame
-        # construction does something different with a subclass of Sequence and
-        # Mapping that results in the columns being re-ordered.
+        self.move_previous_file(destination)
         save_csv(destination, results)
 
     def get_destination(self, phase):
