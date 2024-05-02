@@ -30,3 +30,6 @@ sphinx:
 python:
    install:
    - requirements: docs/requirements.txt
+   # Install our package before building the docs so autodoc works
+   - method: pip
+     path: .
