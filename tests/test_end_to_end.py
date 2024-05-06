@@ -25,15 +25,12 @@ def test_employee_pipeline(pipeline):
 
 
 def test_reporting(pipeline):
-    f = io.StringIO()
-    with redirect_stdout(f):
-        # Having to grab stdout is probably temporary until we make pipeline more versatile in reporting errors
-        pipeline.run()
-    stdout = f.getvalue()
-    assert "Reporting for phase Validator" in stdout
-    assert "Employee Garak has no ID and inactive" in stdout
-    assert "Reporting for phase Transformer" in stdout
-    assert "'Full name' was added to the row_data and not declared a header'" in stdout
+    pipeline.run()
+    file_data = open(pipeline.errors_and_warnings_file, 'r').read()
+    assert "Beginning errors and warnings for Validator" in file_data
+    assert "Employee Garak has no ID and inactive" in file_data
+    assert "Beginning errors and warnings for Transformer" in file_data
+    assert "'Full name' was added to the row_data and not declared a header'" in file_data
 
 
 def test_line_numbering(pipeline):
