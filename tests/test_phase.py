@@ -3,7 +3,8 @@ import pandas as pd
 from pathlib import Path
 import pytest  # noqa # pylint: disable=unused-import
 
-from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, DataException, dataframe_step
+from phaser import Phase, row_step, Pipeline, Column, IntColumn, read_csv, DataException, dataframe_step, ON_ERROR_WARN, \
+    ON_ERROR_DROP_ROW
 from steps import adds_row
 
 current_path = Path(__file__).parent
@@ -82,7 +83,7 @@ def test_have_and_run_steps(tmpdir):
 
 
 def test_column_error_drops_row():
-    col = IntColumn(name='level', min_value=0, on_error='drop_row')
+    col = IntColumn(name='level', min_value=0, on_error=ON_ERROR_DROP_ROW)
     phase = Phase("test", columns=[col])
     phase.load_data([{'level': -1}])
     phase.do_column_stuff()
@@ -90,7 +91,7 @@ def test_column_error_drops_row():
 
 
 def test_column_error_adds_warning():
-    col = IntColumn(name='level', min_value=0, on_error='warn')
+    col = IntColumn(name='level', min_value=0, on_error=ON_ERROR_WARN)
     phase = Phase("test", columns=[col])
     phase.load_data([{'level': -1}])
     phase.do_column_stuff()

@@ -5,7 +5,8 @@ import inspect
 import logging
 import types
 from collections.abc import Iterable
-from .exceptions import DropRowException, DataErrorException, WarningException
+from .exceptions import DropRowException, DataErrorException, WarningException, PhaserError
+from .constants import ON_ERROR_STOP_NOW, ON_ERROR_COLLECT, ON_ERROR_WARN, ON_ERROR_DROP_ROW
 from .io import is_nan_or_null, safe_is_nan, is_empty
 
 logger = logging.getLogger('phaser')
@@ -27,6 +28,13 @@ TODOs:
 class Column:
     """ Default Column class including for columns of Strings """
     FORBIDDEN_COL_NAME_CHARACTERS = ['\n', '\t']
+
+    ON_ERROR_VALUES = {
+        ON_ERROR_WARN: WarningException,
+        ON_ERROR_DROP_ROW: DropRowException,
+        ON_ERROR_COLLECT: DataErrorException,
+        ON_ERROR_STOP_NOW: Exception
+    }
 
     def __init__(self,
                  name,
@@ -70,13 +78,10 @@ class Column:
         self.allowed_values = allowed_values
         self.save = save
         self.use_exception = DataErrorException
+        if on_error and on_error not in Column.ON_ERROR_VALUES.keys():
+            raise PhaserError(f"Supported on_error values are [{', '.join(Column.ON_ERROR_VALUES.keys())}]")
         if on_error:
-            self.use_exception = {
-                'warn': WarningException,
-                'drop_row': DropRowException,
-                'collect': DataErrorException,
-                'stop_now': Exception
-            }.get(on_error, DataErrorException)
+            self.use_exception = Column.ON_ERROR_VALUES[on_error]
 
         if self.null is False and self.default is not None:
             raise Exception(f"Column {self.name} defined to error on null values, but also provides a non-null default")
@@ -125,6 +130,7 @@ class Column:
         if not self.blank and not value:  # Python boolean casting returns false if string is empty
             raise self.use_exception(f"Column `{self.name}' had blank value")
         if self.allowed_values and not (value in self.allowed_values):
+            print(f"LMD: self use exception {self.use_exception}")
             raise self.use_exception(f"Column '{self.name}' had value {value} not found in allowed values")
 
     def fix_value(self, value):

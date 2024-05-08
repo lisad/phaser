@@ -5,7 +5,7 @@ import pytest
 from dateutil.tz import gettz
 
 from phaser import (Phase, Column, IntColumn, FloatColumn, DateColumn, DateTimeColumn,
-                    DataErrorException, DropRowException)
+                    DataErrorException, DropRowException, ON_ERROR_DROP_ROW, PhaserError)
 
 
 # Constructor tests
@@ -15,8 +15,9 @@ def test_null_forbidden_but_null_default():
 
 
 def test_invalid_on_error():
-    col = Column(name="anything", on_error="Bogus")
-    assert col.use_exception == DataErrorException
+    with pytest.raises(PhaserError) as excinfo:
+        col = Column(name='anything', on_error='BOGUS')
+    assert "Supported on_error values" in excinfo.value.message
 
 
 # Simple feature tests
@@ -227,7 +228,7 @@ def test_date_column_range():
 
 
 def test_column_error_selection():
-    col = Column(name='room', allowed_values=['stateroom', 'cabin'], on_error='drop_row')
+    col = Column(name='room', allowed_values=['stateroom', 'cabin'], on_error=ON_ERROR_DROP_ROW)
     row = {'room': 'single'}
     with pytest.raises(DropRowException):
         col.check_and_cast_value(row)
@@ -243,7 +244,6 @@ def test_column_can_drop_row():
     phase = Phase(columns=[col])
     phase.load_data([{'Shoe size': '42'}, {'Shoe size': None}])
     phase.do_column_stuff()
-    assert phase.context.phase_has_errors(phase) is False
+    assert phase.context.phase_has_errors(phase.name) is False
     assert len(phase.row_data) == 1
     assert phase.row_data[0]['Shoe size'] == 42
-
