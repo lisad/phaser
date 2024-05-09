@@ -130,7 +130,6 @@ class Column:
         if not self.blank and not value:  # Python boolean casting returns false if string is empty
             raise self.use_exception(f"Column `{self.name}' had blank value")
         if self.allowed_values and not (value in self.allowed_values):
-            print(f"LMD: self use exception {self.use_exception}")
             raise self.use_exception(f"Column '{self.name}' had value {value} not found in allowed values")
 
     def fix_value(self, value):
