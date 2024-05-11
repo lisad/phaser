@@ -82,4 +82,7 @@ class RunPipelineCommand(Command):
             self.pipeline.init_source(source, args[source])
 
         print(f"Running pipeline '{self.pipeline.__class__.__name__}'")
-        self.pipeline.run()
+        try:
+            self.pipeline.run()
+        except phaser.DataException as e:
+            print("Error processing data.  ", e.message)

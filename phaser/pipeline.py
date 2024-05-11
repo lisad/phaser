@@ -305,21 +305,24 @@ class Pipeline:
             next_source = destination
 
     def run_phase(self, phase, source, destination):
+        self.context.current_phase = phase.name
+        logger.info(f"Loading input from {source} for {phase.name}")
+        data = Records(self.load(source))
+        phase.load_data(data)
         try:
-            self.context.current_phase = phase.name
-            logger.info(f"Loading input from {source} for {phase.name}")
-            data = Records(self.load(source))
-            phase.load_data(data)
             results = phase.run()
-            self.save(results.for_save(), destination)
-            self.check_extra_outputs(phase)
-            self.save_extra_outputs()
-            logger.info(f"{phase.name} saved output to {destination}")
-            self.report_errors_and_warnings(phase.name)
         except Exception as exc:
             self.context.process_exception(exc, phase, 'None', None)
             if self.context.error_policy in [ON_ERROR_STOP_NOW, ON_ERROR_COLLECT]:
                 raise PhaserError(f"Error in pipeline running {phase.name}") from exc
+
+        if len(results) == 0:
+            raise DataException(f"No rows left to process after phase {phase.name} - terminating early")
+        self.save(results.for_save(), destination)
+        self.check_extra_outputs(phase)
+        self.save_extra_outputs()
+        logger.info(f"{phase.name} saved output to {destination}")
+        self.report_errors_and_warnings(phase.name)
         if self.context.phase_has_errors(phase.name):
             raise DataException(f"Phase '{phase.name}' failed with errors.")
 

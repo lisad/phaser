@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import pytest
-from phaser import Pipeline, Phase, batch_step, PhaserError
+from phaser import Pipeline, Phase, batch_step, PhaserError, DataException
 from fixtures import reconcile_phase_class, null_step_phase
 
 current_path = Path(__file__).parent
@@ -64,3 +64,16 @@ def test_error_report_in_pipeline_around_phase(tmpdir):
     with pytest.raises(PhaserError) as excinfo:
         pipeline.run()
     assert "PhaseWillErrorOnRun" in excinfo.value.message
+
+
+def test_phase_returns_no_rows(tmpdir):
+    class PhaseReturnsNothing(Phase):
+        def run(self):
+            return []
+
+    pipeline = Pipeline(working_dir=tmpdir,
+                        source=(current_path / 'fixture_files' / 'departments.csv'),
+                        phases=[PhaseReturnsNothing(steps=[])])
+    with pytest.raises(DataException) as exc_info:
+        pipeline.run()
+    assert "No rows left" in exc_info.value.message
