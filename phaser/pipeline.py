@@ -104,6 +104,8 @@ class Context:
         return False
 
     def phase_has_errors(self, phase_name):
+        if phase_name not in self.events.keys():
+            raise PhaserError(f"Pass in a phase name to look up errors, {phase_name} not found in context events")
         for event_list in self.events[phase_name].values():
             if any(event['type'] == Context.ERROR for event in event_list):
                 return True
