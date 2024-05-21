@@ -4,8 +4,6 @@ from functools import wraps, partial
 import pandas as pd
 from .exceptions import DataErrorException, DropRowException, PhaserError
 from .pipeline import PHASER_ROW_NUM
-from .column import Column
-from .records import Records
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
@@ -168,54 +166,3 @@ def context_step(func=None, *, extra_sources=None, extra_outputs=None):
 
     wrapper = StepWrapper(CONTEXT_STEP, postprocess=postprocess)
     return wrapper.wrap(func, extra_sources=extra_sources, extra_outputs=extra_outputs)
-
-
-def check_unique(column, strip=True, ignore_case=False):
-    """ This is a step factory that will create a step that tests that all the values in a column
-    are unique with respect to each other.  It does not change any values permanently (strip spaces
-    or lower-case letters).
-    Params
-    column: the column class or name of the column in which all values should be unique.
-    strip(defaults to True): whether to strip spaces from all values
-    ignore_case(defaults to False): whether to lower-case all values
-    """
-    def safe_strip(value):
-        return value.strip() if isinstance(value, str) else value
-
-    column_name = column.name if isinstance(column, Column) else column
-
-    @batch_step
-    def check_unique_step(batch, context):
-        try:
-            values = [row[column_name] for row in batch]
-        except KeyError:
-            raise DataErrorException(f"Check_unique: Some or all rows did not have '{column_name}' present")
-        if strip:
-            values = [safe_strip(value) for value in values]
-        if ignore_case:
-            values = [value.lower() for value in values]
-        if len(set(values)) != len(values):
-            raise DataErrorException(f"Some values in {column_name} were duplicated, so unique check failed")
-        return batch
-
-    return check_unique_step
-
-
-def sort_by(column):
-    """
-    This is a step factory that will create a step that orders rows by the values in a give column.
-    :param column: The column that will be ordered by when the step is run
-    :return: The function that can be added to a phase's list of steps.
-    """
-    if isinstance(column, Column):
-        column_name = column.name
-    elif isinstance(column, str):
-        column_name = column
-    else:
-        raise PhaserError("Error declaring sort_by step - expecting column to be a Column or a column name string")
-
-    @batch_step
-    def sort_by_step(batch, **kwargs):
-        return sorted(batch, key=lambda row: row[column_name])
-
-    return sort_by_step
