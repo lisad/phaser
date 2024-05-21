@@ -56,7 +56,7 @@ class PhaseBase(ABC):
         # If in tests or when phase is being driven directly not via pipeline, setup context.current_phase
         self.context.current_phase = self.name
         if self.row_data is None or self.row_data == []:
-            raise PhaserError("No data loaded yet")
+            raise PhaserError(f"No data loaded before trying to run phase {self.name}")
 
         outputs = {
             output.name: output
