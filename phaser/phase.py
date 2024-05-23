@@ -15,15 +15,21 @@ logger.addHandler(logging.NullHandler())
 
 class PhaseBase(ABC):
 
-    def __init__(self, name, steps=None, context=None, extra_sources=None, extra_outputs=None):
+    def __init__(self,
+                 name,
+                 steps=None,
+                 context=None,
+                 renumber=False,
+                 extra_sources=None,
+                 extra_outputs=None):
         self.name = name or self.__class__.__name__
         self.context = context or Context()
         self.steps = steps or self.__class__.steps
+        self.renumber = renumber
         self.extra_sources = extra_sources or getattr(self.__class__, 'extra_sources', [])
         self.extra_outputs = extra_outputs or getattr(self.__class__, 'extra_outputs', [])
         self.headers = None
         self.row_data = None
-        self.preserve_row_numbers = True
 
     def load_data(self, data):
         """ Call this method to pass record-oriented data to the Phase before calling 'run'
@@ -112,11 +118,11 @@ class PhaseBase(ABC):
             elif row_size_diff < 0:
                 self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
 
-            if self.preserve_row_numbers:
+            if self.renumber:
+                self.row_data = Records([row for row in new_row_values], preserve_numbers=False)
+            else:
                 preserve_row_num = self.row_data.get_max_row_num()
                 self.row_data = Records([row for row in new_row_values], number_from=preserve_row_num + 1)
-            else:
-                self.row_data = Records([row for row in new_row_values], preserve_numbers=False)
         except DataException as exc:
             self.context.process_exception(exc, self, step, row=exc.row)
         except Exception as exc:
@@ -133,28 +139,6 @@ class PhaseBase(ABC):
             raise PhaserError("DropRowException can't be handled in a context_step") from dre
         except Exception as exc:
             self.context.process_exception(exc, self, step, row=None)
-
-
-class ReshapePhase(PhaseBase):
-    """ Operations that combine rows or split rows, and thus arrive at a different number of rows (beyond just
-    dropping bad data), don't work well in a regular Phase and are hard to do diffs for.  This class solves
-    just the problem of merging and splitting up rows.  Some reshape operations include
-    * group by a field (and sum, or average, or apply another operation to the numeric fields associated)
-    * 'spread' functions
-
-    Note that just dropping or filtering rows one-by-one, or adding or removing columns no matter how much
-    other column values are involved, can be done in a regular phase, with the additional features like 'diff'
-    that a regular phase provides.
-    """
-
-    def __init__(self, name=None, steps=None, context=None, extra_sources=None, extra_outputs=None):
-        super().__init__(name, steps=steps, context=context, extra_sources=extra_sources, extra_outputs=extra_outputs)
-        self.preserve_row_numbers = False
-
-    def run(self):
-        # Break down run into load, steps, error handling, save and delegate
-        self.run_steps()
-        return self.row_data
 
 
 class Phase(PhaseBase):
@@ -215,10 +199,22 @@ class Phase(PhaseBase):
     steps = []
     columns = []
 
-    def __init__(self, name=None, steps=None, columns=None, context=None, extra_sources=None, extra_outputs=None):
+    def __init__(self,
+                 name=None,
+                 steps=None,
+                 columns=None,
+                 context=None,
+                 renumber=False,
+                 extra_sources=None,
+                 extra_outputs=None):
         """ Instantiate (or subclass) a Phase with an ordered list of steps (they will be called in this order) and
         with an ordered list of columns (they will do their checks and type casting in this order).  """
-        super().__init__(name, steps=steps, context=context, extra_sources=extra_sources, extra_outputs=extra_outputs)
+        super().__init__(name,
+                         steps=steps,
+                         context=context,
+                         renumber=renumber,
+                         extra_sources=extra_sources,
+                         extra_outputs=extra_outputs)
         self.columns = columns or self.__class__.columns
         if isinstance(self.columns, Column):
             self.columns = [self.columns]
