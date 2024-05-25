@@ -1,4 +1,6 @@
 from pathlib import Path
+
+import pandas
 import pytest
 
 from phaser import (Phase, row_step, batch_step, context_step,
@@ -371,3 +373,15 @@ def test_extra_outputs_from_df_step():
         12: 'A dozen',
         13: "Baker's dozen",
     }
+
+
+def test_dataframe_step_skip_check_size():
+    @dataframe_step(check_size=False)
+    def double_rows(df):
+        return pandas.concat([df, df.copy()], ignore_index=True, sort=False)
+
+    phase = Phase(steps=[double_rows])
+    phase.load_data([{'id': 1, 'val': 10}])
+    phase.run_steps()
+    assert len(phase.row_data) == 2
+    assert len(phase.context.get_events(phase)) == 0  # No dropped row warning

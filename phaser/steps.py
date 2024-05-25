@@ -113,7 +113,7 @@ def row_step(func=None, *, extra_sources=None, extra_outputs=None):
     wrapper = StepWrapper(ROW_STEP, postprocess=postprocess)
     return wrapper.wrap(func, extra_sources=extra_sources, extra_outputs=extra_outputs)
 
-def batch_step(func=None, *, extra_sources=None, extra_outputs=None):
+def batch_step(func=None, *, extra_sources=None, extra_outputs=None, check_size=False):
     """ This decorator allows the Phase run logic to determine that this step needs to run on the
     whole batch by adding a 'probe' response
     """
@@ -127,12 +127,12 @@ def batch_step(func=None, *, extra_sources=None, extra_outputs=None):
         if not isinstance(result, Sequence):
             raise PhaserError(
                 f"Step {step_function} returned a {result.__class__} rather than a list of rows")
-        return result
+        return result, check_size
 
     wrapper = StepWrapper(BATCH_STEP, postprocess=postprocess, handle_exception=handle_exception)
     return wrapper.wrap(func, extra_sources=extra_sources, extra_outputs=extra_outputs)
 
-def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_outputs=None):
+def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_outputs=None, check_size=False):
     def handle_exception(step_function, exc):
         if isinstance(exc, DropRowException):
             raise PhaserError("DropRowException can't be handled in steps operating on bulk data ") from exc
@@ -148,7 +148,7 @@ def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_o
         if not isinstance(result, pd.DataFrame):
             raise PhaserError(
                 f"Step {step_function} returned a {result.__class__} rather than a pandas DataFrame")
-        return result.to_dict(orient='records')
+        return result.to_dict(orient='records'), check_size
 
     wrapper = StepWrapper(
         DATAFRAME_STEP,

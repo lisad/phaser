@@ -116,8 +116,10 @@ class Context:
     def get_events(self, phase=None, row_num=None):
         if row_num and phase:
             return self.events[phase.name][row_num]
+        elif phase:
+            return self.events[phase.name]
         else:
-            raise PhaserError("Case not handled yet, not sure how this code is going to shake out")
+            return self.events
 
     def add_variable(self, name, value):
         """ Add variables that are global to the pipeline and accessible to steps and internal methods """
