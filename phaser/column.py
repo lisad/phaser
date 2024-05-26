@@ -149,6 +149,41 @@ class Column:
         return value
 
 
+class BooleanColumn(Column):
+    TRUE_VALUES = ['t', 'true', '1', 'yes', 'y']
+    FALSE_VALUES = ['f', 'false', '0', 'no', 'n']
+
+    def __init__(self,
+                 name,
+                 required=True,
+                 null=False,  #Test this being either way
+                 blank=False,
+                 default=None,
+                 fix_value_fn=None,
+                 rename=None,
+                 save=True,
+                 on_error=None):
+        super().__init__(name,
+                         required=required,
+                         null=null,
+                         blank=blank,
+                         default=default,
+                         fix_value_fn=fix_value_fn,
+                         rename=rename,
+                         allowed_values=None,
+                         save=save,
+                         on_error=on_error)
+
+    def cast(self, value):
+        if is_nan_or_null(value) or is_empty(value):
+            return None
+        if value.lower() in BooleanColumn.TRUE_VALUES:
+            return True
+        if value.lower() in BooleanColumn.FALSE_VALUES:
+            return False
+        raise self.use_exception(f"Value {value} not recognized as a boolean value")
+
+
 class IntColumn(Column):
 
     def __init__(self,
