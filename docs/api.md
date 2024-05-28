@@ -17,13 +17,31 @@
   :members:
   :inherited-members:
 
+.. autoclass:: phaser.Context
+  :members:
+```
+
+## Columns
+
+```{eval-rst}
 .. autoclass:: phaser.Column
   :members:
   :inherited-members:
 
 .. autoclass:: phaser.IntColumn
-  :members:
-  :inherited-members:
+
+.. autoclass:: phaser.FloatColumn
+
+.. autoclass:: phaser.DateColumn
+
+.. autoclass:: phaser.DateTimeColumn
+```
+
+## Exceptions
+
+```{eval-rst}
+.. autoexception:: phaser.DropRowException
+
 ```
 
 ## Steps

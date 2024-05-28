@@ -26,7 +26,7 @@ have datatype casting and name canonicalization done automatically.
 # but that may be more relevant for smaller modules.  We should also consider readthedocs.io but that's a big
 # commitment to build for that.
 
-from phaser.pipeline import Pipeline
+from phaser.pipeline import Pipeline, Context
 from phaser.constants import PHASER_ROW_NUM, ON_ERROR_WARN, ON_ERROR_COLLECT, ON_ERROR_DROP_ROW, ON_ERROR_STOP_NOW
 from phaser.exceptions import PhaserError, DataErrorException, DataException, DropRowException, WarningException
 from phaser.phase import Phase, ReshapePhase

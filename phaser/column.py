@@ -26,7 +26,24 @@ TODOs:
 
 
 class Column:
-    """ Default Column class including for columns of Strings """
+    """
+    Sets up a Column instance ready to do type, format, null and default checking on values, as well as
+    renaming the column name itself to chosen version.  This column is useful for fields with Strings as values.
+
+    :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
+    :param required: If the column is required, the phase will present errors if it is missing.
+    :param null: Checks all values of the column for null values to raise as errors.
+    :param default: A default value to apply if a column value is null. Not compatible with "null=False"
+    :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
+    :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
+        the preferred name of this column. Upon loading the data, all rows that have columns matching
+        any alternate name in this set will have a column with the preferred name with the same data in
+        it. In other words, any data in a column name in `rename` will end up in a column named `name`.
+    :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
+    :param save: if True, column is saved at the end of the phase; if not it is omitted.
+    :param on_error: Choose from 'warn', 'drop_row', 'collect', 'stop_now' to pick how errors checking or
+        fixing this column affect the pipeline.
+    """
     FORBIDDEN_COL_NAME_CHARACTERS = ['\n', '\t']
 
     ON_ERROR_VALUES = {
@@ -47,24 +64,6 @@ class Column:
                  allowed_values=None,
                  save=True,
                  on_error=None):
-        """
-        Sets up a Column instance ready to do type, format, null and default checking on values, as well as
-        renaming the column name itself to chosen version.
-
-        :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
-        :param required: If the column is required, the phase will present errors if it is missing.
-        :param null: Checks all values of the column for null values to raise as errors.
-        :param default: A default value to apply if a column value is null. Not compatible with "null=False"
-        :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
-        :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
-            the preferred name of this column. Upon loading the data, all rows that have columns matching
-            any alternate name in this set will have a column with the preferred name with the same data in
-            it. In other words, any data in a column name in `rename` will end up in a column named `name`.
-        :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
-        :param save: if True, column is saved at the end of the phase; if not it is omitted.
-        :param on_error: Choose from 'warn', 'drop_row', 'collect', 'stop_now' to pick how errors checking or
-            fixing this column affect the pipeline.
-        """
         self.name = str(name).strip()
         assert all(character not in name for character in Column.FORBIDDEN_COL_NAME_CHARACTERS)
         self.required = required
@@ -89,6 +88,7 @@ class Column:
     def check_required(self, data_headers):
         """
         If this column is required, then checks the list of headers of the dataset to see if its name is there.
+
         :param data_headers: just the column headers found in data
         :return: None
         """
@@ -150,6 +150,27 @@ class Column:
 
 
 class IntColumn(Column):
+    """
+    Sets up a Column instance ready to do type, format, null and default checking on values, as well as
+    renaming the column name itself to chosen version.
+
+    :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
+    :param required: If the column is required, the phase will present errors if it is missing.
+    :param null: Checks all values of the column for null values to raise as errors.
+    :param default: A default value to apply if a column value is null. Not compatible with "null=False"
+    :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
+    :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
+        the preferred name of this column. Upon loading the data, all rows that have columns matching
+        any alternate name in this set will have a column with the preferred name with the same data in
+        it. In other words, any data in a column name in `rename` will end up in a column named `name`.
+    :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
+        To supply a range, use min_value and max_value instead.  NOTE: this is checked after casting,
+        so to check allowed values of a column specified to cast to int, such as IntColumn, check for
+        values like [1, 2, 3] rather than ["1", "2", "3"]
+    :param save: if True, column is saved at the end of the phase; if not it is omitted.
+    :param min_value: If data is below this value, column raises errors
+    :param max_value: If data is above this value, column raises errors
+    """
 
     def __init__(self,
                  name,
@@ -164,27 +185,6 @@ class IntColumn(Column):
                  on_error=None,
                  min_value=None,
                  max_value=None):
-        """
-        Sets up a Column instance ready to do type, format, null and default checking on values, as well as
-        renaming the column name itself to chosen version.
-
-        :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
-        :param required: If the column is required, the phase will present errors if it is missing.
-        :param null: Checks all values of the column for null values to raise as errors.
-        :param default: A default value to apply if a column value is null. Not compatible with "null=False"
-        :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
-        :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
-            the preferred name of this column. Upon loading the data, all rows that have columns matching
-            any alternate name in this set will have a column with the preferred name with the same data in
-            it. In other words, any data in a column name in `rename` will end up in a column named `name`.
-        :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
-            To supply a range, use min_value and max_value instead.  NOTE: this is checked after casting,
-            so to check allowed values of a column specified to cast to int, such as IntColumn, check for
-            values like [1, 2, 3] rather than ["1", "2", "3"]
-        :param save: if True, column is saved at the end of the phase; if not it is omitted.
-        :param min_value: If data is below this value, column raises errors
-        :param max_value: If data is above this value, column raises errors
-        """
         super().__init__(name,
                          required=required,
                          null=null,
@@ -212,6 +212,7 @@ class IntColumn(Column):
 
 
 class FloatColumn(IntColumn):
+    """ Defines a column that accepts a float value. See `IntColumn` for parameters. """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
