@@ -100,6 +100,7 @@ class Column:
         """ This checks to see if the value is there before attempting to cast it.  It does some checks before
         casting the value to a datatype, and some other checks afterward. .  Most of the time, a custom
         algorithm for converting a value to a specific datatype can just override the simpler 'cast' method.
+
         :param row: entire row is passed for simplicity elsewhere and in case this needs more scope
         """
         value = row.get(self.name)
@@ -150,6 +151,10 @@ class Column:
 
 
 class BooleanColumn(Column):
+    """
+    Validates truthy and falsey values, as defined in TRUE_VALUES and FALSE_VALUES.
+    """
+
     TRUE_VALUES = ['t', 'true', '1', 'yes', 'y']
     FALSE_VALUES = ['f', 'false', '0', 'no', 'n']
 
@@ -257,6 +262,28 @@ class FloatColumn(IntColumn):
 
 
 class DateTimeColumn(Column):
+    """
+    Sets up a DateColumn instance ready to do type, format, null and default checking on values, as well as
+    renaming the column name itself to chosen version.
+
+    :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
+    :param required: If the column is required, the phase will present errors if it is missing.
+    :param null: Checks all values of the column for null values to raise as errors.
+    :param default: A default value to apply if a column value is null. Not compatible with "null=False"
+    :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
+    :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
+        the preferred name of this column. Upon loading the data, all rows that have columns matching
+        any alternate name in this set will have a column with the preferred name with the same data in
+        it. In other words, any data in a column name in `rename` will end up in a column named `name`.
+    :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
+        To supply a range, use min_value and max_value instead.
+    :param save: if True, column is saved at the end of the phase; if not it is omitted.
+    :param min_value: If data is below this value, column raises errors
+    :param max_value: If data is above this value, column raises errors
+    :param date_format_code:  Formatting string used by datetime.strptime to parse string to date,
+        e.g. '%d/%m/%y %H:%M:%S.%f', '%d/%m/%Y' or '%m/%d/%y'.  If left None, class will use dateutil.parser.
+    :param default_tz: If timezone is not specified in value, assume this timezone applies.
+    """
 
     def __init__(self,
                  name,
@@ -273,28 +300,6 @@ class DateTimeColumn(Column):
                  max_value=None,
                  date_format_code=None,
                  default_tz=None):
-        """
-        Sets up a DateColumn instance ready to do type, format, null and default checking on values, as well as
-        renaming the column name itself to chosen version.
-
-        :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
-        :param required: If the column is required, the phase will present errors if it is missing.
-        :param null: Checks all values of the column for null values to raise as errors.
-        :param default: A default value to apply if a column value is null. Not compatible with "null=False"
-        :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
-        :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
-            the preferred name of this column. Upon loading the data, all rows that have columns matching
-            any alternate name in this set will have a column with the preferred name with the same data in
-            it. In other words, any data in a column name in `rename` will end up in a column named `name`.
-        :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
-            To supply a range, use min_value and max_value instead.
-        :param save: if True, column is saved at the end of the phase; if not it is omitted.
-        :param min_value: If data is below this value, column raises errors
-        :param max_value: If data is above this value, column raises errors
-        :param date_format_code:  Formatting string used by datetime.strptime to parse string to date,
-            e.g. '%d/%m/%y %H:%M:%S.%f', '%d/%m/%Y' or '%m/%d/%y'.  If left None, class will use dateutil.parser.
-        :param default_tz: If timezone is not specified in value, assume this timezone applies.
-        """
         super().__init__(name,
                          required=required,
                          null=null,
@@ -333,6 +338,8 @@ class DateTimeColumn(Column):
 
 
 class DateColumn(DateTimeColumn):
+    """ A column that supports the date value only (no time). See `DateTimeColumn` for parameters. """
+
     def cast(self, value):
         value = super().cast(value)
         return datetime.date(value)

@@ -28,6 +28,8 @@
   :members:
   :inherited-members:
 
+.. autoclass:: phaser.BooleanColumn
+
 .. autoclass:: phaser.IntColumn
 
 .. autoclass:: phaser.FloatColumn

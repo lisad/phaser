@@ -38,6 +38,7 @@ been programmed functionally are therefore available to declare.
 
 Columns and features available so far:
 
+* [BooleanColumn](#BooleanColumn)
 * [IntColumn](#IntColumn), [FloatColumn](#FloatColumn)
 * [DateColumn](#DateColumn), [DateTimeColumn](#DateTimeColumn)
 * Range validation, list of allowed values
