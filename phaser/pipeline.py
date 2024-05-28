@@ -30,7 +30,9 @@ def _extract_row_num(row):
         return 'none'
     if isinstance(row, Record):
         return row.row_num
-    return row.get(PHASER_ROW_NUM, 'unknown')
+    if isinstance(row, dict):
+        return row.get(PHASER_ROW_NUM, 'unknown')
+    raise PhaserError("Unrecognized data type for row (can handle Record or dict)")
 
 
 class Context:

@@ -61,6 +61,20 @@ class Records(UserList):
         return self.max_row_num
 
     def _recordize(self, record):
+        def fix_row_num(row_num):
+            if row_num is None:
+                return next(self.row_num_gen)
+            if not isinstance(row_num, bool) and isinstance(row_num, int) and row_num > 0:
+                return row_num
+            elif isinstance(row_num, str):
+                try:
+                    if int(row_num) > 0:
+                        return int(row_num)
+                except ValueError:
+                    pass # to phaser error
+
+            raise PhaserError(f"Data received with {PHASER_ROW_NUM} value not an integer")
+
         if isinstance(record, Record):
             if not self.preserve_numbers:
                 record.row_num = next(self.row_num_gen)
@@ -69,11 +83,7 @@ class Records(UserList):
 
         else:
             if PHASER_ROW_NUM in record and self.preserve_numbers:
-                row_num = record.pop(PHASER_ROW_NUM)
-                if row_num is None:
-                    row_num = next(self.row_num_gen)
-                else:
-                    row_num = int(row_num)
+                row_num = fix_row_num(record.pop(PHASER_ROW_NUM))
             else:
                 row_num = next(self.row_num_gen)
 
@@ -100,7 +110,7 @@ class Records(UserList):
 class Record(UserDict):
     def __init__(self, row_num, record):
         super().__init__(record)
-        self.row_num = row_num
+        self.row_num = int(row_num)
 
     def __repr__(self):
         return f"(row_num={self.row_num}, data={super().__repr__()})"

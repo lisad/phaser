@@ -83,3 +83,9 @@ def test_do_not_save_nans(tmpdir):
     save_csv(tmpdir / 'save_nans.csv', data)
     result = read_text(tmpdir / 'save_nans.csv')
     assert "nan" not in result.lower()
+
+
+def test_pound_start_line(tmpdir):
+    filename = tmpdir / 'pound_start_line_test.csv'
+    write_text(filename,"Label,location,type\n#1,cabinet,yarn\n#2,garage,fiber")
+    assert dict(read_csv(filename)[0]) == {'Label': "#1", 'location':'cabinet', 'type': 'yarn'}

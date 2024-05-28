@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 from fixtures import reconcile_phase_class
-from phaser import Phase, row_step, batch_step, WarningException, DropRowException, ReshapePhase, DataErrorException, \
+from phaser import Phase, row_step, batch_step, WarningException, DropRowException, DataErrorException, \
     Pipeline, ON_ERROR_WARN, ON_ERROR_STOP_NOW
 
 current_path = Path(__file__).parent
@@ -178,19 +178,20 @@ def test_extra_fields_warn_once():
     assert len(phase.context.warnings) == 1
 
 
-def test_row_step_in_reshape_can_report_row_num_error():
+def test_row_step_in_renumbering_phase_can_report_row_num_error():
     @row_step
     def report_row_error(row, context):
         if row['floor'] == 13:
             raise DataErrorException("Floor cannot be #13")
         return row
 
-    phase = ReshapePhase(steps=[report_row_error])
+    phase = Phase(steps=[report_row_error], renumber=True)
     phase.load_data([{'floor': 1}, {'floor': 13}])
     phase.run()
     row_events = phase.context.get_events(phase=phase, row_num=2)
     assert len(row_events) == 1
     assert 'Floor cannot' in row_events[0]['message']
+    assert row_events[0]['row_num'] == 2
 
 
 @batch_step

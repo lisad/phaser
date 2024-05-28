@@ -1,18 +1,17 @@
 from pathlib import Path
 import pytest
 
-from phaser import (check_unique, Phase, row_step, batch_step, context_step, Pipeline, sort_by, IntColumn,
-                    DataErrorException, DropRowException, PhaserError, read_csv, dataframe_step,
+from phaser import (Phase, row_step, batch_step, context_step,
+                    DropRowException, PhaserError, dataframe_step,
                     PHASER_ROW_NUM, ON_ERROR_STOP_NOW)
 from phaser.io import ExtraMapping
 import phaser
-from fixtures import test_data_phase_class
 from steps import sum_bonuses
 
 current_path = Path(__file__).parent
 
 
-# Tests of the operation of steps
+# Tests of the operation of step decorators and internal step functionality
 
 # Row steps
 
@@ -129,7 +128,6 @@ def test_batch_step_missing_param():
     assert phase.row_data == [{'a': 'c'}]
 
 
-#@pytest.mark.skip("Needs to be fixed - when we add a row to a Records instance it should have a row number")
 def test_batch_step_can_add_row():
     @batch_step
     def add_row(batch, context):
@@ -188,88 +186,6 @@ def test_extra_outputs_to_batch_step():
         12: 'A dozen',
         13: "Baker's dozen",
     }
-
-
-# Tests of the check_unique step
-
-
-def test_builtin_step():
-    phase = Phase(steps=[check_unique('crew id')])
-    phase.load_data(read_csv(current_path / 'fixture_files' / 'crew.csv'))
-    phase.run_steps()
-
-
-def test_check_unique_fails(test_data_phase_class):
-    phase = test_data_phase_class()
-    phase.context.error_policy = ON_ERROR_STOP_NOW
-    phase.load_data([{'id': '1'}, {'id': '1'}])
-    with pytest.raises(DataErrorException):
-        phase.run_steps()
-
-
-def test_check_unique_strips_spaces():
-    fn = check_unique('id')
-    with pytest.raises(DataErrorException):
-        fn([{'id': " 1 "}, {'id': '1'}])
-
-
-def test_check_unique_without_stripping():
-    fn = check_unique('name', strip=False)
-    fn([{'name': '  Sam'}, {'name': 'Sam'}])
-
-
-def test_check_unique_case_sensitive():
-    fn = check_unique('dept')
-    fn([{'dept': "ENG"}, {'dept': 'Sales'}, {'dept': "eng"}, {'dept': None}])
-
-
-def test_check_unique_case_insensitive():
-    fn = check_unique('dept', ignore_case=True)
-    with pytest.raises(DataErrorException):
-        fn([{'dept': "ENG"}, {'dept': 'Sales'}, {'dept': "Eng"}])
-
-
-def test_check_unique_null_values():
-    fn = check_unique('id')
-    fn([{'id': "1"}, {'id': "2"}, {'id': None}])
-
-
-def test_check_unique_int_values():
-    fn = check_unique('id')
-    fn([{'id': 1}, {'id': 2}, {'id': 3}])   # passes
-    with pytest.raises(DataErrorException):
-        fn([{'id': 1}, {'id': 2}, {'id': 2}])
-
-
-def test_check_unique_takes_column_instance():
-    col = IntColumn(name='id')
-    fn = check_unique(col)
-    fn([{'id': 1}, {'id': 2}, {'id': 3}])
-
-
-def test_check_unique_is_helpful_when_column_missing():
-    fn = check_unique('crew id')
-    with pytest.raises(DataErrorException) as error_info:
-        fn([{'id': 1}, {'id': 2}, {'id': 3}])
-    assert "Check_unique: Some or all rows did not have 'crew id' present" in error_info.value.message
-
-
-# Testing builtin sort_by step
-
-
-def test_sort_with_col_name():
-    phase = Phase(steps=[sort_by("id")])
-    phase.load_data([{'id': 1}, {'id': 3}, {'id': 2}, {'id': 0}])
-    phase.run_steps()
-    assert all([phase.row_data[i]['id'] == i for i in range(4)])
-
-
-def test_sort_with_col_obj():
-    id_col = IntColumn(name='id')
-    phase = Phase(columns=[id_col], steps=[sort_by(id_col)])
-    phase.load_data([{'id': 1}, {'id': 3}, {'id': 2}, {'id': 0}])
-    phase.run_steps()
-    assert all([phase.row_data[i]['id'] == i for i in range(4)])
 
 
 # Testing context steps
