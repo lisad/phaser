@@ -171,7 +171,12 @@ def test_boolean_required():
 
 def test_boolean_not_null():
     with pytest.raises(DataErrorException):
-        BooleanColumn('test', null=False).check_and_cast_value({'id': 1, 'present': None})
+        BooleanColumn('test', null=False).check_and_cast_value({'id': 1, 'test': None})
+
+
+def test_boolean_null():
+    # Should not raise an exception
+    BooleanColumn('test', null=True).check_and_cast_value({'id': 1, 'test': None})
 
 # Testing IntColumn
 

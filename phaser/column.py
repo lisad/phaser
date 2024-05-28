@@ -156,8 +156,7 @@ class BooleanColumn(Column):
     def __init__(self,
                  name,
                  required=True,
-                 null=False,  #Test this being either way
-                 blank=False,
+                 null=False,
                  default=None,
                  fix_value_fn=None,
                  rename=None,
@@ -166,7 +165,7 @@ class BooleanColumn(Column):
         super().__init__(name,
                          required=required,
                          null=null,
-                         blank=blank,
+                         blank=True,   # Ignores blank parameter - only null=T/F applies
                          default=default,
                          fix_value_fn=fix_value_fn,
                          rename=rename,
