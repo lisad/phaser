@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 from dateutil.tz import gettz
 
-from phaser import (Phase, Column, IntColumn, FloatColumn, DateColumn, DateTimeColumn,
+from phaser import (Phase, Column, IntColumn, FloatColumn, DateColumn, DateTimeColumn, BooleanColumn,
                     DataErrorException, DropRowException, ON_ERROR_DROP_ROW, PhaserError)
 
 
@@ -145,6 +145,39 @@ def test_curious_quote_situation(tmpdir):
     assert phase.row_data[0]['name'] == 'James T. Kirk'
 
 
+# Testing BooleanColumn
+
+boolean_tests = [
+    ("T", True),
+    ("t", True),
+    ("True", True),
+    ("Yes", True),
+    ("", None),
+    (None, None),
+]
+
+
+@pytest.mark.parametrize("value,cast_value", boolean_tests)
+def test_boolean_column_casts(value, cast_value):
+    assert BooleanColumn("test").cast(value) == cast_value
+
+
+def test_boolean_required():
+    phase = Phase(columns=[BooleanColumn("test", required=True)])
+    phase.load_data([{'id': 1}])
+    with pytest.raises(DataErrorException):
+        phase.do_column_stuff()
+
+
+def test_boolean_not_null():
+    with pytest.raises(DataErrorException):
+        BooleanColumn('test', null=False).check_and_cast_value({'id': 1, 'test': None})
+
+
+def test_boolean_null():
+    # Should not raise an exception
+    BooleanColumn('test', null=True).check_and_cast_value({'id': 1, 'test': None})
+
 # Testing IntColumn
 
 
@@ -167,6 +200,7 @@ def test_cast_nans_and_nones():
     assert col.cast("NULL") is None
     assert col.cast(None) is None
     assert col.cast("") is None
+
 
 def test_cast_when_not_present():
     col = IntColumn(name="Shoe size", required=False)

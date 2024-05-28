@@ -32,7 +32,7 @@ from phaser.exceptions import PhaserError, DataErrorException, DataException, Dr
 from phaser.phase import Phase
 from phaser.steps import row_step, batch_step, dataframe_step, context_step
 from phaser.builtin_steps import check_unique, sort_by, filter_rows
-from phaser.column import Column, IntColumn, DateColumn, DateTimeColumn, FloatColumn
+from phaser.column import Column, IntColumn, DateColumn, DateTimeColumn, FloatColumn, BooleanColumn
 from phaser.io import read_csv, save_csv
 
 __version__ = 0.1
