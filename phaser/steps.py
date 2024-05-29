@@ -53,6 +53,12 @@ class StepWrapper():
                 if __probe__ == PROBE_VALUE:
                     return self.probe  # Allows Phase to probe a step for how to call it
 
+                # Note that context will always be passed in during regular operation of phases and pipelines. HOWEVER,
+                # we want the DX for tests of wrapped steps to just be simple - call the step with a batch or a row
+                # and check the return value.  So instead, we check for context being correct when we need it.
+                if context is not None and not "Context" in str(context.__class__):
+                    raise PhaserError("A step requiring extra data sources cannot be run without a context")
+
                 try:
                     outputs = outputs or {}
                     kwargs = {}
@@ -62,6 +68,7 @@ class StepWrapper():
                     if self.probe != CONTEXT_STEP:
                         if 'context' in parameters:
                             kwargs['context'] = context
+
 
                     for source in extra_sources:
                         kwargs[source] = context.get_source(source)
