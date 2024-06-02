@@ -10,7 +10,7 @@ from phaser import (Phase, Column, IntColumn, FloatColumn, DateColumn, DateTimeC
 
 # Constructor tests
 def test_null_forbidden_but_null_default():
-    with pytest.raises(Exception):
+    with pytest.raises(PhaserError):
         Column(name='bogus', null=False, default='homer')
 
 
@@ -18,6 +18,12 @@ def test_invalid_on_error():
     with pytest.raises(PhaserError) as excinfo:
         col = Column(name='anything', on_error='BOGUS')
     assert "Supported on_error values" in excinfo.value.message
+
+
+@pytest.mark.parametrize('column_type', [IntColumn, FloatColumn, DateColumn, DateTimeColumn, BooleanColumn])
+def test_non_string_column_types_dont_have_empty_param(column_type):
+    with pytest.raises(TypeError):
+        column_type(name='inconsistent', null=False, blank=True)
 
 
 # Simple feature tests
@@ -33,6 +39,13 @@ def test_null_forbidden():
     col = Column('employeeid', null=False)
     with pytest.raises(DataErrorException):
         col.check_and_cast_value({'employeeid': None})
+
+
+@pytest.mark.parametrize('value', ["", " ", "\t"])
+def test_blank_forbidden(value):
+    col = Column(name='not_blank', null=False, blank=False)
+    with pytest.raises(DataErrorException):
+        col.check_and_cast_value({'not_blank': value})
 
 
 def test_default_value():
@@ -85,7 +98,7 @@ def test_multiple_functions():
     assert col.fix_value("  ACTIVE  ") == "Active  "
 
 
-# Test naming fetaures
+# Test naming features
 
 
 def test_rename():
