@@ -111,12 +111,15 @@ class PhaseBase(ABC):
 
     def execute_batch_step(self, step, outputs={}):
         try:
-            new_row_values = step(self.row_data, context=self.context, outputs=outputs)
-            row_size_diff = len(self.row_data) - len(new_row_values)
-            if row_size_diff > 0:
-                self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
-            elif row_size_diff < 0:
-                self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
+            new_row_values, check_size = step(self.row_data, context=self.context, outputs=outputs)
+            if check_size:
+                # We have to get the check_size parameter from the wrapped function, but process it here
+                # because here we have access to the context.
+                row_size_diff = len(self.row_data) - len(new_row_values)
+                if row_size_diff > 0:
+                    self.context.add_warning(step, None, f"{row_size_diff} rows were dropped by step")
+                elif row_size_diff < 0:
+                    self.context.add_warning(step, None, f"{abs(row_size_diff)} rows were ADDED by step")
 
             if self.renumber:
                 self.row_data = Records([row for row in new_row_values], preserve_numbers=False)

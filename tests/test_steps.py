@@ -1,4 +1,6 @@
 from pathlib import Path
+
+import pandas
 import pytest
 
 from phaser import (Phase, row_step, batch_step, context_step,
@@ -40,18 +42,22 @@ def test_context_available_to_step():
     transformer.run_steps()
     assert transformer.row_data[0]['secret'] == "I'm always angry"
 
-def test_extra_sources_to_row_step():
-    @row_step(extra_sources=['extra'])
-    def append_extra_to_row(row, extra):
-        row['extra'] = extra[row['number']]
-        return row
 
-    extra = ExtraMapping('extra', {12: 'A dozen', 13: "Baker's dozen"})
+@row_step(extra_sources=['extra'])
+def append_extra_to_row(row, extra):
+    row['extra'] = extra[row['number']]
+    return row
+
+
+EXTRA_DATA = ExtraMapping('extra', {12: 'A dozen', 13: "Baker's dozen"})
+
+
+def test_extra_sources_to_row_step():
     phase = Phase(
         steps=[append_extra_to_row],
-        extra_sources=[extra],
+        extra_sources=[EXTRA_DATA],
     )
-    phase.context.set_source('extra', extra)
+    phase.context.set_source('extra', EXTRA_DATA)
     phase.load_data([{'number': 12}, {'number': 13}])
     phase.run_steps()
     assert phase.row_data == [
@@ -59,12 +65,22 @@ def test_extra_sources_to_row_step():
         {'number': 13, 'extra': "Baker's dozen"},
     ]
 
-def test_extra_outputs_to_row_step():
-    @row_step(extra_outputs=['extra'])
-    def collect_extra_from_row(row, extra):
-        extra[row['number']] = row['extra']
-        return row
 
+def test_extra_sources_but_no_context():
+    # When the user tries to test a step like _append_extra_to_row_ and forgets to add a context, we should
+    # provide a helpful error.
+    with pytest.raises(PhaserError) as exc_info:
+        append_extra_to_row({'original': 'data'}, EXTRA_DATA)
+    assert "without a context" in exc_info.value.message
+
+
+@row_step(extra_outputs=['extra'])
+def collect_extra_from_row(row, extra):
+    extra[row['number']] = row['extra']
+    return row
+
+
+def test_extra_outputs_to_row_step():
     extra = ExtraMapping('extra', {})
     phase = Phase(
         steps=[collect_extra_from_row],
@@ -81,6 +97,15 @@ def test_extra_outputs_to_row_step():
         12: 'A dozen',
         13: "Baker's dozen",
     }
+
+
+def test_extra_outputs_but_no_context():
+    # When the user tries to test a step like _collect_extra_from_row_ and forgets to pass a context to add
+    # extra outputs to, we need to test for that and return a helpful error.
+    with pytest.raises(PhaserError) as exc_info:
+        collect_extra_from_row({'id': 1, 'what': 'the row'}, ExtraMapping('extra', {}))
+    assert "without a context" in exc_info.value.message
+
 
 # Batch steps
 
@@ -371,3 +396,15 @@ def test_extra_outputs_from_df_step():
         12: 'A dozen',
         13: "Baker's dozen",
     }
+
+
+def test_dataframe_step_skip_check_size():
+    @dataframe_step(check_size=False)
+    def double_rows(df):
+        return pandas.concat([df, df.copy()], ignore_index=True, sort=False)
+
+    phase = Phase(steps=[double_rows])
+    phase.load_data([{'id': 1, 'val': 10}])
+    phase.run_steps()
+    assert len(phase.row_data) == 2
+    assert len(phase.context.get_events(phase)) == 0  # No dropped row warning
