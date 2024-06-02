@@ -34,7 +34,6 @@ class PhaseBase(ABC):
     def load_data(self, data):
         """ Call this method to pass record-oriented data to the Phase before calling 'run'
         Can be overridden to load data in a different structure.
-        Used in phaser's builtin phases - by regular Phase and ReshapePhase.
         Note that in normal operation, a Records object is passed in with Record objects and row numbers -
         however if a Phase is being used in tests, it makes testing a lot easier if load_data can take a
         raw list of dicts and row numbers get added.  """
