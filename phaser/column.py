@@ -17,10 +17,7 @@ logger = logging.getLogger('phaser')
 Column: Use for strings & general purpose
 IntColumn, FloatColumn: Cast to int/float datatypes and apply number logic like min_value, max_value
 DateColumn, DateTimeColumn: Cast to date/time datatypes and apply calendar logic like default timezone
-
-TODOs:
-* Probably the default column and the other columns should both inherit from a BaseColumn, so we can
-  have fields like 'blank' on Column but not on IntColumn
+BooleanColumn: cast 1, 0, T, F, yes, no, TRUE, FALSE etc to python True and False values.
 
 """
 
@@ -84,7 +81,7 @@ class Column:
             self.use_exception = Column.ON_ERROR_VALUES[on_error]
 
         if self.null is False and self.default is not None:
-            raise Exception(f"Column {self.name} defined to error on null values, but also provides a non-null default")
+            raise PhaserError(f"Column {self.name} defined to error on null values, but also provides a non-null default")
 
     def check_required(self, data_headers):
         """
@@ -127,7 +124,7 @@ class Column:
         """ Raises chosen exception type if something is wrong with a value in the column.
             One can override this to use a different exception or check value in a different way
             (don't forget to call super().check_value() """
-        if not self.blank and not value:  # Python boolean casting returns false if string is empty
+        if not self.blank and not value.strip():  # Python boolean casting returns false if string is empty
             raise self.use_exception(f"Column `{self.name}' had blank value")
         if self.allowed_values and not (value in self.allowed_values):
             raise self.use_exception(f"Column '{self.name}' had value {value} not found in allowed values")
@@ -189,7 +186,6 @@ class IntColumn(Column):
                  name,
                  required=True,
                  null=True,
-                 blank=True,
                  default=None,
                  fix_value_fn=None,
                  rename=None,
@@ -222,7 +218,7 @@ class IntColumn(Column):
         super().__init__(name,
                          required=required,
                          null=null,
-                         blank=blank,
+                         blank=True,  # Ignores this column - only null=T/F matters
                          default=default,
                          fix_value_fn=fix_value_fn,
                          rename=rename,
@@ -261,7 +257,6 @@ class DateTimeColumn(Column):
                  name,
                  required=True,
                  null=True,
-                 blank=True,
                  default=None,
                  fix_value_fn=None,
                  rename=None,
@@ -297,7 +292,7 @@ class DateTimeColumn(Column):
         super().__init__(name,
                          required=required,
                          null=null,
-                         blank=blank,
+                         blank=True,  # Ignores this param - only null=T/F matters
                          default=default,
                          fix_value_fn=fix_value_fn,
                          rename=rename,
