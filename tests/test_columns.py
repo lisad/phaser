@@ -128,10 +128,11 @@ def test_conflicting_renames():
         Phase(columns=[FloatColumn(name="Division", rename='div'), IntColumn(name="Divisor", rename='div')])
 
 
-def test_canonicalize_names():
+@pytest.mark.parametrize('column_name', ['country of origin', 'country_of_origin', 'Country of\nOrigin'])
+def test_canonicalize_names(column_name):
     col1 = Column("Country of Origin")
     phase = Phase(columns=[col1])
-    phase.load_data([{'country of origin': 'UK'}, {'country_of_origin': 'US'}])
+    phase.load_data([{column_name: 'UK'}, {column_name: 'US'}])
     phase.rename_columns()
     assert all(list(row.keys()) == ['Country of Origin'] for row in phase.row_data)
     assert phase.headers == ['Country of Origin']
