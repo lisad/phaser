@@ -109,6 +109,12 @@ def test_rename_passed_string():
     assert phase.headers == [col.name]
 
 
+@pytest.mark.skip("Todo - issue #17")
+def test_conflicting_renames():
+    with pytest.raises(PhaserError):
+        Phase(columns=[FloatColumn(name="Division", rename='div'), IntColumn(name="Divisor", rename='div')])
+
+
 def test_canonicalize_names():
     col1 = Column("Country of Origin")
     phase = Phase(columns=[col1])
