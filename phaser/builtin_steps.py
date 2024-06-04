@@ -60,7 +60,7 @@ def filter_rows(func):
     those create a DROPPED_ROW message for each one.  This will summarize how many rows were dropped.
     """
 
-    @batch_step
+    @batch_step(check_size=False)
     def filter_rows_step(batch, context, **kwargs):
         new_batch = [row for row in batch if func(row)]
         num_dropped = len(batch) - len(new_batch)

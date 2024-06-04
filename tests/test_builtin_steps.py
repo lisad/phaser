@@ -99,7 +99,6 @@ def test_filter_rows():
     assert len(phase.context.events['foo']) == 1  # No rows should have warnings besides the 'none' row
 
 
-@pytest.mark.skip("TODO: we have not yet written the code to suppress the warning")
 def test_filter_rows_doesnt_warn_extra():
     phase = Phase(name='foo', steps=[filter_rows(lambda row: row['rank'] == "Doctor")])
     phase.load_data(read_csv(current_path / 'fixture_files' / 'crew.csv'))
