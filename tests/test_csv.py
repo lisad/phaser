@@ -4,6 +4,11 @@ from phaser import Pipeline, Phase, DataErrorException
 from phaser.io import read_csv, save_csv
 
 
+@pytest.fixture
+def temp_file(tmpdir):
+    return tmpdir / 'temp_file.csv'
+
+
 def write_text(path, text):
     return path.write_text(text, encoding='utf8')
 
@@ -44,48 +49,52 @@ def test_not_enough_fields_in_csv(tmpdir):
 
 
 @pytest.mark.skip("Commented lines are really hard to skip with clevercsv but otherwise it's a good library...")
-def test_comment_lines(tmpdir):
-    write_text(tmpdir / 'commented_line', "#crew\n,id,name\n,1,James Kirk\n")
-    assert read_csv(tmpdir / 'commented_line') == [{'id':1, 'name':'James Kirk'}]
+def test_comment_lines(temp_file):
+    write_text(temp_file, "#crew\n,id,name\n,1,James Kirk\n")
+    assert read_csv(temp_file) == [{'id':1, 'name':'James Kirk'}]
 
 
-def test_empty_lines_at_end(tmpdir):
-    write_text(tmpdir / 'commented_line', "id,name\n1,James Kirk\n\n\n")
-    assert dict(read_csv(tmpdir / 'commented_line')[0]) == {'id':'1', 'name':'James Kirk'}
+def test_empty_lines_at_end(temp_file):
+    write_text(temp_file, "id,name\n1,James Kirk\n\n\n")
+    assert dict(read_csv(temp_file)[0]) == {'id':'1', 'name':'James Kirk'}
 
 
-def test_empty_lines_elsewhere(tmpdir):
-    write_text(tmpdir / 'commented_line', "id,name\n\n1,James Kirk\n")
-    assert dict(read_csv(tmpdir / 'commented_line')[0]) == {'id':'1', 'name':'James Kirk'}
+def test_empty_lines_elsewhere(temp_file):
+    write_text(temp_file, "id,name\n\n1,James Kirk\n")
+    assert dict(read_csv(temp_file)[0]) == {'id':'1', 'name':'James Kirk'}
 
 
 @pytest.mark.skip("An empty line at the beginning of the file doesn't work. I think we can live with that")
-def test_empty_line_at_beginning(tmpdir):
-    write_text(tmpdir / 'commented_line', "\nid,name\n1,James Kirk\n")
-    assert dict(read_csv(tmpdir / 'commented_line')[0]) == {'id':'1', 'name':'James Kirk'}
+def test_empty_line_at_beginning(temp_file):
+    write_text(temp_file, "\nid,name\n1,James Kirk\n")
+    assert dict(read_csv(temp_file)[0]) == {'id':'1', 'name':'James Kirk'}
 
 
-def test_regular_quotes(tmpdir):
-    write_text(tmpdir / 'commented_line', '"id","name"\n1,James Kirk\n')
-    assert dict(read_csv(tmpdir / 'commented_line')[0])== {'id': '1', 'name': 'James Kirk'}
+@pytest.mark.skip("A line that contains ONLY commas should be dropped by default - feature to add")
+def test_empty_line_only_commas(temp_file):
+    write_text(temp_file, "id,name\n\n1,James Kirk\n,\n")
+    assert dict(read_csv(temp_file)[0]) == {'id': '1', 'name': 'James Kirk'}
+    assert len(read_csv(temp_file)) == 1
 
 
-def test_curious_quote_situation(tmpdir):
+def test_regular_quotes(temp_file):
+    write_text(temp_file, '"id","name"\n1,James Kirk\n')
+    assert dict(read_csv(temp_file)[0]) == {'id': '1', 'name': 'James Kirk'}
+
+
+def test_curious_quote_situation(temp_file):
     """ This is NOT how we think field names should ideally be determined. Note how the 'name' field
     name is not 'name' but actually ' "name"'.  Humans edit CSVs and add spaces so this happens IRL.
     It's OK though, we can strip spaces and quotes when we canonicalize column names in a regular phase"""
-    write_text(tmpdir / 'commented_line', '"id", "name"\n1,James Kirk\n')
-    assert dict(read_csv(tmpdir / 'commented_line')[0]) == {'id': '1', ' "name"': 'James Kirk'}
+    write_text(temp_file, '"id", "name"\n1,James Kirk\n')
+    assert dict(read_csv(temp_file)[0]) == {'id': '1', ' "name"': 'James Kirk'}
 
 
-def test_do_not_save_nans(tmpdir):
-    data = [{"id": 1, "val": np.nan}, {"id": 2, 'val': 2}]
-    save_csv(tmpdir / 'save_nans.csv', data)
-    result = read_text(tmpdir / 'save_nans.csv')
-    assert "nan" not in result.lower()
+def test_do_not_save_nans(temp_file):
+    save_csv(temp_file, [{"id": 1, "val": np.nan}, {"id": 2, 'val': 2}])
+    assert "nan" not in read_text(temp_file).lower()
 
 
-def test_pound_start_line(tmpdir):
-    filename = tmpdir / 'pound_start_line_test.csv'
-    write_text(filename,"Label,location,type\n#1,cabinet,yarn\n#2,garage,fiber")
-    assert dict(read_csv(filename)[0]) == {'Label': "#1", 'location':'cabinet', 'type': 'yarn'}
+def test_pound_start_line(temp_file):
+    write_text(temp_file,"Label,location,type\n#1,cabinet,yarn\n#2,garage,fiber")
+    assert dict(read_csv(temp_file)[0]) == {'Label': "#1", 'location':'cabinet', 'type': 'yarn'}
