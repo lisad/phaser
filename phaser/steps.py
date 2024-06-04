@@ -106,8 +106,20 @@ class StepWrapper():
             return _step_argument_wrapper(func)
 
 def row_step(func=None, *, extra_sources=None, extra_outputs=None):
-    """ This decorator is used to indicate a step that should run on each row of a data set.
-    It adds a "probe" response to the step that allows the phase running logic to know this.
+    """
+    Used to define a step that should run on each row of a data set.
+
+    The function that is decorated should accept a dictionary as its first
+    parameter.  If extra_sources or extra_outputs are defined, then they will be
+    passed in as explicit parameters, named according to their definition in the
+    decorator.  Sources and outputs appear to the step function as the type of
+    object defined at the pipeline level.  If a `Context` is required, then it
+    can be included as a parameter, too.
+
+    The decorated function must return a dict, or throw an exception.
+
+    :param extra_sources: An array of source names
+    :param extra_output: An array of names of outputs
     """
 
     def postprocess(step_function, result):
@@ -121,8 +133,15 @@ def row_step(func=None, *, extra_sources=None, extra_outputs=None):
     return wrapper.wrap(func, extra_sources=extra_sources, extra_outputs=extra_outputs)
 
 def batch_step(func=None, *, extra_sources=None, extra_outputs=None, check_size=False):
-    """ This decorator allows the Phase run logic to determine that this step needs to run on the
-    whole batch by adding a 'probe' response
+    """
+    Used to define a step that needs to run on the whole batch of data.
+
+    The decorated function should accept a list of dictionaries as its first parameter.
+
+    :param extra_sources: An array of source names
+    :param extra_output: An array of names of outputs
+    :param check_size: A boolean indicating whether or not to validate the size of the
+        batch after the step is run
     """
 
     def handle_exception(step_function, exc):
@@ -140,6 +159,18 @@ def batch_step(func=None, *, extra_sources=None, extra_outputs=None, check_size=
     return wrapper.wrap(func, extra_sources=extra_sources, extra_outputs=extra_outputs)
 
 def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_outputs=None, check_size=False):
+    """
+    Used to define a step that needs to run on the whole set of data as a `pandas.DataFrame`.
+
+    The decorated function should accept a DataFrame as its first parameter.
+
+    :param pass_row_nums: If True, the row numbers will be set in the DataFrame
+        in a column named the value of `PHASER_ROW_NUM`
+    :param extra_sources: An array of source names
+    :param extra_output: An array of names of outputs
+    :param check_size: A boolean indicating whether or not to validate the size of the
+        DataFrame after the step is run
+    """
     def handle_exception(step_function, exc):
         if isinstance(exc, DropRowException):
             raise PhaserError("DropRowException can't be handled in steps operating on bulk data ") from exc
@@ -167,6 +198,14 @@ def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_o
 
 
 def context_step(func=None, *, extra_sources=None, extra_outputs=None):
+    """
+    Used to define a step that works on the context.
+
+    The decorated function should accept the context as its first parameter.
+
+    :param extra_sources: An array of source names
+    :param extra_output: An array of names of outputs
+    """
     def postprocess(step_function, result):
         if result is not None:
             raise PhaserError(f"Context steps are not expected to return a value (step is {step_function})")
