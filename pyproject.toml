@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "phaser"
-version = "0.1"
+version = "0.2"
 authors = [
     {name="Lisa Dusseault", email="lisa@rtfm.com"},
     {name="Jeff Kolesky", email="jeff.kolesky@gmail.com"},
 ]
 requires-python = ">=3.11"
 readme = "README.md"
-description = "A work-in-progress framework and utilities for the transform part of data pipelines"
+description = "A framework and utilities to make complex data pipelines better"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License"

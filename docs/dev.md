@@ -34,3 +34,14 @@ docstrings from within the library's python modules.
 % open _build/html/index.html
 
 ```
+
+## How to build/distribute
+
+Edit pyproject.toml to update version number if appropriate, then 
+
+```
+% pip install twine
+% pip install build
+% python3 -m build
+% python3 -m twine upload --repository testpypi dist/*
+```
