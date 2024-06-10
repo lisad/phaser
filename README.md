@@ -92,3 +92,20 @@ The benefit of even such a simple pipeline expressed as two phases is that the p
 run separately. A developer can run the Validator phase once then work on adding features to the Transformer phase,
 or narrow down an error in production by comparing the checkpoint output of each phase.  In addition, the code
 is readable and supports team collaboration.
+
+## Advanced Example
+
+For a real, working advanced example, see the [phaser-example](https://github.com/lisad/phaser-example) repository on GitHub.
+You should be able to clone that repository, fetch the Boston and Seattle bike trail bike sensor data,
+and run the pipelines on the source data to get the data in a consistent format.
+
+The pipelines in the phaser-example project demonstrate these features:
+
+* Columns that get renamed
+* Columns with allowed_values (enumerated types),
+* Dropping columns,
+* Dropping many rows (without creating many warnings),
+* Sorting,
+* Adding columns,
+* Using pandas 'aggregate' method to sum values distributed across rows, within a phaser step
+* Pivoting the data by timestamp column into long row-per-timestamp data format,
