@@ -98,6 +98,38 @@ def test_multiple_functions():
     assert col.fix_value("  ACTIVE  ") == "Active  "
 
 
+@pytest.mark.skip("Column value fixing should apply BEFORE checking allowed_values, issue #142")
+def test_order_of_allowed_value_checking():
+    col = Column('sale_type',
+                 fix_value_fn='capitalize',
+                 allowed_values=['Reg', 'Final', 'Exchange']
+                 )
+    assert col.check_and_cast_value({'sale_type': "reg"}) == {'sale_type': "Reg"}
+
+
+def test_empty_allowed_values():
+    col1 = Column('forbidden_field', allowed_values=[])
+    assert col1.check_and_cast_value({'forbidden_field': None}) == {'forbidden_field': None}
+    assert col1.check_and_cast_value({'forbidden_field': 'secret'}) == {'forbidden_field': 'secret'}
+    col2 = Column('forbidden_field', allowed_values=[None])
+    with pytest.raises(DataErrorException):
+        col2.check_and_cast_value({'forbidden_field': ''})
+    col3 = Column('forbidden_field', allowed_values=[''])
+    with pytest.raises(DataErrorException):
+        col3.check_and_cast_value({'forbidden_field': None})
+
+
+def test_allowed_values_cast_to_array():
+    col1 = Column(name='only-one', allowed_values='highlander')
+    col1.check_and_cast_value({'only-one': 'highlander'})
+
+
+@pytest.mark.skip("Doesn't work yet - we don't wrap the value of allowed_values in an array if it isn't one")
+def test_allowed_values_cast_int_to_array():
+    col2 = IntColumn(name='answer', allowed_values=42)
+    col2.check_and_cast_value({'answer': '42'})
+
+
 # Test naming features
 
 

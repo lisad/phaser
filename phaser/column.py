@@ -24,22 +24,30 @@ BooleanColumn: cast 1, 0, T, F, yes, no, TRUE, FALSE etc to python True and Fals
 
 class Column:
     """
-    Sets up a Column instance ready to do type, format, null and default checking on values, as well as
-    renaming the column name itself to chosen version.  This column is useful for fields with Strings as values.
+    A Column declaration is an instance of Column to provide to a Phase, so that the column
+    name and values may be fixed, validated or cast to a datatype at the beginning of the Phase.
+    The base Column type, besides being subclassed for specific datatypes, is useful for columns
+    that might be mixed types or have strings as values.
 
-    :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
-    :param required: If the column is required, the phase will present errors if it is missing.
-    :param null: Checks all values of the column for null values to raise as errors.
+    :param name: The preferred name or label of the column, e.g. "Date of Birth" or "first_name".
+        The class will automatically canonicalize column names that appear with inconsistent
+        capitalization or spacing, replacing names such as "last NAME" with the preferred name "last_name".
+    :param required: If the column is required, it must be included in the data source.  Even so,
+        a phase will continue after finding this column is missing, unless the 'on_error' policy is
+        to 'stop_now' (see below).
+    :param null: States whether null values are allowed (True) or will cause errors/warnings (False)
     :param default: A default value to apply if a column value is null. Not compatible with "null=False"
-    :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
-    :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
+    :param fix_value_fn: A function (string or callable) or array of functions to apply to each value,
+        such as a builtin 'capitalize' or a custom function defined in scope.
+    :param rename: A set of alternate names that may be used for this column, all of which should be mapped to
         the preferred name of this column. Upon loading the data, all rows that have columns matching
-        any alternate name in this set will have a column with the preferred name with the same data in
-        it. In other words, any data in a column name in `rename` will end up in a column named `name`.
-    :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
+        any alternate name in this set will have the alternate name replaced with the preferred `name` value.
+    :param allowed_values: If allowed_values is empty or None, it is not checked.  If allowed_values is a
+        single value or list of values, column logic checks every row to see that values are in the allowed list.
     :param save: if True, column is saved at the end of the phase; if not it is omitted.
-    :param on_error: Choose from 'warn', 'drop_row', 'collect', 'stop_now' to pick how errors checking or
-        fixing this column affect the pipeline.
+    :param on_error: Choose from one of the error policies to determine how errors that occur while
+        checking, type casting or fixing this column will be handled.  Error policies are
+        ON_ERROR_WARN, ON_ERROR_COLLECT, ON_ERROR_DROP_ROW, and ON_ERROR_STOP_NOW.
     """
     FORBIDDEN_COL_NAME_CHARACTERS = ['\n', '\t']
 
@@ -83,23 +91,15 @@ class Column:
             raise PhaserError(f"Column {self.name} defined to error on null values, but also provides a non-null default")
 
     def check_required(self, data_headers):
-        """
-        If this column is required, then checks the list of headers of the dataset to see if its name is there.
-
-        :param data_headers: just the column headers found in data
-        :return: None
-        """
+        # Called by Phase to make sure that all the required columns are in place.  Not documented
+        # with docstrings because it's not meant to be overridden.
         if self.required:
             if self.name not in data_headers:
                 raise self.use_exception(f"Header {self.name} not found in {data_headers}")
 
     def check_and_cast_value(self, row):
-        """ This checks to see if the value is there before attempting to cast it.  It does some checks before
-        casting the value to a datatype, and some other checks afterward. .  Most of the time, a custom
-        algorithm for converting a value to a specific datatype can just override the simpler 'cast' method.
-
-        :param row: entire row is passed for simplicity elsewhere and in case this needs more scope
-        """
+        # This method is probably NOT for overriding as it marshals the logic of checking, fixing
+        # and casting values in a specific order.
         value = row.get(self.name)
         if self.null is False and value is None:
             raise self.use_exception(f"Null value found in column {self.name}")
@@ -114,27 +114,49 @@ class Column:
         return row
 
     def cast(self, value):
-        """ Basic column only fixes NaN values. Even values like "NULL" or "None" might be actual values if we
-        don't know the type. this is good to subclass to cast python data types or custom objects.
         """
+        When subclassing Column to provide a custom column type, override the `cast` method to do type-casting.
+        For example, the builtin IntColumn uses this method to cast to an `int`.
+
+        :param value: this parameter will hold a single value from the column, for this method to cast
+            to the correct data type.
+        :return: the value that was passed, now in the correct data type
+        """
+        # Note that the basic column type does something while casting, but only to fix NaN values.
+        # Even values like "NULL" or "None" might be actual values if we
+        # don't know the type. this is good to subclass to cast python data types or custom objects.
         if safe_is_nan(value):
             return None
         return value
 
     def check_value(self, value):
-        """ Raises chosen exception type if something is wrong with a value in the column.
-            One can override this to use a different exception or check value in a different way
-            (don't forget to call super().check_value() """
+        """
+        When subclassing Column to provide custom validation in a re-usable form, override the `check_value`
+        method to do additional checking.
+
+        Tips:
+         * To also use the parent class's validation, don't forget to call super().check_value(value).
+         * To use the exception declared when the column is defined:
+         ``` raise self.use_exception("Explanation of what check went wrong goes here") ```
+
+        :param value: this parameter will hold a single value from the column.
+        :return: None
+        """
         if not self.blank and not value.strip():  # Python boolean casting returns false if string is empty
             raise self.use_exception(f"Column `{self.name}' had blank value")
         if self.allowed_values and not (value in self.allowed_values):
             raise self.use_exception(f"Column '{self.name}' had value {value} not found in allowed values")
 
     def fix_value(self, value):
-        """ Sets value to default if provided and appropriate, and calls any functions or
-        methods passed as 'fix_value_fn'.  Also, this method can be overridden if a special column
-        has a custom way to fix values and it's worth subclassing Column - just be sure to call
-        value = super(value) if you want to apply the logic already here.
+        """
+        When subclassing Column to provide custom data cleaning in a re-usable form, override the 'fix_value'
+        method.  The default implementation of this method applies the `default` parameter value and
+        also applies functions passed into the `fix_value_fn` parameter.
+
+        Tips:
+         * Don't forget to call super().fix_value(value)
+         * This method can raise exceptions if a problem is found trying to fix value, see 'check_value' for example.
+
         """
         if value is None and self.default is not None:
             value = self.default
