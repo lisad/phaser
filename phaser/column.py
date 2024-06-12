@@ -80,6 +80,8 @@ class Column:
         if isinstance(self.rename, str):
             self.rename = [self.rename]
         self.allowed_values = allowed_values
+        if self.allowed_values is not None and not isinstance(self.allowed_values, Iterable):
+            self.allowed_values = [self.allowed_values]
         self.save = save
         self.use_exception = DataErrorException
         if on_error and on_error not in Column.ON_ERROR_VALUES.keys():
@@ -106,10 +108,11 @@ class Column:
 
         new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
 
-        self.check_value(new_value)
         fixed_value = self.fix_value(new_value)
         if fixed_value is None and new_value is not None:
             logger.debug(f"Column {self.name} set value to None while fixing value")
+
+        self.check_value(fixed_value)
         row[self.name] = fixed_value
         return row
 

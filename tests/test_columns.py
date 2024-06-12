@@ -98,7 +98,6 @@ def test_multiple_functions():
     assert col.fix_value("  ACTIVE  ") == "Active  "
 
 
-@pytest.mark.skip("Column value fixing should apply BEFORE checking allowed_values, issue #142")
 def test_order_of_allowed_value_checking():
     col = Column('sale_type',
                  fix_value_fn='capitalize',
@@ -124,7 +123,6 @@ def test_allowed_values_cast_to_array():
     col1.check_and_cast_value({'only-one': 'highlander'})
 
 
-@pytest.mark.skip("Doesn't work yet - we don't wrap the value of allowed_values in an array if it isn't one")
 def test_allowed_values_cast_int_to_array():
     col2 = IntColumn(name='answer', allowed_values=42)
     col2.check_and_cast_value({'answer': '42'})
