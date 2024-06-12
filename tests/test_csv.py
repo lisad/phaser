@@ -70,7 +70,6 @@ def test_empty_line_at_beginning(temp_file):
     assert dict(read_csv(temp_file)[0]) == {'id':'1', 'name':'James Kirk'}
 
 
-@pytest.mark.skip("A line that contains ONLY commas should be dropped by default - feature to add")
 def test_empty_line_only_commas(temp_file):
     write_text(temp_file, "id,name\n\n1,James Kirk\n,\n")
     assert dict(read_csv(temp_file)[0]) == {'id': '1', 'name': 'James Kirk'}
