@@ -158,3 +158,7 @@ cython_debug/
 # according to GH's template .gitignore but we could always get more nuanced later. -Lisa
 .idea/
 docs/_build/*
+
+# This directory name is used in examples as an output directory, so if a developer creates it while following
+# CLI examples, it will now be ignored.
+phaser_output

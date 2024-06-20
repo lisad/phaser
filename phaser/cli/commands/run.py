@@ -27,7 +27,14 @@ import phaser
 from phaser.cli import Command
 from phaser.constants import *
 
+
 class RunPipelineCommand(Command):
+
+    def __init__(self):
+        super().__init__()
+        self.pipeline = None
+        self.sources_needing_initialization = None
+
     def add_arguments(self, parser):
         parser.add_argument("pipeline_name", help="pipeline to run")
         parser.add_argument("working_dir", help="directory to output phase results")
@@ -39,7 +46,7 @@ class RunPipelineCommand(Command):
     def has_incremental_arguments(self, args):
         return True
 
-    def add_incremental_arguments(self, args, parser):
+    def instantiate_pipeline(self, args):
         pipeline_name = args.pipeline_name
         # Pipelines are expected to be defined in a module in the `pipelines`
         # package. The module name is given as the command line argument, and
@@ -60,8 +67,6 @@ class RunPipelineCommand(Command):
             raise Exception(f"Found {len(pipelines)} Pipelines declared in module '{pipeline_module}'. Need only 1.")
         # pipelines is a tuple of names and values. We want the value which is
         # a class object.
-        # LMDTODO DIscuss with Jeff - this doesn't feel like it belongs in a method called "add_incremental_arguments"
-        # we should separate out "initialize pipeline" as a method of this object, called by main before this is called
         Pipeline = pipelines[0][1]
 
         verbose = args.verbose
@@ -71,6 +76,9 @@ class RunPipelineCommand(Command):
 
         self.pipeline = Pipeline(working_dir, source, verbose=verbose, error_policy=error_policy)
 
+    def add_incremental_arguments(self, args, parser):
+        # In order to know which extra arguments the command will need, we first need to instantiate the pipeline
+        self.instantiate_pipeline(args)
         self.sources_needing_initialization = self.pipeline.sources_needing_initialization()
         for source in self.sources_needing_initialization:
             parser.add_argument(f"--{source}", help=f"path to source file for {source}", required=True)
