@@ -10,7 +10,7 @@ throughout the pipeline.
 
 ```
 % cd tests
-% python -m phaser run employees ./phaser_output fixture_files/employees.csv
+% python -m phaser run employees ../phaser_output fixture_files/employees.csv
 Running pipeline 'EmployeeReviewPipeline'
 
 % cat ~/phaser_output/errors_and_warnings.txt
