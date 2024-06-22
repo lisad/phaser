@@ -11,9 +11,7 @@ from .records import Records, Record
 from .constants import *
 
 
-logger = logging.getLogger('phaser')
-logger.addHandler(logging.NullHandler())
-
+logger = logging.getLogger(__name__)
 
 def _stringify_step(step):
     if isinstance(step, str):
@@ -167,7 +165,6 @@ class Context:
         e_name = exc.__class__.__name__
         e_message = str(exc)
         message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
-        logger.info(f"Unknown exception handled in executing steps ({message}")
         stack_info = traceback.format_exc() if self.verbose else None
         event_info = {'phase': phase,
                       'step': step,
@@ -183,17 +180,20 @@ class Context:
             self.add_event({'type': Context.WARNING, **event_info})
 
         # Otherwise, decide how to handle exception based on error_policy
-        elif self.error_policy == ON_ERROR_COLLECT:
-            self.add_event({'type': Context.ERROR, **event_info})
-        elif self.error_policy == ON_ERROR_WARN:
-            self.add_event({'type': Context.WARNING, **event_info})
-        elif self.error_policy == ON_ERROR_DROP_ROW:
-            self.add_event({'type': Context.DROPPED_ROW, **event_info})
-        elif self.error_policy == ON_ERROR_STOP_NOW:
-            self.add_event({'type': Context.ERROR, **event_info})
-            raise exc
         else:
-            raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
+            logger.warning(f"Unknown exception handled in executing steps ({message}")
+            if self.error_policy == ON_ERROR_COLLECT:
+                self.add_event({'type': Context.ERROR, **event_info})
+            elif self.error_policy == ON_ERROR_WARN:
+                self.add_event({'type': Context.WARNING, **event_info})
+            elif self.error_policy == ON_ERROR_DROP_ROW:
+                self.add_event({'type': Context.DROPPED_ROW, **event_info})
+            elif self.error_policy == ON_ERROR_STOP_NOW:
+                self.add_event({'type': Context.ERROR, **event_info})
+                raise exc
+            else:
+                raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
+
 
 class Pipeline:
     """ Pipeline handles running phases in order.  It also handles I/O and marshalling what
@@ -201,7 +201,6 @@ class Pipeline:
     working_dir = None
     source = None
     phases = []
-
 
     def __init__(self, working_dir=None, source=None, phases=None, verbose=False, error_policy=None):
         self.working_dir = working_dir or self.__class__.working_dir
@@ -383,7 +382,7 @@ class Pipeline:
         if Path(file_path).is_file():
             # Move data from previous runs to snapshot dir
             if not self.prev_run_dir.is_dir():
-                print(f"Moving files from previous runs to {self.prev_run_dir}")
+                logger.debug(f"Moving files from previous runs to {self.prev_run_dir}")
                 self.prev_run_dir.mkdir(exist_ok=False)
             os.rename(file_path, self.prev_run_dir / os.path.basename(os.path.normpath(file_path)))
 

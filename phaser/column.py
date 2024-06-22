@@ -2,14 +2,11 @@ from datetime import datetime
 from dateutil.parser import parse
 from decimal import Decimal
 import inspect
-import logging
 import types
 from collections.abc import Iterable
 from .exceptions import DropRowException, DataErrorException, WarningException, PhaserError
 from .constants import ON_ERROR_STOP_NOW, ON_ERROR_COLLECT, ON_ERROR_WARN, ON_ERROR_DROP_ROW
 from .io import is_nan_or_null, safe_is_nan, is_empty
-
-logger = logging.getLogger('phaser')
 
 
 """ Contains definitions of columns that can apply certain rules and datatypes to values automatically.
@@ -101,7 +98,7 @@ class Column:
             if self.name not in data_headers:
                 raise self.use_exception(f"Header {self.name} not found in {data_headers}")
 
-    def check_and_cast_value(self, row):
+    def check_and_cast_value(self, row, context=None):
         # This method is probably NOT for overriding as it marshals the logic of checking, fixing
         # and casting values in a specific order.
         value = row.get(self.name)
@@ -110,8 +107,8 @@ class Column:
         new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
 
         fixed_value = self.fix_value(new_value)
-        if fixed_value is None and new_value is not None:
-            logger.debug(f"Column {self.name} set value to None while fixing value")
+        if fixed_value is None and new_value is not None and context:
+            context.add_warning('fix-value-none', row, f"Column {self.name} set value to None while fixing value")
 
         self.check_value(fixed_value)
         row[self.name] = fixed_value
