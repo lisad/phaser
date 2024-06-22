@@ -1,19 +1,46 @@
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 import math
-from clevercsv import stream_dicts, stream_table, DictWriter
+from clevercsv import DictReader, stream_table, DictWriter, Detector
 from phaser.exceptions import DataErrorException, PhaserError
 
 
 def read_csv(source):
-    # Using the 'stream_table' method we can get just the header row, and perform our check for
-    # duplicate columns before having the library parse everything into dicts.
-    stream = stream_table(source)
+    NUM_CHARS = 10000   # Number of characters to read to guess the dialect
+
+    # The point of this next section is to detect if the data has duplicate column names, before converting
+    # rows into dicts, because the fact of duplicate column names (and an entire column of data with the duplicate
+    # name) get ignored in the translation to dict. The clever_csv stream_table method does not lose the fact of
+    # duplicate column names, however, so we use that.  THe stream_table method does look at the first NUM_CHARS
+    # characters to detect dialect, then we use 'next' to ONLY get the headers, so in theory the entire file
+    # is not processed in this section.
+    stream = stream_table(source, num_chars=NUM_CHARS)
     header = next(stream)
     if len(header) > len(set(header)):
         raise DataErrorException(f"CSV {source} has duplicate column names and cannot reliably be parsed")
 
-    return list(stream_dicts(source))
+    # Now we start over again with the clever_csv library's DictReader.  This section duplicates the implementation
+    # of stream_dicts from clever_csv, only with the inclusion of our generator that cleans empty rows.
+    with open(source, "r", newline="") as datafile:
+        # This reproduces how read_dicts is implemented in clevercsv, only adds the filtering of empty rows
+        data = datafile.read(NUM_CHARS)
+        dialect = Detector().detect(data)
+        datafile.seek(0)
+
+        if dialect is None:
+            raise PhaserError("CSV dialect could not be identified")
+
+        reader = DictReader(drop_empty_rows(datafile), dialect=dialect)
+        return [row for row in reader]
+
+
+def drop_empty_rows(stream):
+    for row in stream:
+        if row.replace(',', '').strip() == '':
+            # Skipping rows that are empty or nothing but commas - often generated at the end of Excel tables
+            continue
+        yield row
+
 
 
 class FixNansIterator:
