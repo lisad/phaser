@@ -70,7 +70,6 @@ def test_empty_line_at_beginning(temp_file):
     assert dict(read_csv(temp_file)[0]) == {'id':'1', 'name':'James Kirk'}
 
 
-@pytest.mark.skip("A line that contains ONLY commas should be dropped by default - feature to add")
 def test_empty_line_only_commas(temp_file):
     write_text(temp_file, "id,name\n\n1,James Kirk\n,\n")
     assert dict(read_csv(temp_file)[0]) == {'id': '1', 'name': 'James Kirk'}
@@ -98,3 +97,35 @@ def test_do_not_save_nans(temp_file):
 def test_pound_start_line(temp_file):
     write_text(temp_file,"Label,location,type\n#1,cabinet,yarn\n#2,garage,fiber")
     assert dict(read_csv(temp_file)[0]) == {'Label': "#1", 'location':'cabinet', 'type': 'yarn'}
+
+
+def test_drop_empty_tab_delimiter(temp_file):
+    write_text(temp_file, "\n\n\nid\tname\n1\tJames Kirk\n")
+    assert dict(read_csv(temp_file)[0]) == {'id': '1', 'name': 'James Kirk'}
+
+
+def test_drop_empty_semicolon_delimiter(temp_file):
+    write_text(temp_file, "\n\n\nid;name\n1;James Kirk\n")
+    assert dict(read_csv(temp_file)[0]) == {'id': '1', 'name': 'James Kirk'}
+
+
+def test_drop_empty_large_file(temp_file):
+    rows = ["id,name"] + [f"{i},name_{i}" for i in range(10000)]
+    write_text(temp_file, "\n".join(rows)+"\n"*10000)
+    data = read_csv(temp_file)
+    assert len(data) == 10000
+    assert dict(data[9999]) == {'id': '9999', 'name': 'name_9999'}
+
+
+def test_drop_empty_non_utf8_encoding(temp_file):
+    write_text(temp_file, "\n\nid,name\n1,José\n")
+    temp_file.write_binary(temp_file.read_binary().replace(b'utf8', b'latin1'))
+    data = read_csv(temp_file)
+    assert dict(data[0]) == {'id': '1', 'name': 'José'}
+
+
+def test_drop_empty_mixed_data_types(temp_file):
+    write_text(temp_file, "\n\nid,age,is_student\n1,21,True\n2,22,False\n")
+    data = read_csv(temp_file)
+    assert dict(data[0]) == {'id': '1', 'age': '21', 'is_student': 'True'}
+    assert dict(data[1]) == {'id': '2', 'age': '22', 'is_student': 'False'}

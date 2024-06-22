@@ -39,6 +39,38 @@ so it's worth reading up on the parameters of different Column types.
 * [DateColumn](#DateColumn)
 
 
+## Declarative column fixing
+
+Column declarations can have common operations passed in as a list of functions to apply to the column values
+to "fix" them.  For example, it's pretty common to have users type in values like "new", "NEW" and "New",
+so asking the value to always be converted to upper-case via the 'upper' method makes those consistent.
+
+```
+Column('status', fix_value_fn='upper')
+```
+
+These can also be in a list of functions that are applied in order:
+
+```
+Column('status', fix_value_fn=['strip', 'upper'])
+```
+
+Note that the column type is applied first, so the functions must work on the given data type.  The following works:
+
+```
+IntColumn('value', fix_value_fn='abs')
+```
+
+But the next example will give an error because python 'strip' doesn't work on dates:
+
+```
+ERR: DateColumn(name='date', fix_value_fn='strip')
+```
+
+Happily, the above example will convert ' 2023-01-01 '  to a date without explicitly asking it to strip spaces.
+Should you require a "fix_value_fn" that applies before the column is cast to its data type, a custom Column class
+may be required instead (see [custom validation for columns](#custom-column-validation))
+
 ## Row steps
 
 ## Batch steps
