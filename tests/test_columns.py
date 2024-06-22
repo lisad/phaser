@@ -128,6 +128,135 @@ def test_allowed_values_cast_int_to_array():
     col2.check_and_cast_value({'answer': '42'})
 
 
+def test_fix_and_cast_value():
+    col = Column(name='status', fix_value_fn='capitalize')
+    assert col.check_and_cast_value({'status': 'active'}) == {'status': 'Active'}
+
+
+def test_fix_and_cast_value_with_allowed_values():
+    col = Column(name='status', fix_value_fn='capitalize', allowed_values=['Active', 'Inactive'])
+    assert col.check_and_cast_value({'status': 'active'}) == {'status': 'Active'}
+    with pytest.raises(DataErrorException):
+        col.check_and_cast_value({'status': 'unknown'})
+
+
+def test_fix_and_cast_value_with_null_forbidden():
+    col = Column(name='status', null=False, fix_value_fn='title')
+    with pytest.raises(DataErrorException):
+        col.check_and_cast_value({'status': None})
+
+
+def test_fix_and_cast_value_with_default():
+    col = Column(name='status', default='active', fix_value_fn='capitalize')
+    assert col.check_and_cast_value({'status': None}) == {'status': 'Active'}
+
+
+def test_int_column_fix_and_cast_value():
+    col = IntColumn(name='quantity', fix_value_fn='abs')
+    assert col.check_and_cast_value({'quantity': '-10'}) == {'quantity': 10}
+
+
+def test_float_column_fix_and_cast_value():
+    col = FloatColumn(name='amount', fix_value_fn='abs')
+    assert col.check_and_cast_value({'amount': '-123.45'}) == {'amount': 123.45}
+
+
+def test_date_column_strips_spaces():
+    col = DateColumn(name='date')
+    assert col.check_and_cast_value({'date': ' 2023-01-01 '}) == {'date': date(2023, 1, 1)}
+
+
+def test_datetime_column_strips_spaces():
+    col = DateTimeColumn(name='timestamp')
+    assert col.check_and_cast_value({'timestamp': ' 2023-01-01 12:34 '}) == {'timestamp': datetime(2023, 1, 1, 12, 34)}
+
+
+def test_check_and_cast_value_with_custom_callable():
+    def custom_fix(value):
+        return value.strip().upper()
+
+    col = Column(name='code', fix_value_fn=custom_fix, allowed_values=['ABC', 'XYZ'])
+    assert col.check_and_cast_value({'code': ' abc '}) == {'code': 'ABC'}
+    with pytest.raises(DataErrorException):
+        col.check_and_cast_value({'code': ' unknown '})
+
+
+def test_check_and_cast_value_with_multiple_fix_functions():
+    col = Column(name='code', fix_value_fn=['strip', 'upper'], allowed_values=['ABC', 'XYZ'])
+    assert col.check_and_cast_value({'code': ' abc '}) == {'code': 'ABC'}
+    with pytest.raises(DataErrorException):
+        col.check_and_cast_value({'code': ' unknown '})
+
+
+def test_check_and_cast_value_with_minmax():
+    col = IntColumn(name='age', min_value=18, max_value=65)
+    assert col.check_and_cast_value({'age': '30'}) == {'age': 30}
+    with pytest.raises(DataErrorException):
+        col.check_and_cast_value({'age': '17'})
+    with pytest.raises(DataErrorException):
+        col.check_and_cast_value({'age': '66'})
+
+
+def test_check_and_cast_value_with_on_error():
+    col = Column(name='category', allowed_values=['A', 'B'], on_error=ON_ERROR_DROP_ROW)
+    with pytest.raises(DropRowException):
+        col.check_and_cast_value({'category': 'C'})
+
+
+def test_column_can_drop_row_with_fix_function():
+    def drop_if_no_value(value):
+        if value is None:
+            raise DropRowException("Value is required")
+        return value
+
+    col = Column(name='required_field', fix_value_fn=drop_if_no_value)
+    with pytest.raises(DropRowException):
+        col.check_and_cast_value({'required_field': None})
+
+
+# Parametrized tests to cover more scenarios
+
+@pytest.mark.parametrize('value,expected', [
+    ('1', True), ('0', False), ('yes', True), ('no', False), ('', None)
+])
+def test_boolean_column_variants(value, expected):
+    col = BooleanColumn(name='is_active')
+    assert col.check_and_cast_value({'is_active': value}) == {'is_active': expected}
+
+
+@pytest.mark.parametrize('value,expected', [
+    ('42', 42), (' 42 ', 42), ('42.0', 42)
+])
+def test_int_column_variants(value, expected):
+    col = IntColumn(name='quantity')
+    assert col.check_and_cast_value({'quantity': value}) == {'quantity': expected}
+
+
+@pytest.mark.parametrize('value,expected', [
+    ('42.0', 42.0), (' 42.0 ', 42.0), ('42', 42.0)
+])
+def test_float_column_variants(value, expected):
+    col = FloatColumn(name='amount')
+    assert col.check_and_cast_value({'amount': value}) == {'amount': expected}
+
+
+@pytest.mark.parametrize('value,expected', [
+    ('2023-01-01', date(2023, 1, 1)), (' 2023-01-01 ', date(2023, 1, 1)), ('2023/01/01', date(2023, 1, 1))
+])
+def test_date_column_variants(value, expected):
+    col = DateColumn(name='date')
+    assert col.check_and_cast_value({'date': value}) == {'date': expected}
+
+
+@pytest.mark.parametrize('value,expected', [
+    ('2023-01-01 12:34', datetime(2023, 1, 1, 12, 34)), (' 2023-01-01 12:34 ', datetime(2023, 1, 1, 12, 34)),
+    ('2023/01/01 12:34', datetime(2023, 1, 1, 12, 34))
+])
+def test_datetime_column_variants(value, expected):
+    col = DateTimeColumn(name='timestamp')
+    assert col.check_and_cast_value({'timestamp': value}) == {'timestamp': expected}
+
+
 # Test naming features
 
 

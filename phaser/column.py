@@ -112,6 +112,7 @@ class Column:
         fixed_value = self.fix_value(new_value)
         if fixed_value is None and new_value is not None:
             logger.debug(f"Column {self.name} set value to None while fixing value")
+
         self.check_value(fixed_value)
         row[self.name] = fixed_value
         return row
