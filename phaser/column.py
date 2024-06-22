@@ -80,8 +80,10 @@ class Column:
         if isinstance(self.rename, str):
             self.rename = [self.rename]
         self.allowed_values = allowed_values
-        if self.allowed_values is not None and not isinstance(self.allowed_values, Iterable):
-            self.allowed_values = [self.allowed_values]
+        if self.allowed_values:
+            if not isinstance(self.allowed_values, Iterable) or isinstance(self.allowed_values, str):
+                # Strings are iterables in python, yet we don't want to break up a string into letters
+                self.allowed_values = [self.allowed_values]
         self.save = save
         self.use_exception = DataErrorException
         if on_error and on_error not in Column.ON_ERROR_VALUES.keys():
@@ -105,7 +107,6 @@ class Column:
         value = row.get(self.name)
         if self.null is False and value is None:
             raise self.use_exception(f"Null value found in column {self.name}")
-
         new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
 
         fixed_value = self.fix_value(new_value)
