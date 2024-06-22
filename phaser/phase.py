@@ -1,16 +1,11 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
 import pandas as pd
-import logging
 
 from .column import make_strict_name, Column
 from .pipeline import Context, DropRowException, DataException, PhaserError
 from .records import Records, Record
 from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step, DATAFRAME_STEP
-from .constants import *
-
-logger = logging.getLogger('phaser')
-logger.addHandler(logging.NullHandler())
 
 
 class PhaseBase(ABC):
@@ -242,7 +237,7 @@ class Phase(PhaseBase):
             can assume the correct type). """
             new_row = row
             for col in self.columns:
-                new_row = col.check_and_cast_value(new_row)
+                new_row = col.check_and_cast_value(new_row, context)
             return new_row
 
         # Header work is done first
