@@ -224,14 +224,14 @@ def test_pipeline_error_policy(tmpdir):
         pipeline.run()
 
 
-def test_logging_respects_levels_and_handlers(tmpdir):
+def test_logging_respects_levels_and_handlers(tmpdir, caplog):
     import logging
 
     logger = logging.getLogger('phaser')
 
     log_file1 = tmpdir / "log_file1.txt"
     logger.addHandler(logging.FileHandler(log_file1))
-    logger.setLevel(logging.INFO)
+    caplog.set_level(logging.INFO)
     pipeline = Pipeline(working_dir=tmpdir,
                         source=(current_path / 'fixture_files' / 'departments.csv'),
                         phases=[Phase(steps=[report_row_error_in_batch])],
@@ -242,7 +242,7 @@ def test_logging_respects_levels_and_handlers(tmpdir):
 
     log_file2 = tmpdir / "log_file2.txt"
     logger.addHandler(logging.FileHandler(log_file2))
-    logger.setLevel(logging.WARNING)
+    caplog.set_level(logging.WARNING)
     pipeline = Pipeline(working_dir=tmpdir,
                         source=(current_path / 'fixture_files' / 'departments.csv'),
                         phases=[Phase(steps=[report_row_error_in_batch])],
