@@ -8,8 +8,7 @@ from .io import IOObject
 from .records import Record
 
 
-logger = logging.getLogger('phaser')
-logger.addHandler(logging.NullHandler())
+logger = logging.getLogger(__name__)
 
 
 class Context:
@@ -144,7 +143,7 @@ class Context:
         e_name = exc.__class__.__name__
         e_message = str(exc)
         message = f"{e_name} raised ({e_message})" if e_message else f"{e_name} raised."
-        logger.info(f"Unknown exception handled in executing steps ({message}")
+        logger.warning(f"Unknown exception handled in executing steps ({message}")
         stack_info = traceback.format_exc() if self.verbose else None
         event_info = {'phase': phase,
                       'step': step,
@@ -168,6 +167,7 @@ class Context:
             self.add_event({'type': Context.DROPPED_ROW, **event_info})
         elif self.error_policy == ON_ERROR_STOP_NOW:
             self.add_event({'type': Context.ERROR, **event_info})
+            logger.exception(f"Stopping the pipeline; error policy: {self.error_policy}")
             raise exc
         else:
             raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc

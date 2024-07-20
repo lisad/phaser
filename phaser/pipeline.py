@@ -11,9 +11,7 @@ from .records import Records
 from .constants import *
 
 
-logger = logging.getLogger('phaser')
-logger.addHandler(logging.NullHandler())
-
+logger = logging.getLogger(__name__)
 
 class Pipeline:
     """ Pipeline handles running phases in order.  It also handles I/O and marshalling what
@@ -202,7 +200,7 @@ class Pipeline:
         if Path(file_path).is_file():
             # Move data from previous runs to snapshot dir
             if not self.prev_run_dir.is_dir():
-                print(f"Moving files from previous runs to {self.prev_run_dir}")
+                logger.debug(f"Moving files from previous runs to {self.prev_run_dir}")
                 self.prev_run_dir.mkdir(exist_ok=False)
             os.rename(file_path, self.prev_run_dir / os.path.basename(os.path.normpath(file_path)))
 

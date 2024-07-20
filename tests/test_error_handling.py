@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pytest
+
 from fixtures import reconcile_phase_class
 from phaser import Phase, row_step, batch_step, WarningException, DropRowException, DataErrorException, \
     Pipeline, ON_ERROR_WARN, ON_ERROR_STOP_NOW
@@ -221,3 +222,33 @@ def test_pipeline_error_policy(tmpdir):
                         error_policy=ON_ERROR_STOP_NOW)
     with pytest.raises(DataErrorException):
         pipeline.run()
+
+
+def test_logging_respects_levels_and_handlers(tmpdir, caplog):
+    import logging
+
+    logger = logging.getLogger('phaser')
+
+    log_file1 = tmpdir / "log_file1.txt"
+    logger.addHandler(logging.FileHandler(log_file1))
+    caplog.set_level(logging.INFO)
+    pipeline = Pipeline(working_dir=tmpdir,
+                        source=(current_path / 'fixture_files' / 'departments.csv'),
+                        phases=[Phase(steps=[report_row_error_in_batch])],
+                        error_policy=ON_ERROR_WARN)
+    pipeline.run()
+    log_file_data_with_info = open(log_file1, 'r').read()
+    assert "Look I just know there's a problem" in log_file_data_with_info
+
+    log_file2 = tmpdir / "log_file2.txt"
+    logger.addHandler(logging.FileHandler(log_file2))
+    caplog.set_level(logging.WARNING)
+    pipeline = Pipeline(working_dir=tmpdir,
+                        source=(current_path / 'fixture_files' / 'departments.csv'),
+                        phases=[Phase(steps=[report_row_error_in_batch])],
+                        error_policy=ON_ERROR_WARN)
+    pipeline.run()
+    log_file_data_with_warn = open(log_file2, 'r').read()
+    assert "Look I just know there's a problem" in log_file_data_with_warn
+
+    assert len(log_file_data_with_info) > len(log_file_data_with_warn)

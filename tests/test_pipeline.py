@@ -1,7 +1,9 @@
+import logging
 import os
 from pathlib import Path
 import pytest
-from phaser import Pipeline, Phase, batch_step, PhaserError, DataException
+from phaser import (Pipeline, Phase, batch_step, PhaserError, DataException, Context,
+                    ON_ERROR_COLLECT, ON_ERROR_WARN, ON_ERROR_STOP_NOW, ON_ERROR_DROP_ROW)
 from fixtures import reconcile_phase_class, null_step_phase
 
 current_path = Path(__file__).parent
@@ -77,3 +79,65 @@ def test_phase_returns_no_rows(tmpdir):
     with pytest.raises(DataException) as exc_info:
         pipeline.run()
     assert "No rows left" in exc_info.value.message
+
+
+def test_pipeline_logging(tmpdir, null_step_phase, caplog):
+    with caplog.at_level(logging.INFO):
+        p = Pipeline(phases=[null_step_phase],
+                     source=current_path / 'fixture_files' / 'crew.csv',
+                     working_dir=tmpdir)
+        p.run()
+
+    log_messages = [record.message for record in caplog.records]
+    assert any("Loading input from" in message for message in log_messages)
+    assert any("saved output to" in message for message in log_messages)
+
+
+def test_context_process_exception_logging(caplog):
+    context = Context()
+    exc = KeyError("Test KeyError")
+
+    with caplog.at_level(logging.WARNING):
+        context.process_exception(exc, phase=None, step='test_step', row=None)
+
+    log_messages = [record.message for record in caplog.records]
+    assert any("Unknown exception handled in executing steps" in message for message in log_messages)
+
+
+def test_context_process_exception_with_different_policies(caplog):
+    context = Context(error_policy=ON_ERROR_COLLECT)
+    exc = KeyError("Test KeyError")
+
+    context.process_exception(exc, phase=None, step='test_step', row=None)
+    assert context.events['Unknown']['none'][0]['type'] == Context.ERROR
+
+    context.error_policy = ON_ERROR_WARN
+    context.process_exception(exc, phase=None, step='test_step', row=None)
+    assert context.events['Unknown']['none'][1]['type'] == Context.WARNING
+
+    context.error_policy = ON_ERROR_DROP_ROW
+    context.process_exception(exc, phase=None, step='test_step', row=None)
+    assert context.events['Unknown']['none'][2]['type'] == Context.DROPPED_ROW
+
+    context.error_policy = ON_ERROR_STOP_NOW
+    with caplog.at_level(logging.WARNING):
+        with pytest.raises(KeyError):
+            context.process_exception(exc, phase=None, step='test_step', row=None)
+            log_messages = [record.message for record in caplog.records]
+            assert any("Test KeyError" in message for message in log_messages)
+
+
+def test_pipeline_error_handling_logging(tmpdir, caplog):
+    class DummyPhase(Phase):
+        def run(self):
+            raise PhaserError("Error in pipeline running")
+
+    with caplog.at_level(logging.WARNING):
+        pipeline = Pipeline(phases=[DummyPhase()],
+                            source=current_path / 'fixture_files' / 'departments.csv',
+                            working_dir=tmpdir,
+                            error_policy=ON_ERROR_STOP_NOW)
+        with pytest.raises(PhaserError):
+            pipeline.run()
+            log_messages = [record.message for record in caplog.records]
+            assert any("Error in pipeline running" in message for message in log_messages)

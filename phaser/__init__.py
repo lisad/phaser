@@ -26,6 +26,10 @@ have datatype casting and name canonicalization done automatically.
 # but that may be more relevant for smaller modules.  We should also consider readthedocs.io but that's a big
 # commitment to build for that.
 
+# Set default logging handler to avoid "No handler found" warnings.
+import logging
+from logging import NullHandler
+
 from phaser.pipeline import Pipeline
 from phaser.context import Context
 from phaser.constants import PHASER_ROW_NUM, ON_ERROR_WARN, ON_ERROR_COLLECT, ON_ERROR_DROP_ROW, ON_ERROR_STOP_NOW
@@ -36,4 +40,6 @@ from phaser.builtin_steps import check_unique, sort_by, filter_rows
 from phaser.column import Column, IntColumn, DateColumn, DateTimeColumn, FloatColumn, BooleanColumn
 from phaser.io import read_csv, save_csv, ExtraMapping, ExtraRecords
 
-__version__ = 0.1
+logging.getLogger(__name__).addHandler(NullHandler())
+
+__version__ = 0.2
