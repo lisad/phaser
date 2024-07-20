@@ -72,7 +72,19 @@ def main(argv):
     parser.add_argument(
         "-l", "--log",
         help="set the log level",
-        default="INFO"
+        default=logging.INFO,
+        choices=[
+                    "CRITICAL",
+                    "DEBUG",
+                    "ERROR",
+                    "INFO",
+                    "WARNING",
+                    logging.CRITICAL,
+                    logging.DEBUG,
+                    logging.ERROR,
+                    logging.INFO,
+                    logging.WARNING,
+                ]
     )
     subparsers = parser.add_subparsers(
         title="commands", dest="command"
@@ -96,7 +108,10 @@ def main(argv):
         sys.exit(2)
 
     loglevel = args.log
-    numeric_level = getattr(logging, loglevel.upper(), None)
+    if isinstance(loglevel, int):
+        numeric_level = loglevel
+    else:
+        numeric_level = getattr(logging, loglevel.upper(), None)
     if not isinstance(numeric_level, int):
         raise ValueError('Invalid log level: %s' % loglevel)
     logging.basicConfig(level=numeric_level)
