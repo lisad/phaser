@@ -5,6 +5,7 @@ integration pipelines
 
 import argparse
 from importlib import import_module
+import logging
 import os
 import pkgutil
 import inspect
@@ -68,6 +69,23 @@ def main(argv):
         help="output more information during execution",
         action="store_true",
     )
+    parser.add_argument(
+        "-l", "--log",
+        help="set the log level",
+        default=logging.INFO,
+        choices=[
+                    "CRITICAL",
+                    "DEBUG",
+                    "ERROR",
+                    "INFO",
+                    "WARNING",
+                    logging.CRITICAL,
+                    logging.DEBUG,
+                    logging.ERROR,
+                    logging.INFO,
+                    logging.WARNING,
+                ]
+    )
     subparsers = parser.add_subparsers(
         title="commands", dest="command"
     )
@@ -88,6 +106,15 @@ def main(argv):
     if not args.command:
         parser.print_help()
         sys.exit(2)
+
+    loglevel = args.log
+    if isinstance(loglevel, int):
+        numeric_level = loglevel
+    else:
+        numeric_level = getattr(logging, loglevel.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % loglevel)
+    logging.basicConfig(level=numeric_level)
 
     command = commands.get(args.command)
     cmd = command["instance"]
