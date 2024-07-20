@@ -3,7 +3,8 @@ from copy import deepcopy
 import pandas as pd
 
 from .column import make_strict_name, Column
-from .pipeline import Context, DropRowException, DataException, PhaserError
+from .pipeline import DropRowException, DataException, PhaserError
+from . import Context
 from .records import Records, Record
 from .steps import ROW_STEP, BATCH_STEP, CONTEXT_STEP, PROBE_VALUE, row_step, DATAFRAME_STEP
 
