@@ -190,6 +190,7 @@ class Context:
                 self.add_event({'type': Context.DROPPED_ROW, **event_info})
             elif self.error_policy == ON_ERROR_STOP_NOW:
                 self.add_event({'type': Context.ERROR, **event_info})
+                logger.exception(f"Stopping the pipeline; error policy: {self.error_policy}")
                 raise exc
             else:
                 raise PhaserError(f"Unknown error policy '{self.error_policy}'") from exc
