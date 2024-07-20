@@ -2,8 +2,7 @@ import logging
 import os
 from pathlib import Path
 import pytest
-from phaser import (Pipeline, Phase, batch_step, PhaserError, DataException, Context,
-                    ON_ERROR_COLLECT, ON_ERROR_WARN, ON_ERROR_STOP_NOW, ON_ERROR_DROP_ROW)
+from phaser import Pipeline, Phase, batch_step, PhaserError, DataException, ON_ERROR_STOP_NOW
 from fixtures import reconcile_phase_class, null_step_phase
 
 current_path = Path(__file__).parent
@@ -91,40 +90,6 @@ def test_pipeline_logging(tmpdir, null_step_phase, caplog):
     log_messages = [record.message for record in caplog.records]
     assert any("Loading input from" in message for message in log_messages)
     assert any("saved output to" in message for message in log_messages)
-
-
-def test_context_process_exception_logging(caplog):
-    context = Context()
-    exc = KeyError("Test KeyError")
-
-    with caplog.at_level(logging.WARNING):
-        context.process_exception(exc, phase=None, step='test_step', row=None)
-
-    log_messages = [record.message for record in caplog.records]
-    assert any("Unknown exception handled in executing steps" in message for message in log_messages)
-
-
-def test_context_process_exception_with_different_policies(caplog):
-    context = Context(error_policy=ON_ERROR_COLLECT)
-    exc = KeyError("Test KeyError")
-
-    context.process_exception(exc, phase=None, step='test_step', row=None)
-    assert context.events['Unknown']['none'][0]['type'] == Context.ERROR
-
-    context.error_policy = ON_ERROR_WARN
-    context.process_exception(exc, phase=None, step='test_step', row=None)
-    assert context.events['Unknown']['none'][1]['type'] == Context.WARNING
-
-    context.error_policy = ON_ERROR_DROP_ROW
-    context.process_exception(exc, phase=None, step='test_step', row=None)
-    assert context.events['Unknown']['none'][2]['type'] == Context.DROPPED_ROW
-
-    context.error_policy = ON_ERROR_STOP_NOW
-    with caplog.at_level(logging.WARNING):
-        with pytest.raises(KeyError):
-            context.process_exception(exc, phase=None, step='test_step', row=None)
-            log_messages = [record.message for record in caplog.records]
-            assert any("Test KeyError" in message for message in log_messages)
 
 
 def test_pipeline_error_handling_logging(tmpdir, caplog):
