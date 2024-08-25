@@ -74,7 +74,7 @@ class RunPipelineCommand(Command):
         source = args.source
         error_policy = args.error_policy
 
-        self.pipeline = Pipeline(working_dir, source, verbose=verbose, error_policy=error_policy)
+        self.pipeline = Pipeline(working_dir, source, verbose=verbose, error_policy=error_policy, name=pipeline_name)
 
     def add_incremental_arguments(self, args, parser):
         # In order to know which extra arguments the command will need, we first need to instantiate the pipeline
