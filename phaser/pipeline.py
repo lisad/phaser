@@ -20,7 +20,7 @@ class Pipeline:
     source = None
     phases = []
 
-    def __init__(self, working_dir=None, source=None, phases=None, verbose=False, error_policy=None):
+    def __init__(self, working_dir=None, source=None, phases=None, verbose=False, error_policy=None, name="pipeline"):
         self.working_dir = working_dir or self.__class__.working_dir
         if self.working_dir and not os.path.exists(self.working_dir):
             raise ValueError(f"Working dir {self.working_dir} does not exist.")
@@ -28,7 +28,7 @@ class Pipeline:
         assert self.source is not None and self.working_dir is not None
 
         timestamp = datetime.today().strftime("%y%m%d-%H%M%S")
-        self.prev_run_dir = Path(self.working_dir / f"prev-{timestamp}")
+        self.prev_run_dir = Path(self.working_dir / f"{name}-{timestamp}")
         self.errors_and_warnings_file = self.working_dir / "errors_and_warnings.txt"
 
         self.phases = phases or self.__class__.phases
@@ -122,11 +122,16 @@ class Pipeline:
             raise PhaserError(f"{len(missing_sources)} sources need initialization: {missing_sources}")
 
     def run(self):
+        self.move_previous_file(self.working_dir / self.source_copy_filename())
+        self.move_previous_file(self.errors_and_warnings_file)
+
         self.validate_sources()
         if self.source is None:
             raise ValueError("Pipeline source may not be None")
         next_source = self.source
-        self.move_previous_file(self.errors_and_warnings_file)
+        source_data_to_copy = Records(self.load(self.source))
+        self.save(source_data_to_copy.for_save(), self.working_dir / self.source_copy_filename())
+
         for phase in self.phase_instances:
             destination = self.get_destination(phase)
             self.run_phase(phase, next_source, destination)
@@ -211,6 +216,10 @@ class Pipeline:
         """
         self.move_previous_file(destination)
         save_csv(destination, results)
+
+    @classmethod
+    def source_copy_filename(cls):
+        return "source_copy.csv"
 
     def get_destination(self, phase):
         source_filename = None
