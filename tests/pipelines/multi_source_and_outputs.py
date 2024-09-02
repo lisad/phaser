@@ -129,7 +129,7 @@ class Enrichment(Phase):
     ]
 
 
-class EmployeeReviewPipeline(Pipeline):
+class EmployeeEnrichPipeline(Pipeline):
     phases = [
         Validation,
         Transformation,

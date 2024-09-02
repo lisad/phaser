@@ -35,7 +35,7 @@ def test_pipeline(tmpdir):
     pipeline.run()
 
 
-    output = tmpdir / 'add_currency_names_output_exchange_rates.csv'
+    output = tmpdir / 'add_currency_names_output.csv'
     assert os.path.exists(output)
     data = read_csv(output)
     # extract the from and to symbols into tuples so we can compare to what we

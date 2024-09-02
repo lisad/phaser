@@ -29,7 +29,6 @@ class Pipeline:
 
         timestamp = datetime.today().strftime("%y%m%d-%H%M%S")
         self.prev_run_dir = Path(self.working_dir / f"{name}-{timestamp}")
-        self.errors_and_warnings_file = self.working_dir / "errors_and_warnings.txt"
 
         self.phases = phases or self.__class__.phases
         try:
@@ -42,6 +41,7 @@ class Pipeline:
 
         self.setup_phases()
         self.setup_extras()
+        self.check_output_collision()
 
     def init_source(self, name, source_path):
         """ Initializes a named source based on the kind of 'source' passed in.
@@ -73,12 +73,6 @@ class Pipeline:
                     phase_instance = phase(context=self.context)
                 else:
                     phase.context = self.context
-                name = phase_instance.name
-                i = 1
-                while name in phase_names:
-                    name = f"{phase.name}-{i}"
-                    i = i + 1
-                phase_instance.name = name
                 self.phase_instances.append(phase_instance)
             except Exception as exc:
                 raise PhaserError(f"Error setting up {phase} instance") from exc
@@ -92,6 +86,36 @@ class Pipeline:
         self.extra_sources = [
             source for phase in self.phase_instances for source in phase.extra_sources
         ]
+
+    def expected_outputs(self):
+        """ All the files expected to be saved in the pipeline.  Right now this has
+        phase output checkpoint files, extra outputs, errors and warnings file and the
+        copy of source used for diffs.
+        """
+        expected_outputs = [self.phase_save_filename(phase) for phase in self.phase_instances]
+        expected_outputs.append(self.source_copy_filename())
+        expected_outputs.append(self.errors_and_warnings_filename())
+        for phase in self.phase_instances:
+            expected_outputs.extend([self.item_save_filename(item) for item in phase.extra_outputs])
+        return expected_outputs
+
+    def check_output_collision(self):
+        """ This is to check that the outputs of the pipeline are not going to
+        overwrite the source file or each other, and
+        that previous copies of the outputs are copied to a previous-run directory """
+        expected_outputs = self.expected_outputs()
+        if len(set(expected_outputs)) != len(expected_outputs):
+            raise PhaserError("One of the filenames expected to be saved overlaps with another.  ("
+                              + ",".join(expected_outputs) + ")")
+
+        if (os.path.basename(self.source) in expected_outputs and
+                os.path.dirname(self.source) == self.working_dir):
+            raise PhaserError("One of the expected outputs will overwrite the source file.  ("
+                              + ",".join(expected_outputs) + ")")
+
+    def cleanup_working_dir(self):
+        for filename in self.expected_outputs():
+            self.move_previous_file(self.working_dir / filename)
 
     def sources_needing_initialization(self):
         # Collect the extra sources and outputs from the phases so they can be
@@ -122,9 +146,7 @@ class Pipeline:
             raise PhaserError(f"{len(missing_sources)} sources need initialization: {missing_sources}")
 
     def run(self):
-        self.move_previous_file(self.working_dir / self.source_copy_filename())
-        self.move_previous_file(self.errors_and_warnings_file)
-
+        self.cleanup_working_dir()
         self.validate_sources()
         if self.source is None:
             raise ValueError("Pipeline source may not be None")
@@ -133,7 +155,7 @@ class Pipeline:
         self.save(source_data_to_copy.for_save(), self.working_dir / self.source_copy_filename())
 
         for phase in self.phase_instances:
-            destination = self.get_destination(phase)
+            destination = self.working_dir / self.phase_save_filename(phase)
             self.run_phase(phase, next_source, destination)
             next_source = destination
 
@@ -165,7 +187,7 @@ class Pipeline:
         to logs.  Python logging does allow users of a library to send log messages to more than one place while
         customizing log level desired, and we could have drop-row messages as info and warning as warn level so
         these fit very nicely into the standard levels allowing familiar customization.  """
-        with open(self.errors_and_warnings_file, 'a') as f:
+        with open(self.errors_and_warnings_file(), 'a') as f:
             f.write("-------------\n")
             f.write(f"Beginning errors and warnings for {phase_name}\n")
             f.write("-------------\n")
@@ -191,12 +213,12 @@ class Pipeline:
             # Since context is passed from Phase to Phase, only save the new ones with to_save=True
             if item.to_save:
                 filename = self.working_dir / f"{item.name}.csv"
-                self.move_previous_file(filename)
                 item.save(filename)
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
 
-    def load(self, source):
+    @classmethod
+    def load(cls, source):
         """ The load method can be overridden to apply a pipeline-specific way of loading data.
         Phaser default is to read data from a CSV file. """
         return read_csv(source)
@@ -214,25 +236,29 @@ class Pipeline:
         It should be easy to override this method to save in a different way, using pandas' to_csv, to_excel, to_json
         or a different output entirely.
         """
-        self.move_previous_file(destination)
         save_csv(destination, results)
+
+    @classmethod
+    def phase_save_filename(cls, phase):
+        """
+        As a class method, this can be called from the diffing tool which would like to know what
+        names files will be saved in this pipeline.
+        """
+        if inspect.isclass(phase):
+            phase = phase()
+        return f"{phase.name}_output.csv"
+
+    @classmethod
+    def item_save_filename(cls, item):
+        return f"{item.name}.csv"
 
     @classmethod
     def source_copy_filename(cls):
         return "source_copy.csv"
 
-    def get_destination(self, phase):
-        source_filename = None
-        if isinstance(self.source, str):
-            source_filename = os.path.basename(self.source)
-        elif isinstance(self.source, PosixPath):
-            source_filename = self.source.name
-        else:
-            raise ValueError(f"Pipeline 'source' is not a string or Path ({self.source.__class__}")
+    @classmethod
+    def errors_and_warnings_filename(cls):
+        return 'errors_and_warnings.txt'
 
-        dest_filename = f"{phase.name}_output_{source_filename}"
-
-        destination = os.path.join(self.working_dir, dest_filename)
-        if str(destination) == str(self.source):
-            raise ValueError("Destination file cannot be same as source, it will overwrite")
-        return destination
+    def errors_and_warnings_file(self):
+        return self.working_dir / self.errors_and_warnings_filename()
