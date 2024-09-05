@@ -103,12 +103,12 @@ class Pipeline:
         expected_outputs = self.expected_outputs()
         if len(set(expected_outputs)) != len(expected_outputs):
             raise PhaserError("One of the filenames expected to be saved overlaps with another.  ("
-                              + ",".join(expected_outputs) + ")")
+                              + ", ".join(sorted(expected_outputs)) + ")")
 
         if (os.path.basename(self.source) in expected_outputs and
                 os.path.dirname(self.source) == self.working_dir):
             raise PhaserError("One of the expected outputs will overwrite the source file.  ("
-                              + ",".join(expected_outputs) + ")")
+                              + ", ".join(sorted(expected_outputs)) + ")")
 
     def cleanup_working_dir(self):
         timestamp = None
