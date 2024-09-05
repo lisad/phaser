@@ -5,6 +5,8 @@ import pytest
 from phaser import Pipeline, Phase, batch_step, PhaserError, DataException, ON_ERROR_STOP_NOW
 from fixtures import reconcile_phase_class, null_step_phase
 
+from test_csv import write_text
+
 current_path = Path(__file__).parent
 
 
@@ -14,8 +16,8 @@ def test_pipeline(tmpdir, null_step_phase, reconcile_phase_class):
                  source=current_path / 'fixture_files' / 'crew.csv',
                  working_dir=tmpdir)
     p.run()
-    assert os.path.exists(os.path.join(tmpdir, 'do_nothing_output_crew.csv'))
-    assert os.path.exists(os.path.join(tmpdir, 'Reconciler_output_crew.csv'))
+    assert os.path.exists(os.path.join(tmpdir, 'do_nothing_output.csv'))
+    assert os.path.exists(os.path.join(tmpdir, 'Reconciler_output.csv'))
 
 
 def test_pipeline_source_none(tmpdir, reconcile_phase_class):
@@ -106,3 +108,21 @@ def test_pipeline_error_handling_logging(tmpdir, caplog):
             pipeline.run()
             log_messages = [record.message for record in caplog.records]
             assert any("Error in pipeline running" in message for message in log_messages)
+
+
+def test_pipeline_wont_overwrite_source(tmpdir, null_step_phase):
+    # First add the source file to the tmpdir so it WOULD be overwritten
+    with pytest.raises(PhaserError):
+        Pipeline(phases=[null_step_phase],
+                 source=tmpdir / 'source_copy.csv',
+                 working_dir=tmpdir)
+
+    with pytest.raises(PhaserError):
+        Pipeline(phases=[null_step_phase],
+                 source=tmpdir / 'do_nothing_output.csv',
+                 working_dir=tmpdir)
+
+    # If the source file is named one of the outputs but in a different directory, it should be OK
+    Pipeline(phases=[null_step_phase],
+             source=tmpdir / 'do_nothing_output.csv',
+             working_dir=tmpdir.mkdir("subdir"))

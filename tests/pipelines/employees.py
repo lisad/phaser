@@ -99,3 +99,7 @@ class Transformer(Phase):
 class EmployeeReviewPipeline(Pipeline):
 
     phases = [Validator, Transformer]
+
+    @classmethod
+    def phase_save_filename(cls, phase):
+        return f"{phase.name}_output_employees.csv"

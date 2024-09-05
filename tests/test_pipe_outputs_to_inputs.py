@@ -65,9 +65,9 @@ def test_pipeline(tmpdir):
     pipeline = PipePipeline(source=source, working_dir=tmpdir)
     pipeline.run()
 
-    assert os.path.exists(tmpdir / 'EnrichSiblings_output_source.csv')
+    assert os.path.exists(tmpdir / 'EnrichSiblings_output.csv')
 
-    output = read_csv(tmpdir / 'EnrichSiblings_output_source.csv')
+    output = read_csv(tmpdir / 'EnrichSiblings_output.csv')
     assert len(output) == 6
     expected_siblings = [ 2, 1, 0, 2, 2, 1 ]
     for i, d in enumerate(output):

@@ -55,7 +55,7 @@ def test_reshape_renumber_pipeline_output(tmpdir):
 
     pipeline = MyPandasPipeline(working_dir=tmpdir)
     pipeline.run()
-    with open(tmpdir / 'PhaseWithDFStep_output_locations.csv') as f:
+    with open(tmpdir / 'PhaseWithDFStep_output.csv') as f:
         line = f.readline()
         assert line == f"location,gamma radiation,temperature,{PHASER_ROW_NUM}\n"
         line = f.readline()

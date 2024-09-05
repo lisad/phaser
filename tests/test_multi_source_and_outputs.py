@@ -4,7 +4,7 @@ from contextlib import redirect_stdout
 import os
 import pandas
 from pathlib import Path
-from pipelines.multi_source_and_outputs import EmployeeReviewPipeline
+from pipelines.multi_source_and_outputs import EmployeeEnrichPipeline
 from phaser.io import read_csv
 
 current_path = Path(__file__).parent
@@ -13,16 +13,16 @@ current_path = Path(__file__).parent
 def test_pipeline(tmpdir):
     source = current_path / "fixture_files" / "more-employees.csv"
     department_source = current_path / "fixture_files" / "departments.csv"
-    pipeline = EmployeeReviewPipeline(source=source, working_dir=tmpdir)
+    pipeline = EmployeeEnrichPipeline(source=source, working_dir=tmpdir)
     pipeline.init_source('departments', department_source)
     pipeline.run()
 
-    assert os.path.exists(tmpdir / 'Validation_output_more-employees.csv')
-    assert os.path.exists(tmpdir / 'Transformation_output_more-employees.csv')
-    assert os.path.exists(tmpdir / 'Enrichment_output_more-employees.csv')
+    assert os.path.exists(tmpdir / 'Validation_output.csv')
+    assert os.path.exists(tmpdir / 'Transformation_output.csv')
+    assert os.path.exists(tmpdir / 'Enrichment_output.csv')
     assert os.path.exists(tmpdir / 'managers.csv')
 
-    new_data = read_csv(tmpdir / 'Enrichment_output_more-employees.csv')
+    new_data = read_csv(tmpdir / 'Enrichment_output.csv')
     assert len(new_data) == 5 # One employee should be dropped
     assert all([float(row['Bonus percent']) > 0.1 and float(row['Bonus percent']) < 0.2 for row in new_data])
 
@@ -50,8 +50,11 @@ def test_pipeline(tmpdir):
         { 'key': '2', 'value': '2' },
     ]
 
-    file_data = open(pipeline.errors_and_warnings_file, 'r').read()
+    file_data = open(pipeline.errors_and_warnings_file(), 'r').read()
     assert "Beginning errors and warnings for Validation" in file_data
     assert "Employee Garak has no ID and inactive" in file_data
     assert "Beginning errors and warnings for Transformation" in file_data
     assert "'Full name' was added to the row_data and not declared a header'" in file_data
+
+    # The extra output should be listed in the expected outputs.
+    assert 'managers.csv' in pipeline.expected_outputs()

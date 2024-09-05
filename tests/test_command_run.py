@@ -20,7 +20,7 @@ def test_runs_a_pipeline(tmpdir):
     (args, extra) = parser.parse_known_args(f"passthrough {tmpdir} {source}".split())
     command.add_incremental_arguments(args, parser)
     command.execute(args)
-    output = read_csv(tmpdir / "passthrough_output_runner-test.csv")
+    output = read_csv(tmpdir / "passthrough_output.csv")
     for row in output:
         del row[PHASER_ROW_NUM]
     assert output == read_csv(source)

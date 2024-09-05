@@ -26,7 +26,7 @@ def test_employee_pipeline(pipeline):
 
 def test_reporting(pipeline):
     pipeline.run()
-    file_data = open(pipeline.errors_and_warnings_file, 'r').read()
+    file_data = open(pipeline.errors_and_warnings_file(), 'r').read()
     assert "Beginning errors and warnings for Validator" in file_data
     assert "Employee Garak has no ID and inactive" in file_data
     assert "Beginning errors and warnings for Transformer" in file_data
