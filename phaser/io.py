@@ -31,8 +31,19 @@ def read_csv(source):
             raise PhaserError("CSV dialect could not be identified")
 
         reader = DictReader(drop_empty_rows(datafile), dialect=dialect)
-        return [row for row in reader]
+        data = [row for row in reader]
 
+        # This is a strictness check - if any of the rows in the file are missing a comma or several at the end
+        # or have a comma extra inside a string that's not being handled correctly, lining up fields and
+        # columns can go wrong.
+        field_count = None
+        for record in data:
+            if field_count is None:
+                field_count = len(record)
+            elif field_count != len(record):
+                raise Exception(f"Inconsistent # of fields ({len(record)}) detected first in record <{record}>")
+
+        return data
 
 def drop_empty_rows(stream):
     for row in stream:
