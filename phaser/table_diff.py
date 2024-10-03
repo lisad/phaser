@@ -22,17 +22,27 @@ This table-based diff tool is specific to Phaser
 
 class Differ:
     def __init__(self, f1, f2, pipeline=None):
-        def no_row_num(line):
+        def _no_row_num(line):
             line.pop(PHASER_ROW_NUM)
             return line
-        self.f1_dict = {line[PHASER_ROW_NUM]: no_row_num(line) for line in f1}
-        self.f2_dict = {line[PHASER_ROW_NUM]: no_row_num(line) for line in f2}
+
+        if isinstance(f1, dict):
+            # Passing in a dict instead of a file allows for easier testing.
+            self.f1_dict = f1
+        else:
+            self.f1_dict = {line[PHASER_ROW_NUM]: _no_row_num(line) for line in f1}
+        if isinstance(f2, dict):
+            self.f2_dict = f2
+        else:
+            self.f2_dict = {line[PHASER_ROW_NUM]: _no_row_num(line) for line in f2}
+
         row1 = list(self.f1_dict.values())[0]  # sample row from f1 to get keys which are field names
         row2 = list(self.f2_dict.values())[0]  # sample row from f2
-        self.pipeline = pipeline
+        self.pipeline = pipeline  # LMDTODO: Instead of building pipeline logic in, wrap a generic table differ in something pipeline aware
         self.all_field_names = self._setup_column_header(row1.keys(), row2.keys())
         self.all_row_nums = sorted(set().union(self.f1_dict.keys(), self.f2_dict.keys()))
         self.outputter = None
+        self.counters = {'added': 0, 'removed': 0, 'changed': 0, 'unchanged': 0}
 
     def _setup_column_header(self, headers1, headers2):
         column_headers = list(headers1)
@@ -60,6 +70,7 @@ class Differ:
                 raise Exception("Logic error iterating through rows in diff")
 
     def added_row(self, row_num, row):
+        self.counters['added'] += 1
         self.outputter.add_cell("Added")
         self.outputter.add_cell(row_num)
         for field in self.all_field_names:
@@ -70,6 +81,7 @@ class Differ:
         self.outputter.new_row()
 
     def deleted_row(self, row_num, row):
+        self.counters['removed'] += 1
         self.outputter.add_cell("Deleted")
         self.outputter.add_cell(row_num)
         for field in self.all_field_names:
@@ -81,28 +93,35 @@ class Differ:
 
     def diff_row(self, row_num, l1, l2):
         if all([l1.get(field) == l2.get(field) for field in self.all_field_names]):
+            self.counters['unchanged'] += 1
             self.outputter.add_cell("")
-        else:
-            self.outputter.add_cell("Updated")
+            return
+
+        self.counters['changed'] += 1
+        self.outputter.add_cell("Updated")
         self.outputter.add_cell(row_num)
 
         for field in self.all_field_names:
             value1 = l1.get(field)
             value2 = l2.get(field)
-            if value1 and not value2:
-                self.outputter.add_cell(self.outputter.removed_text(value1))
-            elif value2 and not value1:
-                self.outputter.add_cell(self.outputter.added_text(value2))
-            elif value1 and value2:
-                diff_matcher = SequenceMatcher(None, value1, value2)
-                self.outputter.add_cell(self.outputter.show_changes(diff_matcher.get_opcodes(), value1, value2))
-            else:
-                self.outputter.add_cell('-')
+            self.outputter.add_cell(self.diff_field(value1, value2))
         self.outputter.new_row()
+
+    def diff_field(self, value1, value2):
+        if value1 and not value2:
+            return self.outputter.removed_text(value1)
+        elif value2 and not value1:
+            return self.outputter.added_text(value2)
+        elif value1 and value2:
+            diff_matcher = SequenceMatcher(None, value1, value2)
+            return self.outputter.show_changes(diff_matcher.get_opcodes(), value1, value2)
+        else:
+            return self.outputter.NO_CHANGE_CELL_TEXT
 
 
 class HtmlTableOutput:
 
+    NO_CHANGE_CELL_TEXT = '-'  # Shown when field has no value in both old and new table
     TH_STYLE = "'text-transform: uppercase;padding:8px;border-bottom: 1px solid #e8e8e8;font-size: 0.8125rem;'"
 
     def __init__(self, all_field_names):
@@ -132,6 +151,9 @@ class HtmlTableOutput:
             if op_type == 'equal':
                 text += value1[old_start:old_end]
             elif op_type == 'insert':
+                text += self.added_text(value2[new_start:new_end])
+            elif op_type == 'replace':
+                text += self.removed_text(value1[old_start:old_end])
                 text += self.added_text(value2[new_start:new_end])
             else:
                 raise Exception("More to do", op_type)

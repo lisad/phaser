@@ -65,11 +65,16 @@ class DiffCommand(Command):
         outputs = pipeline_instance.expected_main_outputs()
         if len(outputs) > 1:
             compare_prev = source
+            prev_name = "source"
             for output_name in pipeline_instance.expected_main_outputs():
                 output = Pipeline.load(working_dir / output_name)
                 filename = working_dir / f"diff_to_{output_name}.html"
+                differ = Differ(compare_prev, output)
+                print(f"Diff of {prev_name} and {output_name} in {filename}")
                 with open(filename, 'w') as diff_file:
-                    diff_file.write(Differ(compare_prev, output).html())
+                    diff_file.write(differ.html())
+                print_summary(differ)
+                prev_name = output_name
                 compare_prev = Pipeline.load(working_dir / output_name) # Reload to start read from beginning
             last_one = compare_prev
         else:
@@ -78,5 +83,15 @@ class DiffCommand(Command):
         # Full pipeline diff
         source = Pipeline.load(source_file)  # Reload to read file from beginning
         filename = working_dir / f"diff_pipeline.html"
+        differ = Differ(source, last_one)
+        print(f"Entire pipeline changes in {filename}")
         with open(filename, 'w') as diff_file:
-            diff_file.write(Differ(source, last_one).html())
+            diff_file.write(differ.html())
+        print_summary(differ)
+
+
+def print_summary(differ):
+    print(f"    {differ.counters['added']} rows added")
+    print(f"    {differ.counters['removed']} rows removed")
+    print(f"    {differ.counters['changed']} rows changed")
+    print(f"    {differ.counters['unchanged']} rows unchanged")
