@@ -22,7 +22,7 @@ from pathlib import Path
 
 import phaser
 from phaser.cli import Command
-from phaser.table_diff import Differ
+from phaser.table_diff import IndexedTableDiffer
 
 class DiffCommand(Command):
     def __init__(self):
@@ -69,7 +69,7 @@ class DiffCommand(Command):
             for output_name in pipeline_instance.expected_main_outputs():
                 output = Pipeline.load(working_dir / output_name)
                 filename = working_dir / f"diff_to_{output_name}.html"
-                differ = Differ(compare_prev, output)
+                differ = IndexedTableDiffer(compare_prev, output)
                 print(f"Diff of {prev_name} and {output_name} in {filename}")
                 with open(filename, 'w') as diff_file:
                     diff_file.write(differ.html())
@@ -83,7 +83,7 @@ class DiffCommand(Command):
         # Full pipeline diff
         source = Pipeline.load(source_file)  # Reload to read file from beginning
         filename = working_dir / f"diff_pipeline.html"
-        differ = Differ(source, last_one)
+        differ = IndexedTableDiffer(source, last_one)
         print(f"Entire pipeline changes in {filename}")
         with open(filename, 'w') as diff_file:
             diff_file.write(differ.html())

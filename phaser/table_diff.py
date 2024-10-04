@@ -1,7 +1,5 @@
 from difflib import SequenceMatcher
 
-from phaser import PHASER_ROW_NUM
-
 """
 This table-based diff tool is specific to Phaser
 
@@ -12,6 +10,8 @@ This table-based diff tool is specific to Phaser
    users can see which actual values have been changed ot not.
    TODO - this will require updating the CLI diff code also, to pass in the phase that is being
    run to cause the diff, to get the column renames.
+   EVEN BETTER, keep the table diffing independent of phaser - when setup, the differ could be passed the 
+   column-name-changes to display at top and then factor out of the field-by-field changes.
  * It uses HTML to display the changes in a table that shows added and removed rows, and added and removed columns
    TODO - display new columns with formatting, deleted columns with formatting 
  * Wraps this all up in linked HTML pages so that the entire pipeline diff can used to navigate to the
@@ -20,28 +20,28 @@ This table-based diff tool is specific to Phaser
 """
 
 
-class Differ:
-    def __init__(self, f1, f2, pipeline=None):
+class IndexedTableDiffer:
+    def __init__(self, f1, f2, index_column_name='__phaser_row_num__', pipeline=None):
         def _no_row_num(line):
-            line.pop(PHASER_ROW_NUM)
+            line.pop(index_column_name)
             return line
 
         if isinstance(f1, dict):
             # Passing in a dict instead of a file allows for easier testing.
             self.f1_dict = f1
         else:
-            self.f1_dict = {line[PHASER_ROW_NUM]: _no_row_num(line) for line in f1}
+            self.f1_dict = {line[index_column_name]: _no_row_num(line) for line in f1}
         if isinstance(f2, dict):
             self.f2_dict = f2
         else:
-            self.f2_dict = {line[PHASER_ROW_NUM]: _no_row_num(line) for line in f2}
+            self.f2_dict = {line[index_column_name]: _no_row_num(line) for line in f2}
 
         row1 = list(self.f1_dict.values())[0]  # sample row from f1 to get keys which are field names
         row2 = list(self.f2_dict.values())[0]  # sample row from f2
         self.pipeline = pipeline  # LMDTODO: Instead of building pipeline logic in, wrap a generic table differ in something pipeline aware
         self.all_field_names = self._setup_column_header(row1.keys(), row2.keys())
         self.all_row_nums = sorted(set().union(self.f1_dict.keys(), self.f2_dict.keys()))
-        self.outputter = None
+        self.formatter = None
         self.counters = {'added': 0, 'removed': 0, 'changed': 0, 'unchanged': 0}
 
     def _setup_column_header(self, headers1, headers2):
@@ -52,9 +52,12 @@ class Differ:
         return column_headers
 
     def html(self):
-        self.outputter = HtmlTableOutput(self.all_field_names)
+        return self.output(HtmlTableFormat)
+
+    def output(self, formatter_class):
+        self.formatter = formatter_class(self.all_field_names)
         self.iterate_rows()
-        return self.outputter.finish()
+        return self.formatter.finish()
 
     def iterate_rows(self):
         for row_num in self.all_row_nums:
@@ -71,55 +74,53 @@ class Differ:
 
     def added_row(self, row_num, row):
         self.counters['added'] += 1
-        self.outputter.add_cell("Added")
-        self.outputter.add_cell(row_num)
+        cells = []
         for field in self.all_field_names:
             if field in row.keys():
-                self.outputter.add_cell(self.outputter.added_text(row[field]))
+                cells.append(self.formatter.added_text(row[field]))
             else:
-                self.outputter.add_cell("")
-        self.outputter.new_row()
+                cells.append("")
+        self.formatter.new_added_row(row_num, cells)
 
     def deleted_row(self, row_num, row):
         self.counters['removed'] += 1
-        self.outputter.add_cell("Deleted")
-        self.outputter.add_cell(row_num)
+        cells = []
         for field in self.all_field_names:
             if field in row.keys():
-                self.outputter.add_cell(self.outputter.removed_text(row[field]))
+                cells.append(self.formatter.removed_text(row[field]))
             else:
-                self.outputter.add_cell("-")
-        self.outputter.new_row()
+                cells.append("-")
+        self.formatter.new_deleted_row(row_num, cells)
 
     def diff_row(self, row_num, l1, l2):
+        cells = []
         if all([l1.get(field) == l2.get(field) for field in self.all_field_names]):
             self.counters['unchanged'] += 1
-            self.outputter.add_cell("")
+            for field in self.all_field_names:
+                cells.append(l1.get(field))
+            self.formatter.new_same_row(row_num, cells)
             return
 
         self.counters['changed'] += 1
-        self.outputter.add_cell("Updated")
-        self.outputter.add_cell(row_num)
-
         for field in self.all_field_names:
             value1 = l1.get(field)
             value2 = l2.get(field)
-            self.outputter.add_cell(self.diff_field(value1, value2))
-        self.outputter.new_row()
+            cells.append(self.diff_field(value1, value2))
+        self.formatter.new_changed_row(row_num, cells)
 
     def diff_field(self, value1, value2):
         if value1 and not value2:
-            return self.outputter.removed_text(value1)
+            return self.formatter.removed_text(value1)
         elif value2 and not value1:
-            return self.outputter.added_text(value2)
+            return self.formatter.added_text(value2)
         elif value1 and value2:
             diff_matcher = SequenceMatcher(None, value1, value2)
-            return self.outputter.show_changes(diff_matcher.get_opcodes(), value1, value2)
+            return self.formatter.show_changes(diff_matcher.get_opcodes(), value1, value2)
         else:
-            return self.outputter.NO_CHANGE_CELL_TEXT
+            return self.formatter.NO_CHANGE_CELL_TEXT
 
 
-class HtmlTableOutput:
+class HtmlTableFormat:
 
     NO_CHANGE_CELL_TEXT = '-'  # Shown when field has no value in both old and new table
     TH_STYLE = "'text-transform: uppercase;padding:8px;border-bottom: 1px solid #e8e8e8;font-size: 0.8125rem;'"
@@ -130,7 +131,6 @@ class HtmlTableOutput:
         self.content += "<tr>" + self.header_cell("<!--change type-->") + self.header_cell("Row number")
         self.content += ''.join([self.header_cell(field) for field in self.all_field_names])
         self.content += "</tr>"
-        self.current_row = []
 
     def header_cell(self, text):
         return "<th style=" + self.TH_STYLE + ">" + text + "</th>"
@@ -140,9 +140,6 @@ class HtmlTableOutput:
 
     def removed_text(self, text):
         return "<span style=\"color: red\">" + text + "</span>"
-
-    def add_cell(self, cell_content):
-        self.current_row.append(str(cell_content))
 
     def show_changes(self, op_codes, value1, value2):
         text = ""
@@ -155,15 +152,33 @@ class HtmlTableOutput:
             elif op_type == 'replace':
                 text += self.removed_text(value1[old_start:old_end])
                 text += self.added_text(value2[new_start:new_end])
+            elif op_type == 'delete':
+                text += self.removed_text(value1[old_start:old_end])
             else:
-                raise Exception("More to do", op_type)
+                raise Exception("Table differ does not handle unknown op type: " + op_type)
         return text
 
-    def new_row(self):
-        cells = ["<td style='padding:8px;'>" + item + "</td>" for item in self.current_row]
-        row = "<tr>" + "\n".join(cells) + "</tr>"
+    def new_added_row(self, row_num, cells):
+        cells.insert(0, "Added")
+        self.new_row(row_num, cells)
+
+    def new_deleted_row(self, row_num, cells):
+        cells.insert(0, "Deleted")
+        self.new_row(row_num, cells)
+
+    def new_same_row(self, row_num, cells):
+        cells.insert(0, "Same")
+        self.new_row(row_num, cells)
+
+    def new_changed_row(self, row_num, cells):
+        cells.insert(0, "Changed")
+        self.new_row(row_num, cells)
+
+    def new_row(self, row_num, cells):
+        cells.insert(1, row_num)
+        html_cells = ["<td style='padding:8px;'>" + str(cell) + "</td>" for cell in cells]
+        row = "<tr>" + "\n".join(html_cells) + "</tr>"
         self.content += row
-        self.current_row = []
 
     def finish(self):
         return self.content + "</table>"

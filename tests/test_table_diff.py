@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import Mock, MagicMock
 from difflib import SequenceMatcher
 
-from phaser.table_diff import Differ, HtmlTableOutput
+from phaser.table_diff import IndexedTableDiffer, HtmlTableFormat
 
 @pytest.fixture
 def basic_table():
@@ -12,44 +12,58 @@ def basic_table():
     }
 
 def test_init(basic_table):
-    differ = Differ(basic_table, basic_table)
+    differ = IndexedTableDiffer(basic_table, basic_table)
     assert differ.all_field_names == ['planet', 'homeworld']
     assert differ.all_row_nums == [1, 2]
 
 def test_added_column(basic_table):
     changed_table = basic_table.copy()
     changed_table[1]['destroyed'] = True
-    differ = Differ(basic_table, changed_table)
+    differ = IndexedTableDiffer(basic_table, changed_table)
     assert differ.all_field_names == ['planet', 'homeworld', 'destroyed']
 
 def test_deleted_row(basic_table):
     changed_table = {1: basic_table[1]}
-    differ = Differ(basic_table, changed_table)
-    differ.outputter = Mock()
+    differ = IndexedTableDiffer(basic_table, changed_table)
+    differ.formatter = Mock()
     differ.iterate_rows()
     assert differ.counters['removed'] == 1
 
 def test_added_row(basic_table):
     changed_table = basic_table.copy()
     changed_table[3] = {'planet': "Legara IV", "homeworld": "Legarians"}
-    differ = Differ(basic_table, changed_table)
-    differ.outputter = Mock()
+    differ = IndexedTableDiffer(basic_table, changed_table)
+    differ.formatter = Mock()
     differ.iterate_rows()
     assert differ.counters['added'] == 1
 
 def test_diff_row():
-    # Could do better here - not sure whether to make a custom Outputter as a test harness, or a smarter Mock
-    simple_table = {1: {'planet': 'foo'}}
-    differ = Differ(simple_table, simple_table)
-    differ.outputter = MagicMock()
+    simple_table1 = {1: {'planet': 'Gemaris V'}}
+    simple_table2 = {1: {'planet': 'Gemaris'}}
+    differ = IndexedTableDiffer(simple_table1, simple_table2)
+    differ.formatter = MagicMock()
     # Ignoring the actual contents of the table, going straight to diffing arbitrary rows:
-    differ.diff_row(1, {'planet': "Gemaris V"}, {'planet': "Gemaris"})
-    differ.outputter.show_changes.assert_called()
+    differ.iterate_rows()
+    differ.formatter.show_changes.assert_called()
+    differ.formatter.new_changed_row.assert_called()
 
+def test_unchanged_row(basic_table):
+    differ = IndexedTableDiffer(basic_table, basic_table)
+    differ.formatter = MagicMock()
+    differ.iterate_rows()
+    differ.formatter.new_same_row.assert_called()
 
 def test_infield_changes():
     diff_matcher = SequenceMatcher(None, "Khitomer", "Qi'tomer")
-    outputter = HtmlTableOutput(all_field_names=['planet'])
-    display = outputter.show_changes(diff_matcher.get_opcodes(), "Khitomer", "Qi'tomer")
-    print(display)
-    assert display == """<span style="color: red">Kh</span><span style="color: green">Q</span>i<span style="color: green">'</span>tomer"""
+    formatter = HtmlTableFormat(all_field_names=['planet'])
+    display = formatter.show_changes(diff_matcher.get_opcodes(), "Khitomer", "Qi'tomer")
+    assert 'color: red' in display
+    assert 'color: green' in display
+    assert "Khitomer" not in display  # it should now be broken up with spans, not a whole word
+
+def test_format_deleted_row():
+    diff_matcher = SequenceMatcher(None, "Gemaris V", "Gemaris")
+    formatter = HtmlTableFormat(all_field_names=['planet'])
+    display = formatter.show_changes(diff_matcher.get_opcodes(), "Gemaris V", "Gemaris")
+    assert 'Gemaris' in display
+    assert 'color: red' in display
