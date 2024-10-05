@@ -13,14 +13,25 @@ def basic_table():
 
 def test_init(basic_table):
     differ = IndexedTableDiffer(basic_table, basic_table)
-    assert differ.all_field_names == ['planet', 'homeworld']
+    assert differ.old_and_new_columns == [('planet', 'planet'), ('homeworld', 'homeworld')]
     assert differ.all_row_nums == [1, 2]
 
 def test_added_column(basic_table):
     changed_table = basic_table.copy()
     changed_table[1]['destroyed'] = True
     differ = IndexedTableDiffer(basic_table, changed_table)
-    assert differ.all_field_names == ['planet', 'homeworld', 'destroyed']
+    assert differ.old_and_new_columns == [('planet', 'planet'), ('homeworld', 'homeworld'), ('destroyed', 'destroyed')]
+
+def test_renamed_column(basic_table):
+    changed_table = {
+        1: {'LOCATION': "Aaamazzara", 'homeworld': "Aaamazzarite"},
+    }
+    differ = IndexedTableDiffer(basic_table, changed_table, column_renames={'planet': 'LOCATION'})
+    assert differ.old_and_new_columns == [('planet', 'LOCATION'), ('homeworld', 'homeworld')]
+
+def test_mistake_in_column_renames(basic_table):
+    with pytest.raises(Exception) as exc:
+        differ = IndexedTableDiffer(basic_table, basic_table, column_renames={'planet': 'LOCATION'})
 
 def test_deleted_row(basic_table):
     changed_table = {1: basic_table[1]}
@@ -55,15 +66,15 @@ def test_unchanged_row(basic_table):
 
 def test_infield_changes():
     diff_matcher = SequenceMatcher(None, "Khitomer", "Qi'tomer")
-    formatter = HtmlTableFormat(all_field_names=['planet'])
+    formatter = HtmlTableFormat(old_and_new_columns=[('planet', 'planet')])
     display = formatter.show_changes(diff_matcher.get_opcodes(), "Khitomer", "Qi'tomer")
-    assert 'color: red' in display
-    assert 'color: green' in display
+    assert 'deltext' in display
+    assert 'newtext' in display
     assert "Khitomer" not in display  # it should now be broken up with spans, not a whole word
 
 def test_format_deleted_row():
     diff_matcher = SequenceMatcher(None, "Gemaris V", "Gemaris")
-    formatter = HtmlTableFormat(all_field_names=['planet'])
+    formatter = HtmlTableFormat(old_and_new_columns=[('planet', 'planet')])
     display = formatter.show_changes(diff_matcher.get_opcodes(), "Gemaris V", "Gemaris")
     assert 'Gemaris' in display
-    assert 'color: red' in display
+    assert 'deltext' in display

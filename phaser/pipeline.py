@@ -89,15 +89,12 @@ class Pipeline:
         phase output checkpoint files, extra outputs, errors and warnings file and the
         copy of source used for diffs.
         """
-        expected_outputs = self.expected_main_outputs()
+        expected_outputs = [self.phase_save_filename(phase) for phase in self.phase_instances]
         expected_outputs.append(self.source_copy_filename())
         expected_outputs.append(self.errors_and_warnings_filename())
         for phase in self.phase_instances:
             expected_outputs.extend([self.item_save_filename(item) for item in phase.extra_outputs])
         return expected_outputs
-
-    def expected_main_outputs(self):
-        return [self.phase_save_filename(phase) for phase in self.phase_instances]
 
     def check_output_collision(self):
         """ This is to check that the outputs of the pipeline are not going to

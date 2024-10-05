@@ -58,36 +58,63 @@ class DiffCommand(Command):
         source_file = working_dir / Pipeline.source_copy_filename()
         source = Pipeline.load(source_file)
 
-        old_columns = source[0].keys()
-
         pipeline_instance = Pipeline(working_dir, source_file)
-
-        outputs = pipeline_instance.expected_main_outputs()
-        if len(outputs) > 1:
+        pipeline_instance.setup_phases()
+        phases = pipeline_instance.phase_instances
+        if len(phases) > 1:
             compare_prev = source
             prev_name = "source"
-            for output_name in pipeline_instance.expected_main_outputs():
+            all_column_renames = {}
+            for phase in phases:
+                output_name = pipeline_instance.phase_save_filename(phase)
                 output = Pipeline.load(working_dir / output_name)
-                filename = working_dir / f"diff_to_{output_name}.html"
-                differ = IndexedTableDiffer(compare_prev, output)
-                print(f"Diff of {prev_name} and {output_name} in {filename}")
-                with open(filename, 'w') as diff_file:
+                phase_column_renames = get_real_renamed_columns(phase, compare_prev[0].keys(), output[0].keys())
+                build_full_pipeline_rename_map(phase_column_renames, all_column_renames)
+                diff_filename = working_dir / f"diff_to_{output_name}.html"
+                print(f"Diff of {prev_name} and {output_name} will be saved in {diff_filename}")
+                differ = IndexedTableDiffer(compare_prev, output, column_renames=phase_column_renames)
+                with open(diff_filename, 'w') as diff_file:
                     diff_file.write(differ.html())
                 print_summary(differ)
                 prev_name = output_name
                 compare_prev = Pipeline.load(working_dir / output_name) # Reload to start read from beginning
             last_one = compare_prev
         else:
-            last_one = Pipeline.load(working_dir / outputs[0])
+            last_one = Pipeline.load(working_dir / pipeline_instance.phase_save_filename(phases[0]))
+            all_column_renames = get_real_renamed_columns(phases[0], source[0].keys(), last_one[0].keys())
 
         # Full pipeline diff
         source = Pipeline.load(source_file)  # Reload to read file from beginning
-        filename = working_dir / f"diff_pipeline.html"
-        differ = IndexedTableDiffer(source, last_one)
-        print(f"Entire pipeline changes in {filename}")
-        with open(filename, 'w') as diff_file:
+        diff_filename = working_dir / f"diff_pipeline.html"
+        differ = IndexedTableDiffer(source, last_one, column_renames=all_column_renames)
+        print(f"Entire pipeline changes in {diff_filename}")
+        with open(diff_filename, 'w') as diff_file:
             diff_file.write(differ.html())
         print_summary(differ)
+        # TODO: create a wrapper HTML file that allows the user to navigate between the different diffs when the
+        # wrapper is loaded automatically into the browser after the command runs?
+
+
+def build_full_pipeline_rename_map(phase_column_renames, all_column_renames):
+    for old_name, new_name in phase_column_renames.items():
+        if old_name in all_column_renames.values():
+            reverse_rename_lookup = {v: k for k, v in all_column_renames.items()}
+            old_old_name = reverse_rename_lookup[old_name]
+            all_column_renames[old_old_name] = new_name
+        else:
+            all_column_renames[old_name] = new_name
+
+
+def get_real_renamed_columns(phase, old_column_names, new_column_names):
+    # We want to know which columns were likely to have been renamed.  From the phase we get all possible
+    # mappings - but some mappings weren't used (didn't appear in the source file) or were used then deleted
+    # (don't appear in the destination file)
+    all_possible_column_renames = phase.column_rename_dict()
+    actual_column_renames = {}
+    for old, new in all_possible_column_renames.items():
+        if old in old_column_names and new in new_column_names:
+            actual_column_renames[old] = new
+    return actual_column_renames
 
 
 def print_summary(differ):
