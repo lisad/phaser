@@ -19,6 +19,8 @@ to generate 3 diffs from this output:
 from importlib import import_module
 from inspect import getmembers, getmodule
 from pathlib import Path
+import webbrowser
+import os
 
 import phaser
 from phaser.cli import Command
@@ -61,6 +63,9 @@ class DiffCommand(Command):
         pipeline_instance = Pipeline(working_dir, source_file)
         pipeline_instance.setup_phases()
         phases = pipeline_instance.phase_instances
+        diff_filenames = {phase.name: working_dir / f"diff_to_{phase.name}.html" for phase in phases}
+        diff_filenames["Pipeline"] = working_dir / f"diff_pipeline.html"
+
         if len(phases) > 1:
             compare_prev = source
             prev_name = "source"
@@ -70,10 +75,9 @@ class DiffCommand(Command):
                 output = Pipeline.load(working_dir / output_name)
                 phase_column_renames = get_real_renamed_columns(phase, compare_prev[0].keys(), output[0].keys())
                 build_full_pipeline_rename_map(phase_column_renames, all_column_renames)
-                diff_filename = working_dir / f"diff_to_{output_name}.html"
-                print(f"Diff of {prev_name} and {output_name} will be saved in {diff_filename}")
+                print(f"Diff of {prev_name} and {output_name} will be saved in {diff_filenames[phase.name]}")
                 differ = IndexedTableDiffer(compare_prev, output, column_renames=phase_column_renames)
-                with open(diff_filename, 'w') as diff_file:
+                with open(diff_filenames[phase.name], 'w') as diff_file:
                     diff_file.write(differ.html())
                 print_summary(differ)
                 prev_name = output_name
@@ -85,14 +89,46 @@ class DiffCommand(Command):
 
         # Full pipeline diff
         source = Pipeline.load(source_file)  # Reload to read file from beginning
-        diff_filename = working_dir / f"diff_pipeline.html"
         differ = IndexedTableDiffer(source, last_one, column_renames=all_column_renames)
-        print(f"Entire pipeline changes in {diff_filename}")
-        with open(diff_filename, 'w') as diff_file:
+        print(f"Entire pipeline changes in {diff_filenames['Pipeline']}")
+        with open(diff_filenames["Pipeline"], 'w') as diff_file:
             diff_file.write(differ.html())
         print_summary(differ)
-        # TODO: create a wrapper HTML file that allows the user to navigate between the different diffs when the
-        # wrapper is loaded automatically into the browser after the command runs?
+
+        # Create an HTML file to wrap all the others and open it (could make this an option in future):
+        with open(working_dir / "diff_wrapper.html", 'w') as diff_wrapper_file:
+            diff_wrapper_file.write(get_wrapper_html(diff_filenames))
+        full_path = 'file://' + str(os.path.realpath(working_dir / "diff_wrapper.html"))
+        webbrowser.open(full_path)
+
+
+def get_wrapper_html(diff_filenames):
+    buttons = ""
+    for phase_name, diff_filename in diff_filenames.items():
+        buttons += f"<input type='button' onclick='load_diff_file(\"{diff_filename}\");' value=\"{phase_name}\" />"
+
+    return """
+        <html><head>
+        <style type="text/css">
+            input { margin: 12px; padding: 4px;}
+            p { font-family: Arial; padding: 20px; }
+        </style>
+        </head>
+        <body>
+            <div id='nav'>
+                <p>Diffs of changes by each phase, and entire pipeline:
+        """ + buttons + """
+                </p>
+            </div>
+            <div id='display'></div>
+        <script>
+            function load_diff_file(file_name) {
+                document.getElementById("display").innerHTML =
+                    '<embed type="text/html" src="' + file_name + '" width="100%" height="800" >';
+            }
+        </script>
+        </body></html>
+    """
 
 
 def build_full_pipeline_rename_map(phase_column_renames, all_column_renames):
