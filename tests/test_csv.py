@@ -129,3 +129,13 @@ def test_drop_empty_mixed_data_types(temp_file):
     data = read_csv(temp_file)
     assert dict(data[0]) == {'id': '1', 'age': '21', 'is_student': 'True'}
     assert dict(data[1]) == {'id': '2', 'age': '22', 'is_student': 'False'}
+
+
+def test_string_with_comma(temp_file):
+    # The comma within quotes should not make two fields load as 3; saving the CSV should preserve this
+    write_text(temp_file, "Location name,id\n\"Southern New England Trunkline Trail, Grove Street\",20187\n")
+    data = read_csv(temp_file)
+    assert len(data[0]) == 2
+    save_csv(temp_file, data)
+    reloaded = read_csv(temp_file)
+    assert len(reloaded[0]) == 2
