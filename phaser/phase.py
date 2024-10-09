@@ -249,13 +249,15 @@ class Phase(PhaseBase):
         # Then going row by row allows us to re-use row-based error/reporting work
         self.execute_row_step(cast_each_column_value, None)
 
+    def column_rename_dict(self):
+        return {alt: col.name for col in self.columns for alt in col.rename}
 
     def rename_columns(self):
         """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred
         label format, and using a list of additional alternative names provided in each column definition.
         It would be cool if this could be done before converting everything to list-of-dicts format...
         """
-        rename_list = {alt: col.name for col in self.columns for alt in col.rename}
+        rename_list = self.column_rename_dict()
         strict_name_list = {make_strict_name(col.name): col.name for col in self.columns}
 
         def rename_me(name):
