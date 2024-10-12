@@ -97,75 +97,7 @@ Phaser comes with table-sensitive diff tooling to make it very easy to develop a
 of the diff tool looks like this
 when viewing the pipeline results above operating on one of phaser's text fixture files:
 
-<div>
-<table style="font-family:Arial;padding:20px;"><tr>
-<th><!--change type--></th>
-<th>Row number</th>
-<th><span style="color:red;text-decoration:line-through">employeeNumber</span><br/><span style="color:green;text-decoration:underline">Employee ID</span></th>
-<th><span style="color:red;text-decoration:line-through">firstName</span><br/><span style="color:green;text-decoration:underline">First name</span></th>
-<th><span style="color:red;text-decoration:line-through">lastName</span><br/><span style="color:green;text-decoration:underline">Last name</span></th>
-<th>payType</th>
-<th><span style="color:red;text-decoration:line-through">paidPer</span><br/><span style="color:green;text-decoration:underline">Pay period</span></th>
-<th><span style="color:red;text-decoration:line-through">payRate</span><br/><span style="color:green;text-decoration:underline">Pay rate</span></th>
-<th>bonusAmount</th>
-<th>Status</th>
-<th>Full name</th>
-<th>salary</th>
-<th>Bonus percent</th></tr>
-<tr><td><i>Changed</i></td>
-<td>1</td>
-<td>1</td>
-<td>Benjamin</td>
-<td>Sisko</td>
-<td><span style="color:red;text-decoration:line-through">salary</span></td>
-<td>Year</td>
-<td>188625.0</td>
-<td>30000<span style="color:green;text-decoration:underline">.0</span></td>
-<td>Active</td>
-<td><span style="color:green;text-decoration:underline">Benjamin Sisko</span></td>
-<td><span style="color:green;text-decoration:underline">188625.0</span></td>
-<td><span style="color:green;text-decoration:underline">0.15904572564612326</span></td></tr><tr><td><i>Changed</i></td>
-<td>2</td>
-<td>2</td>
-<td>Kira</td>
-<td>Nerys</td>
-<td><span style="color:red;text-decoration:line-through">salary</span></td>
-<td>Year</td>
-<td>118625.0</td>
-<td>20000<span style="color:green;text-decoration:underline">.0</span></td>
-<td>Active</td>
-<td><span style="color:green;text-decoration:underline">Kira Nerys</span></td>
-<td><span style="color:green;text-decoration:underline">118625.0</span></td>
-<td><span style="color:green;text-decoration:underline">0.16859852476290832</span></td></tr>
-<tr><td><span style="color: grey"><i>Deleted</i></span></td>
-<td>3</td>
-<td><span style="color: grey"></span></td>
-<td><span style="color: grey">None</span></td>
-<td><span style="color: grey">Garak</span></td>
-<td><span style="color: grey">salary</span></td>
-<td><span style="color: grey">Year</span></td>
-<td><span style="color: grey"> 100000</span></td>
-<td><span style="color: grey"></span></td>
-<td><span style="color: grey">Inactive</span></td>
-<td><span style="color: grey"></span></td>
-<td><span style="color: grey"></span></td>
-<td><span style="color: grey"></span></td></tr>
-<tr><td><i>Changed</i></td>
-<td>4</td>
-<td>3</td>
-<td>Julian</td>
-<td>Bashir</td>
-<td><span style="color:red;text-decoration:line-through">salary</span></td>
-<td>Year</td>
-<td>142880.0</td>
-<td>25000<span style="color:green;text-decoration:underline">.0</span></td>
-<td>Active</td>
-<td><span style="color:green;text-decoration:underline">Julian Bashir</span></td>
-<td><span style="color:green;text-decoration:underline">142880.0</span></td>
-<td><span style="color:green;text-decoration:underline">0.17497200447928332</span></td></tr></table>
-</div>
-
-(Note the above table appearing in markdown needed styles edited to display well on PyPI and GitHub)
+![alt text](https://github.com/lisad/phaser/blob/main/docs/diff-example.png?raw=true)
 
 ## Advanced Example
 
