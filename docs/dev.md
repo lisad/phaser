@@ -35,9 +35,11 @@ docstrings from within the library's python modules.
 
 ```
 
+First time: I had to do `brew install sphinx-doc` to run make html 
+
 ## How to build/distribute
 
-Edit pyproject.toml to update version number if appropriate, then 
+Edit pyproject.toml to update version number if appropriate, as well as the version in __init__.py.
 
 ```
 % pip install twine
