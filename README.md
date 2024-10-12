@@ -97,7 +97,7 @@ Phaser comes with table-sensitive diff tooling to make it very easy to develop a
 of the diff tool looks like this
 when viewing the pipeline results above operating on one of phaser's text fixture files:
 
-![alt text](https://github.com/lisad/phaser/blob/main/docs/diff-example.png?raw=true)
+![Diff in table format with colored highlighting](https://github.com/lisad/phaser/blob/main/docs/diff-example.png?raw=true)
 
 ## Advanced Example
 
