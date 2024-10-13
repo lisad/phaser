@@ -23,8 +23,7 @@ have datatype casting and name canonicalization done automatically.
 
 # Note: not sure this documentation is going to stay here.   There is  advice to put module documentation in the
 # module's __init__.py file [here](https://realpython.com/documenting-python-code/)
-# but that may be more relevant for smaller modules.  We should also consider readthedocs.io but that's a big
-# commitment to build for that.
+# but that may be more relevant for smaller modules.
 
 # Set default logging handler to avoid "No handler found" warnings.
 import logging

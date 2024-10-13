@@ -1,57 +1,65 @@
+import csv
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
+import logging
 import math
-from clevercsv import DictReader, stream_table, DictWriter, Detector
 from phaser.exceptions import DataErrorException, PhaserError
 
+logger = logging.getLogger(__name__)
+EXTRA_FIELDS_KEY = "__phaser_extra_fields__"
+MISSING_FIELD_VAL = "__phaser_missing_field__"
 
-def read_csv(source):
-    NUM_CHARS = 10000   # Number of characters to read to guess the dialect
+def read_csv(source, delimiter=','):
+    data = []
+    with open(source, 'r', newline="") as csv_file:
+        csv_reader = csv.reader(csv_file, delimiter=delimiter)
+        first_line = next(drop_empty_rows(csv_reader))
+        while first_line == [] or first_line[0].startswith('#'):
+            first_line = next(csv_reader)
+        if len(first_line) > len(set(first_line)):
+            raise DataErrorException(f"CSV {source} has duplicate column names and cannot reliably be parsed")
+        dict_reader = csv.DictReader(drop_empty_rows(csv_file),
+                                     fieldnames=first_line,
+                                     restkey=EXTRA_FIELDS_KEY,
+                                     restval=MISSING_FIELD_VAL,
+                                     delimiter=delimiter)
+        for row in dict_reader:
+            if EXTRA_FIELDS_KEY in row.keys() and is_list_empty(row[EXTRA_FIELDS_KEY]):
+                row.pop(EXTRA_FIELDS_KEY)
+            if MISSING_FIELD_VAL in row.values():
+                raise Exception(f"Fields missing in record <{row}>")
+            if len(row) != len(first_line):
+                raise Exception(f"Inconsistent # of fields ({len(row)}) detected first in record <{row}>")
+            if all(value == '' for value in row.values()):
+                logger.debug("Row with all empty values dropped from CSV")
+            else:
+                data.append(row)
 
-    # The point of this next section is to detect if the data has duplicate column names, before converting
-    # rows into dicts, because the fact of duplicate column names (and an entire column of data with the duplicate
-    # name) get ignored in the translation to dict. The clever_csv stream_table method does not lose the fact of
-    # duplicate column names, however, so we use that.  THe stream_table method does look at the first NUM_CHARS
-    # characters to detect dialect, then we use 'next' to ONLY get the headers, so in theory the entire file
-    # is not processed in this section.
-    stream = stream_table(source, num_chars=NUM_CHARS)
-    header = next(stream)
-    if len(header) > len(set(header)):
-        raise DataErrorException(f"CSV {source} has duplicate column names and cannot reliably be parsed")
+    return data
 
-    # Now we start over again with the clever_csv library's DictReader.  This section duplicates the implementation
-    # of stream_dicts from clever_csv, only with the inclusion of our generator that cleans empty rows.
-    with open(source, "r", newline="") as datafile:
-        # This reproduces how read_dicts is implemented in clevercsv, only adds the filtering of empty rows
-        data = datafile.read(NUM_CHARS)
-        dialect = Detector().detect(data)
-        datafile.seek(0)
 
-        if dialect is None:
-            raise PhaserError("CSV dialect could not be identified")
-
-        reader = DictReader(drop_empty_rows(datafile), dialect=dialect)
-        data = [row for row in reader]
-
-        # This is a strictness check - if any of the rows in the file are missing a comma or several at the end
-        # or have a comma extra inside a string that's not being handled correctly, lining up fields and
-        # columns can go wrong.
-        field_count = None
-        for record in data:
-            if field_count is None:
-                field_count = len(record)
-            elif field_count != len(record):
-                raise Exception(f"Inconsistent # of fields ({len(record)}) detected first in record <{record}>")
-
-        return data
-
-def drop_empty_rows(stream):
-    for row in stream:
-        if row.replace(',', '').strip() == '':
+def drop_empty_rows(csv_stream):
+    for row in csv_stream:
+        if is_list_empty(row):
             # Skipping rows that are empty or nothing but commas - often generated at the end of Excel tables
             continue
         yield row
 
+
+def is_list_empty(value):
+    """
+    >>> is_list_empty('')
+    True
+    >>> is_list_empty([])
+    True
+    >>> is_list_empty([''])
+    True
+    >>> is_list_empty(['  '])
+    True
+    """
+    return (value == []
+            or isinstance(value, list) and all([is_list_empty(i) for i in value])
+            or isinstance(value, str) and value.strip() == '')
 
 
 class FixNansIterator:
@@ -143,7 +151,7 @@ def save_csv(filename, row_data):
 
     fieldnames = list(first.keys())
     with open(filename, "w", newline="") as fp:
-        w = DictWriter(fp, fieldnames=fieldnames)
+        w = csv.DictWriter(fp, fieldnames=fieldnames)
         w.writeheader()
         w.writerow(first)
         w.writerows(iterator)
