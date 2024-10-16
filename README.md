@@ -4,6 +4,8 @@ A library to simplify automated batch-oriented complex data integration pipeline
 organizing steps and column definitions into phases, and offering utilities for 
 transforms, sorting, validating and viewing changes to data. 
 
+[![0 dependencies!](https://0dependencies.dev/0dependencies.svg)](https://0dependencies.dev)
+
 ## Goals and Scope
 
 This library is designed to help developers run a series of steps on _batch-oriented_,
