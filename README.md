@@ -4,6 +4,8 @@ A library to simplify automated batch-oriented complex data integration pipeline
 organizing steps and column definitions into phases, and offering utilities for 
 transforms, sorting, validating and viewing changes to data. 
 
+[![0 dependencies!](https://0dependencies.dev/0dependencies.svg)](https://0dependencies.dev)
+
 ## Goals and Scope
 
 This library is designed to help developers run a series of steps on _batch-oriented_,
@@ -94,88 +96,10 @@ or narrow down an error in production by comparing the checkpoint output of each
 is readable and supports team collaboration.
 
 Phaser comes with table-sensitive diff tooling to make it very easy to develop and debug phases.  The output
-of the diff tool looks something like this (making allowances for shoving HTML into Markdown),
-viewing the pipeline results above operating on one of phaser's text fixture files:
+of the diff tool looks like this
+when viewing the pipeline results above operating on one of phaser's text fixture files:
 
-<div>
-        <style type="text/css">
-            table { font-family: Arial; padding: 20px; }
-            table td { text-align: end; padding:8px; }
-            table th { 
-                text-transform: uppercase;
-                padding:8px;
-                border-bottom: 1px solid #e8e8e8;
-                font-size: 0.8125rem; 
-            }
-            .newtext { color: green; text-decoration: underline }
-            .deltext { color: red; text-decoration: line-through }
-        </style>
-    <table><tr>
-<th><!--change type--></th>
-<th>Row number</th>
-<th><span class="deltext">employeeNumber</span><br/><span class="newtext">Employee ID</span></th>
-<th><span class="deltext">firstName</span><br/><span class="newtext">First name</span></th>
-<th><span class="deltext">lastName</span><br/><span class="newtext">Last name</span></th>
-<th>payType</th>
-<th><span class="deltext">paidPer</span><br/><span class="newtext">Pay period</span></th>
-<th><span class="deltext">payRate</span><br/><span class="newtext">Pay rate</span></th>
-<th>bonusAmount</th>
-<th>Status</th>
-<th>Full name</th>
-<th>salary</th>
-<th>Bonus percent</th></tr>
-<tr><td><i>Changed</i></td>
-<td>1</td>
-<td>1</td>
-<td>Benjamin</td>
-<td>Sisko</td>
-<td><span class="deltext">salary</span></td>
-<td>Year</td>
-<td>188625.0</td>
-<td>30000<span class="newtext">.0</span></td>
-<td>Active</td>
-<td><span class="newtext">Benjamin Sisko</span></td>
-<td><span class="newtext">188625.0</span></td>
-<td><span class="newtext">0.15904572564612326</span></td></tr><tr><td><i>Changed</i></td>
-<td>2</td>
-<td>2</td>
-<td>Kira</td>
-<td>Nerys</td>
-<td><span class="deltext">salary</span></td>
-<td>Year</td>
-<td>118625.0</td>
-<td>20000<span class="newtext">.0</span></td>
-<td>Active</td>
-<td><span class="newtext">Kira Nerys</span></td>
-<td><span class="newtext">118625.0</span></td>
-<td><span class="newtext">0.16859852476290832</span></td></tr>
-<tr><td><span style="color: grey"><i>Deleted</i></span></td>
-<td>3</td>
-<td><span style="color: grey"></span></td>
-<td><span style="color: grey">None</span></td>
-<td><span style="color: grey">Garak</span></td>
-<td><span style="color: grey">salary</span></td>
-<td><span style="color: grey">Year</span></td>
-<td><span style="color: grey"> 100000</span></td>
-<td><span style="color: grey"></span></td>
-<td><span style="color: grey">Inactive</span></td>
-<td><span style="color: grey"></span></td>
-<td><span style="color: grey"></span></td>
-<td><span style="color: grey"></span></td></tr>
-<tr><td><i>Changed</i></td>
-<td>4</td>
-<td>3</td>
-<td>Julian</td>
-<td>Bashir</td>
-<td><span class="deltext">salary</span></td>
-<td>Year</td>
-<td>142880.0</td>
-<td>25000<span class="newtext">.0</span></td>
-<td>Active</td>
-<td><span class="newtext">Julian Bashir</span></td>
-<td><span class="newtext">142880.0</span></td>
-<td><span class="newtext">0.17497200447928332</span></td></tr></table>
-</div>
+![Diff in table format with colored highlighting](https://github.com/lisad/phaser/blob/main/docs/diff-example.png?raw=true)
 
 ## Advanced Example
 

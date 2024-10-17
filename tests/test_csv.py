@@ -28,30 +28,19 @@ def test_extra_field_in_csv(tmpdir):
     write_text(tmpdir / 'extra-field.csv', "id,name,age\n1,James Kirk,42,\n")
     pipeline = Pipeline(working_dir=tmpdir, source=tmpdir / 'extra-field.csv')
     data = pipeline.load(tmpdir / 'extra-field.csv')
-    phase = Phase()
-    phase.load_data(data)
-    phase.do_column_stuff()
-
-    warning = phase.context.get_events(phase=phase, row_num=1)[0]
-    assert 'Extra value found' in warning['message']
+    assert all([len(row.keys()) == 3 for row in data])
 
 
-@pytest.mark.skip("It would be nice to identify rows with not enough fields...")
 def test_not_enough_fields_in_csv(tmpdir):
     write_text(tmpdir / 'insufficient-field.csv', "id,name,age\n1,James Kirk\n")
     pipeline = Pipeline(working_dir=tmpdir, source=tmpdir / 'insufficient-field.csv')
-    data = pipeline.load(tmpdir / 'insufficient-field.csv')
-    phase = Phase()
-    phase.load_data(data)
-    phase.do_column_stuff()
+    with pytest.raises(Exception) as exc_info:
+        pipeline.load(tmpdir / 'insufficient-field.csv')
+        assert("missing" in exc_info.value)
 
-    assert len(phase.context.warnings) == 1
-
-
-@pytest.mark.skip("Commented lines are really hard to skip with clevercsv but otherwise it's a good library...")
 def test_comment_lines(temp_file):
-    write_text(temp_file, "#crew\n,id,name\n,1,James Kirk\n")
-    assert read_csv(temp_file) == [{'id':1, 'name':'James Kirk'}]
+    write_text(temp_file, "#crew\nid,name\n1,James Kirk\n")
+    assert read_csv(temp_file) == [{'id':'1', 'name':'James Kirk'}]
 
 
 def test_empty_lines_at_end(temp_file):
@@ -64,7 +53,6 @@ def test_empty_lines_elsewhere(temp_file):
     assert dict(read_csv(temp_file)[0]) == {'id':'1', 'name':'James Kirk'}
 
 
-@pytest.mark.skip("An empty line at the beginning of the file doesn't work. I think we can live with that")
 def test_empty_line_at_beginning(temp_file):
     write_text(temp_file, "\nid,name\n1,James Kirk\n")
     assert dict(read_csv(temp_file)[0]) == {'id':'1', 'name':'James Kirk'}
@@ -101,12 +89,12 @@ def test_pound_start_line(temp_file):
 
 def test_drop_empty_tab_delimiter(temp_file):
     write_text(temp_file, "\n\n\nid\tname\n1\tJames Kirk\n")
-    assert dict(read_csv(temp_file)[0]) == {'id': '1', 'name': 'James Kirk'}
+    assert dict(read_csv(temp_file, delimiter='\t')[0]) == {'id': '1', 'name': 'James Kirk'}
 
 
 def test_drop_empty_semicolon_delimiter(temp_file):
     write_text(temp_file, "\n\n\nid;name\n1;James Kirk\n")
-    assert dict(read_csv(temp_file)[0]) == {'id': '1', 'name': 'James Kirk'}
+    assert dict(read_csv(temp_file, delimiter=';')[0]) == {'id': '1', 'name': 'James Kirk'}
 
 
 def test_drop_empty_large_file(temp_file):
@@ -129,3 +117,20 @@ def test_drop_empty_mixed_data_types(temp_file):
     data = read_csv(temp_file)
     assert dict(data[0]) == {'id': '1', 'age': '21', 'is_student': 'True'}
     assert dict(data[1]) == {'id': '2', 'age': '22', 'is_student': 'False'}
+
+
+def test_string_with_comma(temp_file):
+    # The comma within quotes should not make two fields load as 3; saving the CSV should preserve this
+    write_text(temp_file, "Location name,id\n\"Southern New England Trunkline Trail, Grove Street\",20187\n")
+    data = read_csv(temp_file)
+    assert len(data[0]) == 2
+    save_csv(temp_file, data)
+    reloaded = read_csv(temp_file)
+    assert len(reloaded[0]) == 2
+
+
+def test_last_rows_have_spaces(temp_file):
+    write_text(temp_file,
+               '"BP_LOC_ID","LATITUDE","LONGITUDE","COUNT_ID"\n20016,42.3422400003,-71.1213399976,7001\n   \n\n')
+    data = read_csv(temp_file)
+    assert len(data) == 1

@@ -23,8 +23,7 @@ have datatype casting and name canonicalization done automatically.
 
 # Note: not sure this documentation is going to stay here.   There is  advice to put module documentation in the
 # module's __init__.py file [here](https://realpython.com/documenting-python-code/)
-# but that may be more relevant for smaller modules.  We should also consider readthedocs.io but that's a big
-# commitment to build for that.
+# but that may be more relevant for smaller modules.
 
 # Set default logging handler to avoid "No handler found" warnings.
 import logging
@@ -39,7 +38,8 @@ from phaser.steps import row_step, batch_step, dataframe_step, context_step
 from phaser.builtin_steps import check_unique, sort_by, filter_rows
 from phaser.column import Column, IntColumn, DateColumn, DateTimeColumn, FloatColumn, BooleanColumn
 from phaser.io import read_csv, save_csv, ExtraMapping, ExtraRecords
+from phaser.table_diff import HtmlTableFormat, FormatterBase, IndexedTableDiffer
 
 logging.getLogger(__name__).addHandler(NullHandler())
 
-__version__ = 0.2
+__version__ = 0.3
