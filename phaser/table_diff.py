@@ -16,7 +16,7 @@ Another formatter besides the HTML formatter included here may be passed into th
 
 
 class IndexedTableDiffer:
-    def __init__(self, f1, f2, index_column_name='__phaser_row_num__', column_renames=dict()):
+    def __init__(self, f1, f2, index_column_name='__phaser_row_num__', index_type='int', column_renames=dict()):
         """
         Constructs the differ that will find out what was added/removed in f2, a table, relative to f1
 
@@ -32,10 +32,15 @@ class IndexedTableDiffer:
         if isinstance(f1, dict):
             # Passing in a dict by row number instead of a list of rows allows for easier testing.
             self.f1_dict = f1
+        elif index_type == 'int':
+            self.f1_dict = {int(line[index_column_name]): _no_row_num(line) for line in f1}
         else:
             self.f1_dict = {line[index_column_name]: _no_row_num(line) for line in f1}
+
         if isinstance(f2, dict):
             self.f2_dict = f2
+        elif index_type == 'int':
+            self.f2_dict = {int(line[index_column_name]): _no_row_num(line) for line in f2}
         else:
             self.f2_dict = {line[index_column_name]: _no_row_num(line) for line in f2}
 
@@ -231,6 +236,7 @@ class HtmlTableFormat(FormatterBase):
                 border-bottom: 1px solid #e8e8e8;
                 font-size: 0.8125rem; 
             }
+            .deletedrow { color: grey }
             .newtext { color: green; text-decoration: underline }
             .deltext { color: red; text-decoration: line-through }
         </style>
@@ -279,8 +285,8 @@ class HtmlTableFormat(FormatterBase):
 
     def new_deleted_row(self, row_num, cells):
         cells.insert(0, "<i>Deleted</i>")
-        cells = [f"<span style=\"color: grey\">{value}</span>" for value in cells]
-        self.new_row(row_num, cells)
+        cells = [f"<span>{value}</span>" for value in cells]
+        self.new_row(row_num, cells, css_class='deletedrow')
 
     def new_same_row(self, row_num, cells):
         cells.insert(0, "<i>Same</i>")
@@ -290,10 +296,12 @@ class HtmlTableFormat(FormatterBase):
         cells.insert(0, "<i>Changed</i>")
         self.new_row(row_num, cells)
 
-    def new_row(self, row_num, cells):
+    def new_row(self, row_num, cells, css_class=None):
         cells.insert(1, row_num)
         html_cells = ["<td>" + str(cell) + "</td>" for cell in cells]
         row = "<tr>" + "\n".join(html_cells) + "</tr>"
+        if css_class:
+            row = f"<tr class={css_class}>" + "\n".join(html_cells) + "</tr>"
         self.content += row
 
     def finish(self):

@@ -138,6 +138,9 @@ class PhaseBase(ABC):
         except Exception as exc:
             self.context.process_exception(exc, self, step, row=None)
 
+    def diffable(self):
+        return False
+
 
 class Phase(PhaseBase):
     """ The organizing principle for data transformation steps and column definitions is the phase.  A phase can
@@ -309,3 +312,6 @@ class Phase(PhaseBase):
                     self.context.add_warning('consistency_check', row,
                         f"New field '{field_name}' was added to the row_data and not declared a header")
                     added_header_names.add(field_name)
+
+    def diffable(self):
+        return not self.renumber
