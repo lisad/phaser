@@ -66,8 +66,7 @@ class Column:
                  allowed_values=None,
                  save=True,
                  on_error=None):
-        self.name = str(name).strip()
-        assert all(character not in name for character in Column.FORBIDDEN_COL_NAME_CHARACTERS)
+        self.name = self._check_col_name(name)
         self.required = required
         self.null = null
         self.blank = blank
@@ -91,6 +90,16 @@ class Column:
         if self.null is False and self.default is not None:
             raise PhaserError(f"Column {self.name} defined to error on null values, but also provides a non-null default")
 
+    def _check_col_name(self, name):
+        if name is None or isinstance(name, float):
+            raise PhaserError("Column name cannot be None or a float")
+        name = str(name).strip()
+        if name == "":
+            raise PhaserError("Column name cannot be blank")
+        if not all(character not in name for character in Column.FORBIDDEN_COL_NAME_CHARACTERS):
+            raise PhaserError("Forbidden characters (newline or tab) in column name")
+        return name
+
     def check_required(self, data_headers):
         # Called by Phase to make sure that all the required columns are in place.  Not documented
         # with docstrings because it's not meant to be overridden.
@@ -102,7 +111,7 @@ class Column:
         # This method is probably NOT for overriding as it marshals the logic of checking, fixing
         # and casting values in a specific order.
         value = row.get(self.name)
-        if self.null is False and value is None:
+        if self.null is False and is_nan_or_null(value):
             raise self.use_exception(f"Null value found in column {self.name}")
         new_value = self.cast(value)   # Cast to another datatype (int, float) if subclass
 

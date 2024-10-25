@@ -9,7 +9,9 @@ from phaser import (Phase, Column, IntColumn, FloatColumn, DateColumn, DateTimeC
 
 
 # Constructor tests
-def test_null_forbidden_but_null_default():
+def test_null_forbidden_but_also_default():
+    # Null=False should mean that the column can't have a null value or that creates an error.
+    # This is incompatible with providing a default value that defines the value if the value is None.
     with pytest.raises(PhaserError):
         Column(name='bogus', null=False, default='homer')
 
@@ -41,6 +43,12 @@ def test_null_forbidden():
         col.check_and_cast_value({'employeeid': None})
 
 
+def test_other_nulls():
+    col = FloatColumn(name='bogus2', null=False)
+    with pytest.raises(DataErrorException):
+        col.check_and_cast_value({'bogus2': np.nan})
+
+
 @pytest.mark.parametrize('value', ["", " ", "\t"])
 def test_blank_forbidden(value):
     col = Column(name='not_blank', null=False, blank=False)
@@ -58,6 +66,11 @@ def test_default_value():
         else:
             assert col.fix_value(row[col.name]) == row[col.name]
 
+
+def test_nan_can_be_default():
+    col = FloatColumn(name="Warp speed", default=np.nan)
+    value = col.fix_value(None)
+    assert isinstance(value, float)
 
 # Tests of fix_value_fn
 
@@ -297,11 +310,10 @@ def test_canonicalize_names(column_name):
     assert phase.headers == ['Country of Origin']
 
 
-def test_forbidden_column_name_characters():
-    with pytest.raises(AssertionError):
-        Column('1\n2\n3')
-    with pytest.raises(AssertionError):
-        Column('a\tb\tc')
+@pytest.mark.parametrize('bad_name', ['1\n2\n3', 'a\tb\tc', None, np.nan, 5.8, "     "])
+def test_forbidden_column_name_characters(bad_name):
+    with pytest.raises(PhaserError):
+        Column(bad_name)
 
 
 def test_strip_column_name_spaces(tmpdir):
@@ -371,7 +383,7 @@ def test_int_column_casts():
 def test_int_column_null_value():
     col = IntColumn(name="Age")
     assert col.cast(None) is None
-
+    assert col.cast(np.nan) is None
 
 def test_cast_nans_and_nones():
     col = IntColumn(name="Skill level")
@@ -379,6 +391,8 @@ def test_cast_nans_and_nones():
     assert col.cast("NULL") is None
     assert col.cast(None) is None
     assert col.cast("") is None
+    col = FloatColumn(name="Warp speed")
+    assert col.cast(np.nan) is None
 
 
 def test_cast_when_not_present():
