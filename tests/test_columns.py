@@ -281,10 +281,28 @@ def test_rename_passed_string():
     assert phase.headers == [col.name]
 
 
-@pytest.mark.skip("Todo - issue #17")
 def test_conflicting_renames():
     with pytest.raises(PhaserError):
         Phase(columns=[FloatColumn(name="Division", rename='div'), IntColumn(name="Divisor", rename='div')])
+
+
+def test_conflicting_canonicalized_renames():
+    # Unlike test_conflicting_renames which can be detected when the Phase is declared, this can only be detected
+    # when the data is loaded and compared to the column renames.
+    phase = Phase(columns=[Column(name="Fn", rename="Function")])
+    phase.load_data([{'fn': "Counsellor", "FN": "Deanna Troy"}, {'fn': "First Officer", "FN": "William Riker"}])
+    with pytest.raises(PhaserError):
+        phase.rename_columns()
+
+
+def test_column_names_with_case_difference():
+    # This test confirms existing behavior, although we could change our minds about it.  The current behavior is
+    # that if two columns have different capitalization in the data, even though the user is not trying to rename them,
+    # we raise an error.
+    phase = Phase(columns=[Column(name="FN"), Column(name="fn")])
+    phase.load_data([{'fn': "Counsellor", "FN": "Deanna Troy"}, {'fn': "First Officer", "FN": "William Riker"}])
+    with pytest.raises(PhaserError):
+        phase.rename_columns()
 
 
 @pytest.mark.parametrize('column_name', ['country of origin', 'country_of_origin', 'Country of\nOrigin'])

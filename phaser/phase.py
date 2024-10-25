@@ -222,6 +222,13 @@ class Phase(PhaseBase):
 
         self.row_data = None
         self.headers = None
+        self.rename_list = {}
+        for col in self.columns:
+            for alt_name in col.rename:
+                if alt_name in self.rename_list:
+                    raise PhaserError(f"Column cannot be renamed from {alt_name} to {col.name} " +
+                        f"and from {alt_name} to {self.rename_list[alt_name]}, please fix column declarations")
+                self.rename_list[alt_name] = col.name
 
     def run(self):
         # Break down run into load, steps, error handling, save and delegate
@@ -252,16 +259,20 @@ class Phase(PhaseBase):
         # Then going row by row allows us to re-use row-based error/reporting work
         self.execute_row_step(cast_each_column_value, None)
 
-    def column_rename_dict(self):
-        return {alt: col.name for col in self.columns for alt in col.rename}
 
     def rename_columns(self):
         """ Renames columns: both using case and space ('_', ' ') matching to convert columns to preferred
         label format, and using a list of additional alternative names provided in each column definition.
         It would be cool if this could be done before converting everything to list-of-dicts format...
         """
-        rename_list = self.column_rename_dict()
         strict_name_list = {make_strict_name(col.name): col.name for col in self.columns}
+
+        # Check that any column that's going to be renamed doesn't exist TWICE with different cap/spacing variants
+        # This makes the choice that if "FOO" is not going to be renamed it can be a header along with "foo" and "Foo"
+        canonicalized_headers = [make_strict_name(name) for name in self.headers]
+        for item in strict_name_list.keys():
+            if canonicalized_headers.count(item) > 1:
+                raise PhaserError(f"Cannot reliably rename columns - {item} appears with different variations")
 
         def rename_me(name):
             name = name.strip()
@@ -269,8 +280,8 @@ class Phase(PhaseBase):
                 name = name.strip('"')
             if make_strict_name(name) in strict_name_list.keys():
                 name = strict_name_list[make_strict_name(name)]  # Convert to declared capital'n/separ'n
-            if name in rename_list.keys():
-                name = rename_list[name]  # Do declared renames
+            if name in self.rename_list.keys():
+                name = self.rename_list[name]  # Do declared renames
             return name
 
         for row in self.row_data:
