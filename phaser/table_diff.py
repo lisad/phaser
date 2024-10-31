@@ -16,6 +16,27 @@ Another formatter besides the HTML formatter included here may be passed into th
 
 
 class IndexedTableDiffer:
+    """
+    IndexedTableDiffer compares two tables that have some rows in common as determined by an index value.
+    Two rows with the same index are compared field-by-field.  Rows that are in one table and not the other
+    are deemed to have been added or removed.
+
+    Methods
+    -------
+    IndexedTableDiffer(f1, f2, index_column_name, index_type, column_renames)
+        Takes two tables f1 and f2 in record-oriented (table of dicts) format.  The index_column name is the
+        name of the field in each record that provides a row number or row index unique to each row.  The
+        index_type allows the row index to be cast to an int, if appropriate, so that the diff output is
+        sorted by integer value rather than string value.  Finally, the column_renames dict can be a
+        mapping from old column name (in f1) to new column name (in f2).
+
+    html()
+        Returns the results of the diff processing formatted in HTML
+
+    output(formatter_class)
+        Returns the results of the diff processed by another formatter extending FormatterBase.
+
+    """
     def __init__(self, f1, f2, index_column_name='__phaser_row_num__', index_type='int', column_renames=dict()):
         """
         Constructs the differ that will find out what was added/removed in f2, a table, relative to f1

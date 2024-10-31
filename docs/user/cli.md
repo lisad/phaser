@@ -26,6 +26,7 @@ WARNING in step consistency_check, row 1: message: 'New field 'salary' was added
 WARNING in step consistency_check, row 1: message: 'New field 'Bonus percent' was added to the row_data and not declared a header'
 ```
 
+(cli-diff-tool)=
 ## Showing the 'diffs' or changes made by phases or entire pipeline
 
 After running a pipeline and having its output saved in a working directory (for example with the pipeline
