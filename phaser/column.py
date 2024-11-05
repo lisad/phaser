@@ -92,6 +92,11 @@ class Column:
 
     def _check_col_name(self, name):
         if name is None or isinstance(name, float):
+            # We will surely change these column name restrictions in the future as we figure out more edge cases.
+            # For now, many values can be safely stringified and used as column headers -
+            # like data files with column names like 'Employee', 'Reviewer', '100%', '01-01-2024' and '03-01-2024'.
+            # But floats seem to be a particular problem, especially if a date or ratio got accidentally parsed as a
+            # fraction (the fraction '5/12' => 0.41666...), or if a column name gets turned into NaN.
             raise PhaserError("Column name cannot be None or a float")
         name = str(name).strip()
         if name == "":
