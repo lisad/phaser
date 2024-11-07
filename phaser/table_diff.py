@@ -165,6 +165,11 @@ class IndexedTableDiffer:
 
 
 class FormatterBase(ABC):
+    """
+    Implement the abstract base class FormatterBase to provide a different way of formatting a diff between
+    two tabular data sets.  Pass the formatter class to phaser's IndexedTableDiffer to
+    use that class' logic to generate the diff details.
+    """
     @abstractmethod
     def added_text(self, text):
         """
@@ -245,6 +250,10 @@ class FormatterBase(ABC):
 
 
 class HtmlTableFormat(FormatterBase):
+    """
+    By default, the HtmlTableFormat formatter is used to create table-oriented diffs that highlight added
+    and removed rows and columns, and do within-field diffs of cell values.
+    """
 
     NO_CHANGE_CELL_TEXT = '-'  # Shown when field has no value in both old and new table
     STYLESHEET = """

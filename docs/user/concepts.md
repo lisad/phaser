@@ -58,6 +58,7 @@ done within steps that operate in a Phase to give structure and debuggability:
 * Steps can create warnings or errors
 * Pre-baked steps are available to check uniqueness values and do common transforms
 
+(checkpoint-files)=
 ## Checkpoint files
 
 Phaser produces intermediate results as well as final results of data transformations.
