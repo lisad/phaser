@@ -36,6 +36,7 @@ We use Sphinx to create docs in the docs folder in MyST Markdown format.  When b
 docstrings from within the library's python modules.
 
 ```
+% pip install -r docs/requirements.txt
 % cd docs
 % make html
 % open _build/html/index.html

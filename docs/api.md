@@ -85,3 +85,18 @@ All steps can accept a parameter named `context` which will be the
 
 .. autodecorator:: phaser.dataframe_step
 ```
+
+## Diff logic
+
+See [Checkpoint files](#checkpoint-files) and [Table-oriented diffs](#table-oriented-diffs) for how saving
+intermediate results and being able to diff them is supported in phaser and can help debugging and developing
+workflows.  The classes below provide the diff functionality and the ability to plug in additional formats
+or functional changes.
+
+```{eval-rst}
+.. autoclass:: phaser.IndexedTableDiffer
+
+.. autoclass:: phaser.HtmlTableFormat
+
+.. autoclass:: phaser.FormatterBase
+```
