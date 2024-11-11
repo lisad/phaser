@@ -134,3 +134,20 @@ def test_last_rows_have_spaces(temp_file):
                '"BP_LOC_ID","LATITUDE","LONGITUDE","COUNT_ID"\n20016,42.3422400003,-71.1213399976,7001\n   \n\n')
     data = read_csv(temp_file)
     assert len(data) == 1
+
+
+@pytest.mark.parametrize("text, expected",
+    [
+        ("id\n3\n", [{'id': '3'}]),
+        # This one resulted in [{'id':'abc'},{None:['def']}] when using clever_csv
+        ("id\nabc def\n", [{'id': 'abc def'}]),
+        ("on_call\nJulian\n", [{'on_call': 'Julian'}]),
+        # This one resulted in a NoDetectionResult exception when using clever_csv
+        ("on_call\nJulian Bashir\n", [{'on_call': 'Julian Bashir'}]),
+    ]
+)
+def test_single_row_col_csv(tmpdir, text, expected):
+    path = tmpdir / "data.csv"
+    write_text(path, text)
+    data = read_csv(path)
+    assert data == expected
