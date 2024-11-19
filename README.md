@@ -46,6 +46,26 @@ The mechanisms that we think will help phaser meet these goals:
 
 ## Simple example
 
+Logic for transforming or testing data is broken into steps. A developer-defined step can operate on a 
+single record at a time and employ simple logic to combine values, transform values or add values to the record:
+
+```python
+@row_step
+def combine_full_name(row, **kwargs):
+    row["Full name"] = f"{row['First name']} {row['Last name']}"
+    return row
+
+```
+
+Steps are then combined into phases and pipelines.  Developer-defined steps can be used along with
+steps built into phaser like 'check_unique', 'sort_by' and 'filter_rows'.  Single-column logic and typing can be 
+achieved with built-in Column definitions like IntColumn, FloatColumn and DateColumn.  Common tasks like 
+renaming columns and reformatting values are made particularly easy.
+
+The following example Pipeline combines columns and steps organized into two Phases. It includes
+several renamed columns and values that are validated (blank=False, required=True, min_value=0.01...), four
+developer-defined steps and one built-in step ('check_unique').
+
 ```python
 from phaser import Phase, Column, FloatColumn, Pipeline
 
@@ -86,9 +106,8 @@ class EmployeeReviewPipeline(Pipeline):
 
 ```
 
-The example above defines a validation phase that renames a number of columns and defines their values, a 
-transformer phase that performs calculations, and a pipeline that combines both phases.  The full example 
-can be found in the tests directory of the project, including the sample data and the custom steps defined.
+The full example (including steps not shown here) can be found in the tests directory of the project, 
+along with sample data.
 
 The benefit of even such a simple pipeline expressed as two phases is that the phases can be debugged, tested and
 run separately. A developer can run the Validator phase once then work on adding features to the Transformer phase,
