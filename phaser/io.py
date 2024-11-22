@@ -4,10 +4,32 @@ from collections.abc import Mapping, Sequence
 import logging
 import math
 from phaser.exceptions import DataErrorException, PhaserError
+import json
 
 logger = logging.getLogger(__name__)
 EXTRA_FIELDS_KEY = "__phaser_extra_fields__"
 MISSING_FIELD_VAL = "__phaser_missing_field__"
+
+
+def read_json(source):
+    """
+    This read_json helper assumes pandas style orient='records' format.  If your data uses something else,
+    a custom Pipeline can have a custom read/save implementation.
+    :param source:
+    :return: data in python list-of-dicts format.
+    """
+    with open(source, 'r') as json_file:
+        data = json.load(json_file)
+        if isinstance(data, list):
+            return data
+        else:
+            raise PhaserError("JSON data file format expected to hold a list of dict records - did not find list.")
+
+
+def save_json(filename, row_data):
+    with open(filename, 'w') as f:
+        json.dump(row_data, f)
+
 
 def read_csv(source, delimiter=','):
     data = []

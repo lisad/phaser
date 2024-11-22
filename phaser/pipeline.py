@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path, PosixPath
 
 from .context import Context
-from .io import read_csv, save_csv, IOObject
+from .io import read_csv, save_csv, read_json, save_json, IOObject
 from .exceptions import *
 from .records import Records
 from .constants import *
@@ -20,7 +20,14 @@ class Pipeline:
     source = None
     phases = []
 
-    def __init__(self, working_dir=None, source=None, phases=None, verbose=False, error_policy=None, name="pipeline"):
+    def __init__(self,
+                 working_dir=None,
+                 source=None,
+                 phases=None,
+                 verbose=False,
+                 error_policy=None,
+                 name="pipeline",
+                 save_format=CSV_FORMAT):
         self.working_dir = working_dir or self.__class__.working_dir
         if self.working_dir and not os.path.exists(self.working_dir):
             raise ValueError(f"Working dir {self.working_dir} does not exist.")
@@ -35,7 +42,9 @@ class Pipeline:
         self.phase_instances = []
         self.verbose = verbose
         self.context = Context(working_dir=self.working_dir, verbose=self.verbose, error_policy=error_policy)
-
+        self.save_format = CSV_FORMAT
+        if save_format in SUPPORTED_FORMATS:
+            self.save_format = save_format
         self.setup_phases()
         self.setup_extras()
         self.check_output_collision()
@@ -232,10 +241,15 @@ class Pipeline:
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
 
-    @classmethod
-    def load(cls, source):
+    def load(self, source):
         """ The load method can be overridden to apply a pipeline-specific way of loading data.
-        Phaser default is to read data from a CSV file. """
+        Phaser default is to read data from a CSV or JSON file. """
+        if str(source).endswith('json'):
+            return read_json(source)
+        if str(source).endswith('csv'):
+            return read_csv(source)
+        if self.save_format == JSON_RECORD_FORMAT:
+            return read_json(source)
         return read_csv(source)
 
     def save(self, results, destination):
@@ -243,7 +257,12 @@ class Pipeline:
         It should be easy to override this method to save in a different way, using pandas' to_csv, to_excel, to_json
         or a different output entirely.
         """
-        save_csv(destination, results)
+        if self.save_format == CSV_FORMAT:
+            save_csv(destination, results)
+        elif self.save_format == JSON_RECORD_FORMAT:
+            save_json(destination, results)
+        else:
+            raise PhaserError("Unexpected save format in Pipeline implementation")
 
     @classmethod
     def phase_save_filename(cls, phase):
