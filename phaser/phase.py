@@ -1,6 +1,5 @@
 from abc import ABC, abstractmethod
 from copy import deepcopy
-import pandas as pd
 
 from .column import make_strict_name, Column
 from .pipeline import DropRowException, DataException, PhaserError
@@ -33,7 +32,7 @@ class PhaseBase(ABC):
         Note that in normal operation, a Records object is passed in with Record objects and row numbers -
         however if a Phase is being used in tests, it makes testing a lot easier if load_data can take a
         raw list of dicts and row numbers get added.  """
-        if isinstance(data, pd.DataFrame):
+        if "DataFrame" in str(data.__class__):
             self.headers = data.columns.values.tolist()
             data = data.to_dict('records')
 

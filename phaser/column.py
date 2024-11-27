@@ -1,5 +1,4 @@
-from datetime import datetime
-from dateutil.parser import parse
+from datetime import datetime, date
 from decimal import Decimal
 import inspect
 import types
@@ -166,7 +165,8 @@ class Column:
         """
         When subclassing Column to provide custom data cleaning in a re-usable form, override the 'fix_value'
         method.  The default implementation of this method applies the `default` parameter value and
-        also applies functions passed into the `fix_value_fn` parameter.
+        also applies functions passed into the `fix_value_fn` parameter.  This is called after casting the
+        column to the appropriate date type if using IntColumn, DateColumn, etc.
 
         Tips:
          * Don't forget to call super().fix_value(value)
@@ -296,8 +296,9 @@ class FloatColumn(IntColumn):
 
 class DateTimeColumn(Column):
     """
-    Sets up a DateColumn instance ready to do type, format, null and default checking on values, as well as
-    renaming the column name itself to chosen version.
+    Sets up column to do python datetime type, format, null and default checking on values, as well as
+    other column functionality.  Supports ISO8601/RFC3339 date-time formatting -- less rigorous and knowable
+    formats may need to be specified with datetime_format as used by datetime.strptime.
 
     :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
     :param required: If the column is required, the phase will present errors if it is missing.
@@ -313,10 +314,11 @@ class DateTimeColumn(Column):
     :param save: if True, column is saved at the end of the phase; if not it is omitted.
     :param min_value: If data is below this value, column raises errors
     :param max_value: If data is above this value, column raises errors
-    :param date_format_code:  Formatting string used by datetime.strptime to parse string to date,
-        e.g. '%d/%m/%y %H:%M:%S.%f', '%d/%m/%Y' or '%m/%d/%y'.  If left None, class will use dateutil.parser.
+    :param datetime_format:  Formatting string used by datetime.strptime to parse string to date,
+        e.g. '%d/%m/%y %H:%M:%S.%f', '%d/%m/%Y' or '%m/%d/%y'.
     :param default_tz: If timezone is not specified in value, assume this timezone applies.
     """
+
 
     def __init__(self,
                  name,
@@ -330,7 +332,7 @@ class DateTimeColumn(Column):
                  on_error=None,
                  min_value=None,
                  max_value=None,
-                 date_format_code=None,
+                 datetime_format=None,
                  default_tz=None):
         super().__init__(name,
                          required=required,
@@ -344,7 +346,7 @@ class DateTimeColumn(Column):
                          on_error=on_error)
         self.min_value = min_value
         self.max_value = max_value
-        self.date_format_code = date_format_code
+        self.date_format_code = datetime_format
         self.default_tz = default_tz
 
     def check_value(self, value):
@@ -358,23 +360,103 @@ class DateTimeColumn(Column):
             raise self.use_exception(f"Value for {self.name} is {value}, more than max {self.max_value}")
 
     def cast(self, value):
+        if isinstance(value, datetime):
+            return value
+        value = value.strip()
         if is_nan_or_null(value) or is_empty(value):
             return None
         if self.date_format_code:
-            value = datetime.strptime(value, self.date_format_code)
+            result = datetime.strptime(value, self.date_format_code)
+
         else:
-            value = parse(value)
-        if value.tzname() is None and self.default_tz is not None:
-            value = value.replace(tzinfo=self.default_tz)
-        return value
+            try:
+                result = datetime.fromisoformat(value)
+            except ValueError:
+                raise DataErrorException(f"Can't parse time value ({value}), try setting datetime_format on column")
+
+        if result.tzname() is None and self.default_tz is not None:
+            result = result.replace(tzinfo=self.default_tz)
+        return result
 
 
 class DateColumn(DateTimeColumn):
-    """ A column that supports the date value only (no time). See `DateTimeColumn` for parameters. """
+    """
+    Sets up column to do python date type, format, null and default checking on values, as well as
+    other column functionality.
+
+    :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
+    :param required: If the column is required, the phase will present errors if it is missing.
+    :param null: Checks all values of the column for null values to raise as errors.
+    :param default: A default value to apply if a column value is null. Not compatible with "null=False"
+    :param fix_value_fn: A function (string or callable) or array of functions to apply to each value
+    :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
+        the preferred name of this column. Upon loading the data, all rows that have columns matching
+        any alternate name in this set will have a column with the preferred name with the same data in
+        it. In other words, any data in a column name in `rename` will end up in a column named `name`.
+    :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
+        To supply a range, use min_value and max_value instead.
+    :param save: if True, column is saved at the end of the phase; if not it is omitted.
+    :param min_value: If data is below this value, column raises errors
+    :param max_value: If data is above this value, column raises errors
+    :param date_format:  Formatting string used by datetime.strptime to parse string to date,
+        e.g. '%d/%m/%y %H:%M:%S.%f', '%d/%m/%Y' or '%m/%d/%y'.
+    """
+
+    POSSIBLE_FORMATS = [
+        # This list only contains unambiguous options.  Set date_format to %m/%d/Y% or %d/%m/%Y to handle
+        # one of the popular ambiguous options.
+        #"%Y-%m-%d" is already covered by trying ISO8601/RFC3339 format first.
+        "%Y/%m/%d",
+        "%Y%m%d"
+    ]
+
+
+    def __init__(self,
+                 name,
+                 required=True,
+                 null=True,
+                 default=None,
+                 fix_value_fn=None,
+                 rename=None,
+                 allowed_values=None,
+                 save=True,
+                 on_error=None,
+                 min_value=None,
+                 max_value=None,
+                 date_format=None):
+        super().__init__(name,
+                         required=required,
+                         null=null,
+                         default=default,
+                         fix_value_fn=fix_value_fn,
+                         rename=rename,
+                         allowed_values=allowed_values,
+                         save=save,
+                         on_error=on_error)
+        self.min_value = min_value
+        self.max_value = max_value
+        self.date_format_code = date_format
+
 
     def cast(self, value):
-        value = super().cast(value)
-        return datetime.date(value)
+        if isinstance(value, date):
+            return value
+        value = value.strip()
+        try:
+            result = super().cast(value)
+        except DataErrorException:
+            result = None
+            for formatstr in self.POSSIBLE_FORMATS:
+                try:
+                    result = datetime.strptime(value, formatstr)
+                    continue
+                except ValueError:
+                    pass
+            if not result:
+                raise DataErrorException(f"Unparsable date value ({value}), try setting date_format on column")
+
+
+        return datetime.date(result)
 
 
 # -------  Below here: not exported for user use  -------
