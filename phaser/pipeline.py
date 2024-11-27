@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path, PosixPath
 
 from .context import Context
-from .io import read_csv, save_csv, read_json, save_json, IOObject
+from .io import read_csv, save_csv, read_json, save_json, SavableObject
 from .exceptions import *
 from .records import Records
 from .constants import *
@@ -13,21 +13,16 @@ from .constants import *
 
 logger = logging.getLogger(__name__)
 
+
 class Pipeline:
     """ Pipeline handles running phases in order.  It also handles I/O and marshalling what
     outputs from phases get used as inputs in later phases.  """
     working_dir = None
     source = None
     phases = []
+    save_format = CSV_FORMAT
 
-    def __init__(self,
-                 working_dir=None,
-                 source=None,
-                 phases=None,
-                 verbose=False,
-                 error_policy=None,
-                 name="pipeline",
-                 save_format=CSV_FORMAT):
+    def __init__(self, working_dir=None, source=None, phases=None, verbose=False, error_policy=None, name="pipeline"):
         self.working_dir = working_dir or self.__class__.working_dir
         if self.working_dir and not os.path.exists(self.working_dir):
             raise ValueError(f"Working dir {self.working_dir} does not exist.")
@@ -42,24 +37,22 @@ class Pipeline:
         self.phase_instances = []
         self.verbose = verbose
         self.context = Context(working_dir=self.working_dir, verbose=self.verbose, error_policy=error_policy)
-        self.save_format = CSV_FORMAT
-        if save_format in SUPPORTED_FORMATS:
-            self.save_format = save_format
         self.setup_phases()
-        self.setup_extras()
+        self.extra_sources = self.setup_extras()
         self.check_output_collision()
 
     def init_source(self, name, source_path):
         """ Initializes a named source based on the kind of 'source' passed in.
 
-        :param name: An IOObject that specifies the name and type of the source
+        :param name: A SavableObject that specifies the name and type of the source
         :param source_path: must be a os.PathLike file in csv format and will be read entirely into memory
         """
-        source = next((s for s in self.extra_sources if isinstance(s, IOObject) and s.name == name), None)
+        source = next((s for s in self.extra_sources if isinstance(s, SavableObject) and s.name == name), None)
         if not source:
             raise PhaserError(f"Unable to find source {name} to initialize")
 
-        source.load(source_path)
+        raw_data = self.load(source_path)
+        source.load_data(raw_data)
         self.context.set_source(name, source)
 
     def setup_phases(self):
@@ -83,15 +76,12 @@ class Pipeline:
             except Exception as exc:
                 raise PhaserError(f"Error setting up {phase} instance") from exc
 
-
     def setup_extras(self):
         # Phases must be instantiated, because that is how any configuration set
         # on the class of the phase is set on the instance. Otherwise, we would
         # need to check for sources and outputs on the classes and the
-        # instancees.
-        self.extra_sources = [
-            source for phase in self.phase_instances for source in phase.extra_sources
-        ]
+        # instances.
+        return [source for phase in self.phase_instances for source in phase.extra_sources]
 
     def expected_outputs(self):
         """ All the files expected to be saved in the pipeline.  Right now this has
@@ -236,20 +226,26 @@ class Pipeline:
         for item in self.context.rwos.values():
             # Since context is passed from Phase to Phase, only save the new ones with to_save=True
             if item.to_save:
-                filename = self.working_dir / f"{item.name}.csv"
-                item.save(filename)
+                filename = self.working_dir / f"{item.name}.{self.file_extension()}"
+                self.save(item.prepare_for_save(), filename)
                 logger.info(f"Extra output {item.name} saved to {self.working_dir}")
                 item.to_save = False
 
-    def load(self, source):
+    @classmethod
+    def file_extension(cls):
+        if cls.save_format == CSV_FORMAT:
+            return 'csv'
+        elif 'JSON' in cls.save_format:
+            return 'json'
+
+    @classmethod
+    def load(cls, source):
         """ The load method can be overridden to apply a pipeline-specific way of loading data.
         Phaser default is to read data from a CSV or JSON file. """
         if str(source).endswith('json'):
-            return read_json(source)
+            return read_json(source, format=cls.save_format)
         if str(source).endswith('csv'):
             return read_csv(source)
-        if self.save_format == JSON_RECORD_FORMAT:
-            return read_json(source)
         return read_csv(source)
 
     def save(self, results, destination):
@@ -272,15 +268,15 @@ class Pipeline:
         """
         if inspect.isclass(phase):
             phase = phase()
-        return f"{phase.name}_output.csv"
+        return f"{phase.name}_output.{cls.file_extension()}"
 
     @classmethod
     def item_save_filename(cls, item):
-        return f"{item.name}.csv"
+        return f"{item.name}.{cls.file_extension()}"
 
     @classmethod
     def source_copy_filename(cls):
-        return "source_copy.csv"
+        return f"source_copy.{cls.file_extension()}"
 
     @classmethod
     def errors_and_warnings_filename(cls):

@@ -11,7 +11,10 @@ def test_extension_detected(tmpdir):
 
 
 def test_roundtrip(tmpdir):
-    pipeline = Pipeline(working_dir=tmpdir, source=tmpdir / 'testfile.json', save_format=JSON_RECORD_FORMAT)
+    class MyPipeline(Pipeline):
+        save_format = JSON_RECORD_FORMAT
+
+    pipeline = MyPipeline(working_dir=tmpdir, source=tmpdir / 'testfile.json')
     data = [
         {'id': "NCC1701-D", 'name': 'Enterprise', 'class': 'Galaxy'},
         {'id': "NCC-71099", 'name': 'Challenger', 'class': 'Galaxy'}
@@ -19,7 +22,3 @@ def test_roundtrip(tmpdir):
     pipeline.save(data, tmpdir / 'testfile.json')
     loaded_data = pipeline.load(tmpdir / 'testfile.json')
     assert data == loaded_data
-
-def test_checkpoints_work_in_record_format():
-    # LMDTODO
-    pass

@@ -4,7 +4,7 @@ from collections import defaultdict
 
 from .exceptions import *
 from .constants import *
-from .io import IOObject
+from .io import SavableObject
 from .records import Record
 
 
@@ -108,8 +108,8 @@ class Context:
         # At present outputs must be in record format and save to CSV, but this should be expanded.
         if name in self.rwos:
             logger.warning("Overwriting while adding output '%s'", name)
-        if not isinstance(output, IOObject):
-            raise PhaserError(f"outputs must be set to an IOObject. set_output({name}, {output})")
+        if not isinstance(output, SavableObject):
+            raise PhaserError(f"outputs must be set to a SavableObject. set_output({name}, {output})")
         output.to_save = True
         self.rwos[name] = output
 
