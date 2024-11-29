@@ -297,8 +297,8 @@ class FloatColumn(IntColumn):
 class DateTimeColumn(Column):
     """
     Sets up column to do python datetime type, format, null and default checking on values, as well as
-    other column functionality.  Supports ISO8601/RFC3339 date-time formatting -- less rigorous and knowable
-    formats may need to be specified with datetime_format as used by datetime.strptime.
+    other column functionality.  Supports ISO8601/RFC3339 date-time formatting.  Supply a strptime-style
+    format string to datetime_format to parse other formats.
 
     :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
     :param required: If the column is required, the phase will present errors if it is missing.
@@ -382,7 +382,7 @@ class DateTimeColumn(Column):
 class DateColumn(DateTimeColumn):
     """
     Sets up column to do python date type, format, null and default checking on values, as well as
-    other column functionality.
+    other column functionality.  Supports only a few unambiguous formats - otherwise specify date_format parameter.
 
     :param name: The preferred name/presentation of the column, e.g. "Date of Birth" or "first_name"
     :param required: If the column is required, the phase will present errors if it is missing.
