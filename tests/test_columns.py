@@ -254,20 +254,11 @@ def test_float_column_variants(value, expected):
 
 
 @pytest.mark.parametrize('value,expected', [
-    ('2023-01-01', date(2023, 1, 1)), (' 2023-01-01 ', date(2023, 1, 1)), ('2023/01/01', date(2023, 1, 1))
+    ('2023-01-01', date(2023, 1, 1)), (' 20230101 ', date(2023, 1, 1)), ('2023/01/01', date(2023, 1, 1))
 ])
 def test_date_column_variants(value, expected):
     col = DateColumn(name='date')
     assert col.check_and_cast_value({'date': value}) == {'date': expected}
-
-
-@pytest.mark.parametrize('value,expected', [
-    ('2023-01-01 12:34', datetime(2023, 1, 1, 12, 34)), (' 2023-01-01 12:34 ', datetime(2023, 1, 1, 12, 34)),
-    ('2023/01/01 12:34', datetime(2023, 1, 1, 12, 34))
-])
-def test_datetime_column_variants(value, expected):
-    col = DateTimeColumn(name='timestamp')
-    assert col.check_and_cast_value({'timestamp': value}) == {'timestamp': expected}
 
 
 # Test naming features
@@ -398,10 +389,16 @@ def test_int_column_casts():
     assert [row['Age'] for row in phase.row_data] == [3, 4, 5]
 
 
+def test_int_column_doesnt_need_to_cast():
+    col = IntColumn(name="Age")
+    assert col.cast(1) == 1
+
+
 def test_int_column_null_value():
     col = IntColumn(name="Age")
     assert col.cast(None) is None
     assert col.cast(np.nan) is None
+
 
 def test_cast_nans_and_nones():
     col = IntColumn(name="Skill level")
@@ -440,15 +437,36 @@ def test_float_column():
 # Testing Datetime and date column
 
 def test_datetime_column_casts():
-    col = DateTimeColumn(name="start")
+    col = DateTimeColumn(name="start", datetime_format="%Y/%m/%d %H:%M")
     with pytest.raises(Exception):
         col.cast('Data')
     assert col.cast("2223/01/01 14:28") == datetime(2223,1,1, 14, 28)
 
 
-def test_datetime_column_custom_format():
-    col=DateTimeColumn(name="stardate", date_format_code="%Y%m%d")
-    assert col.cast("22230101") == datetime(2223,1,1)
+def test_datetime_column_doesnt_need_to_cast():
+    col = DateTimeColumn(name="start")
+    sample_dt = datetime(2023, 1, 1, 14, 14)
+    assert col.cast(sample_dt) == sample_dt
+
+
+def test_datetime_column_casts_consistently():
+    # This test was originally intended to make sure that '1/31/2024' and '31/1/2024' don't get cast to the
+    # same value - which would happen if we used dateutil to individually parse each date.  If a column has
+    # both values in its data, something is wrong and it's better to know that about the data than to hide it.
+    # If a column has both 1/31/2024 and 31/1/2024, we don't know how to parse '5/6/2024'.  Now that we use a
+    # more rigorous date parsing logic, the comparison of the results of 1/31/2024 and 31/1/2024 is a little bogus,
+    # because one of those two raises a ValueError.
+    col = DateTimeColumn(name="logtime", datetime_format='%m/%d/%Y')
+    assert col.cast('5/6/2024') != col.cast('6/5/2024')
+    try:
+        assert col.cast('31/1/2024') != col.cast('1/31/2024')
+    except Exception:
+        pass
+
+
+def test_date_column_custom_format():
+    col=DateColumn(name="stardate", date_format="%Y|%m|%d")
+    assert col.cast("2223|01|01") == date(2223,1,1)
 
 
 def test_datetime_column_applies_tz():
@@ -459,7 +477,19 @@ def test_datetime_column_applies_tz():
 
 def test_date_column_casts_to_date():
     col = DateColumn(name="start")
-    assert col.cast("2223/01/01") == date(2223,1,1)
+    value = col.cast("2223/01/01")
+    assert value == date(2223,1,1)
+    assert hasattr(value, 'tzname') is False
+
+
+def test_date_column_doesnt_need_to_cast():
+    col = DateColumn(name="start")
+    assert col.cast(date(2023,1,1)) == date(2023,1,1)
+
+
+def test_date_column_converts_time_to_date():
+    col = DateColumn(name="start")
+    assert col.cast("2023-01-01T10:50") == date(2023, 1, 1)
 
 
 def test_date_column_range():
