@@ -1,7 +1,6 @@
 import inspect
 from collections.abc import Mapping, Sequence
 from functools import wraps, partial
-import pandas as pd
 from .exceptions import DataErrorException, DropRowException, PhaserError
 from .pipeline import PHASER_ROW_NUM
 
@@ -177,13 +176,17 @@ def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_o
         raise exc
 
     def preprocess(step_function, target):
-        dataframe = pd.DataFrame.from_records(target)
-        if pass_row_nums:
-            dataframe[PHASER_ROW_NUM] = [row.row_num for row in target]
-        return dataframe
+        try:
+            from pandas import DataFrame
+            dataframe = DataFrame.from_records(target)
+            if pass_row_nums:
+                dataframe[PHASER_ROW_NUM] = [row.row_num for row in target]
+            return dataframe
+        except ImportError:
+            raise PhaserError("Using dataframe step requires pandas to be installed")
 
     def postprocess(step_function, result):
-        if not isinstance(result, pd.DataFrame):
+        if not "DataFrame" in str(result.__class__):
             raise PhaserError(
                 f"Step {step_function} returned a {result.__class__} rather than a pandas DataFrame")
         return result.to_dict(orient='records'), check_size
