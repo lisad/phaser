@@ -182,10 +182,13 @@ def save_csv(filename, row_data, fieldnames=None):
     except ValueError:
         all_fieldnames = set()
         [all_fieldnames.update(row.keys()) for row in row_data]
+        extra_fieldnames = [name for name in all_fieldnames if name not in fieldnames]
         save_csv(filename, row_data, fieldnames=all_fieldnames)
-        logger.info("Data had extra fields in some rows, which were duplicated across all rows in order to " +
-                    "be valid CSV.  If this is not the desired behavior: save as JSON, mark some fields as " +
-                    "not-saved, or set all fields explicitly on all rows.  Fields found: """ + ','.join(all_fieldnames))
+        logger.info("Data had added fields in some rows, which were duplicated across all rows to save as" +
+                    "valid CSV.  If this is not the desired behavior: save as JSON, mark extra fields as " +
+                    "not-saved, or set all fields explicitly on all rows.  (Added fields found: """ +
+                    ', '.join(extra_fieldnames) + ')')
+
 
 class SavableObject():
     """ Base class for data that can be saved as tabular data - but can reorganize data coming in or out"""
