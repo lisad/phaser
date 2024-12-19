@@ -161,7 +161,7 @@ def is_empty(value):
         return value.replace('\t', '').replace('\n', '').replace(' ', '') == ""
     return False
 
-def save_csv(filename, row_data):
+def save_csv(filename, row_data, fieldnames=None):
     if not row_data:
         return
 
@@ -171,13 +171,21 @@ def save_csv(filename, row_data):
     except StopIteration:
         return
 
-    fieldnames = list(first.keys())
-    with open(filename, "w", newline="") as fp:
-        w = csv.DictWriter(fp, fieldnames=fieldnames)
-        w.writeheader()
-        w.writerow(first)
-        w.writerows(iterator)
-
+    if fieldnames is None:
+        fieldnames = list(first.keys())
+    try:
+        with open(filename, "w", newline="") as fp:
+            w = csv.DictWriter(fp, fieldnames=fieldnames)
+            w.writeheader()
+            w.writerow(first)
+            w.writerows(iterator)
+    except ValueError:
+        all_fieldnames = set()
+        [all_fieldnames.update(row.keys()) for row in row_data]
+        save_csv(filename, row_data, fieldnames=all_fieldnames)
+        logger.info("Data had extra fields in some rows, which were duplicated across all rows in order to " +
+                    "be valid CSV.  If this is not the desired behavior: save as JSON, mark some fields as " +
+                    "not-saved, or set all fields explicitly on all rows.  Fields found: """ + ','.join(all_fieldnames))
 
 class SavableObject():
     """ Base class for data that can be saved as tabular data - but can reorganize data coming in or out"""

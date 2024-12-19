@@ -166,7 +166,10 @@ class Pipeline:
             raise ValueError("Pipeline source may not be None")
         next_source = self.source
         source_data_to_copy = Records(self.load(self.source))
-        self.save(source_data_to_copy.for_save(), self.working_dir / self.source_copy_filename())
+        try:
+            self.save(source_data_to_copy.for_save(), self.working_dir / self.source_copy_filename())
+        except ValueError as exc_info:
+            logging.exception(f"Source file could not be saved in {self.save_format} format.", exc_info=exc_info)
 
         for phase in self.phase_instances:
             destination = self.working_dir / self.phase_save_filename(phase)

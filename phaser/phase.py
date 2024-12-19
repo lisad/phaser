@@ -233,6 +233,9 @@ class Phase(PhaseBase):
         return self.row_data
 
     def do_column_stuff(self):
+        if self.headers is None:
+            raise DataException(f"Regular Phases require data with columns and known headers. Data did not have headers.")
+
         @row_step
         def cast_each_column_value(row, context):
             """ We run this as a row step to have consistent error handling and DRY.  It could be
