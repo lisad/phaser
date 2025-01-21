@@ -1,6 +1,7 @@
 from pathlib import Path
 import pytest
-from phaser import Phase, check_unique, read_csv, ON_ERROR_STOP_NOW, DataErrorException, IntColumn, sort_by, filter_rows
+from phaser import (Phase, check_unique, read_csv, ON_ERROR_STOP_NOW, DataErrorException, IntColumn, sort_by,
+                    filter_rows, flatten_dict, flatten_all)
 from fixtures import test_data_phase_class
 
 current_path = Path(__file__).parent
@@ -117,3 +118,56 @@ def test_filter_rows_message():
     assert all([row['rank'] == "Doctor" for row in phase.row_data])
     events = phase.context.get_events(phase, 'none')
     assert events[0]['message'] == "1 rows dropped in filter_rows with 'find_doctors'"
+
+
+def test_flatten_one_column_not_all():
+    phase = Phase(name='phase', steps=[flatten_dict('perf', keep_going=True)])
+    phase.load_data(data=[{'employee_id': 123, 'perf': {'leadership': 3, 'communication': 2}, 'extra': {'foo': 'bar'}},
+                          {'employee_id': 124, 'perf': {'leadership': 2, 'communication': 4}, 'extra': {'foo': 'baz'}}])
+    phase.run_steps()
+    assert phase.row_data[0]['perf__leadership'] > 2
+    assert phase.row_data[0]['extra'] == {'foo': 'bar'}
+    assert 'extra__foo' not in phase.row_data[0].keys()
+
+
+NESTED_DATA_ROW = {
+    'id': 123,
+    'msg': {
+        'type': {
+            'oid': '1b2a',
+            'name': 'Reply'
+        },
+        'content': 'Hello World'
+    }
+}
+
+RESULT_ROW = {
+    'id': 123,
+    'msg__type__oid': '1b2a',
+    'msg__type__name': 'Reply',
+    'msg__content': 'Hello World'
+}
+
+
+def test_flatten_more_nested_value():
+    phase = Phase(name='phase', steps=[flatten_dict('msg')])
+    phase.load_data(data=[NESTED_DATA_ROW])
+    phase.run_steps()
+    assert all([phase.row_data[0][key] == value for key, value in RESULT_ROW.items()])
+
+
+def test_flatten_just_one_level():
+    phase = Phase(name='phase', steps=[flatten_dict('msg', keep_going=False)])
+    phase.load_data(data=[NESTED_DATA_ROW])
+    phase.run_steps()
+    assert phase.row_data[0]['msg__content'] == "Hello World"
+    assert 'msg__type__oid' not in phase.row_data[0].keys()
+    assert phase.row_data[0]['msg__type'] == {'oid': '1b2a', 'name': 'Reply'}
+
+
+def test_flatten_all():
+    phase = Phase(name='phase', steps=[flatten_all])
+    phase.load_data(data=[NESTED_DATA_ROW])
+    phase.run_steps()
+    print(phase.row_data[0])
+    assert all([phase.row_data[0][key] == value for key, value in RESULT_ROW.items()])

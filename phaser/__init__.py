@@ -36,7 +36,7 @@ from phaser.constants import (PHASER_ROW_NUM, ON_ERROR_WARN, ON_ERROR_COLLECT, O
 from phaser.exceptions import PhaserError, DataErrorException, DataException, DropRowException, WarningException
 from phaser.phase import Phase
 from phaser.steps import row_step, batch_step, dataframe_step, context_step
-from phaser.builtin_steps import check_unique, sort_by, filter_rows
+from phaser.builtin_steps import check_unique, sort_by, filter_rows, flatten_dict, flatten_all
 from phaser.column import Column, IntColumn, DateColumn, DateTimeColumn, FloatColumn, BooleanColumn
 from phaser.io import read_csv, save_csv, ExtraMapping, ExtraRecords
 from phaser.table_diff import HtmlTableFormat, FormatterBase, IndexedTableDiffer
