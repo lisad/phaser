@@ -169,5 +169,11 @@ def test_flatten_all():
     phase = Phase(name='phase', steps=[flatten_all])
     phase.load_data(data=[NESTED_DATA_ROW])
     phase.run_steps()
-    print(phase.row_data[0])
     assert all([phase.row_data[0][key] == value for key, value in RESULT_ROW.items()])
+
+
+def test_flatten_empty():
+    phase = Phase(name='phase', steps=[flatten_dict('performance')])
+    phase.load_data(data=[{'employee_id': 123, 'perf': None, 'extra': {'foo': 'bar'}}])
+    phase.run_steps()
+    assert phase.row_data[0]['perf'] is None
