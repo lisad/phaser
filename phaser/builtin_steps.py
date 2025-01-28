@@ -128,7 +128,10 @@ def flatten_dict(column_name, keep_going=True):
         if isinstance(row[column_name], dict):
             new_row, new_columns = _merge_values_if_no_collisions(new_row, column_name)
         else:
-            # TODO: is nothing the right thing?
+            # Intentionally doing nothing here - if the value isn't a dict, just keep the value what it is.
+            # Example in practice: we could see data with language values that are sometimes strings or dicts, eg
+            #                      [{'id': 1, 'title': "Lions and Tigers"},
+            #                       {'id': 2, 'title': {'en_US': 'Bears', 'fr_FR': 'Les ours'} }]
             pass
 
         if keep_going:

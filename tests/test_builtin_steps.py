@@ -1,8 +1,9 @@
 from pathlib import Path
 import pytest
-from phaser import (Phase, check_unique, read_csv, ON_ERROR_STOP_NOW, DataErrorException, IntColumn, sort_by,
+from phaser import (Phase, Pipeline, check_unique, read_csv, ON_ERROR_STOP_NOW, DataErrorException, IntColumn, sort_by,
                     filter_rows, flatten_dict, flatten_all)
 from fixtures import test_data_phase_class
+from test_csv import write_text
 
 current_path = Path(__file__).parent
 
@@ -172,8 +173,34 @@ def test_flatten_all():
     assert all([phase.row_data[0][key] == value for key, value in RESULT_ROW.items()])
 
 
-def test_flatten_empty():
-    phase = Phase(name='phase', steps=[flatten_dict('performance')])
+def test_flatten_value_none():
+    phase = Phase(name='phase', steps=[flatten_dict('perf')])
     phase.load_data(data=[{'employee_id': 123, 'perf': None, 'extra': {'foo': 'bar'}}])
     phase.run_steps()
     assert phase.row_data[0]['perf'] is None
+
+
+def test_flatten_empty():
+    phase = Phase(name='phase', steps=[flatten_dict('perf')])
+    phase.load_data(data=[{'employee_id': 123, 'perf': "", 'extra': {'foo': 'bar'}}])
+    phase.run_steps()
+    print(phase.row_data[0])
+    assert phase.row_data[0]['perf'] == ""
+
+
+def test_flatten_missing():
+    # JSON data can easily be missing some fields in some records:
+    phase = Phase(name='phase', steps=[flatten_dict('perf')])
+    phase.load_data(data=[{'employee_id': 123,  'extra': {'foo': 'bar'}}])
+    phase.run_steps()
+    assert 'perf' not in phase.row_data[0].keys()
+
+
+def test_flatten_sometimes_a_dict():
+    phase = Phase(name='phase', steps=[flatten_dict('title')])
+    phase.load_data(data=[{'id': 1, 'title': "Lions and Tigers"},
+                          {'id': 2, 'title': {'en_US': 'Bears', 'fr_FR': 'Les ours'} }])
+    phase.run_steps()
+    assert phase.row_data[0]['title'] == "Lions and Tigers"
+    assert phase.row_data[1]['title__en_US'] == "Bears"
+
