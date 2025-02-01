@@ -19,12 +19,12 @@ Record-oriented data can be stored or expressed in various formats and objects i
 * CSV files
 * Excel files
 * Pandas dataframes
-* JSON files, provided the JSON format is a list of dicts
+* JSON files, provided the JSON format is in record format (a list of dicts)
 
 In this project, record consistency is somewhat forgiving.  The library does not insist that
 each record must have a value for every column.  Some records may not have some fields, i.e. 'sparse' data.
 Sparse data may sometimes be represented in a format that isn't columnar
-(a JSON format might easily contain records in which only fields with values are listed).  Sparse
+(a JSON file in 'record' format might easily contain records in which only fields with values are listed).  Sparse
 record-oriented data should be trivial to handle in this library, although by default checkpoint
 data will be saved in a columnar CSV that shows all the null values.
 
