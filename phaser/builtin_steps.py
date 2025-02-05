@@ -80,12 +80,13 @@ def filter_rows(func):
 
 @row_step
 def flatten_all(row, context, **kwargs):
-    new_row = row.copy()
+    new_row = row
     still_flattening = True
     while still_flattening:
         # Each iteration will pull nested data up one level. This will repeat until all nested data flattened.
         still_flattening = False
         for key, value in new_row.copy().items():
+            # The copy operation is necessary in this loop: you can't add columns to the dict you're looping through
             if isinstance(value, dict):
                 still_flattening = True
                 new_row, new_columns = _merge_values_if_no_collisions(new_row, key)
@@ -93,7 +94,7 @@ def flatten_all(row, context, **kwargs):
 
 
 def _merge_values_if_no_collisions(row, key_name):
-    new_row = row.copy()
+    new_row = row
     new_columns = []
     value = row[key_name]
     for inner_key, inner_value in value.items():
