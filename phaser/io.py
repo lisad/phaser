@@ -4,10 +4,32 @@ from collections.abc import Mapping, Sequence
 import logging
 import math
 from phaser.exceptions import DataErrorException, PhaserError
+import json
 
 logger = logging.getLogger(__name__)
 EXTRA_FIELDS_KEY = "__phaser_extra_fields__"
 MISSING_FIELD_VAL = "__phaser_missing_field__"
+
+
+def read_json(source, format=format):
+    """
+    This read_json helper assumes pandas style orient='records' format.  If your data uses something else,
+    a custom Pipeline can have a custom read/save implementation.
+    :param source:
+    :return: data in python list-of-dicts format.
+    """
+    with open(source, 'r') as json_file:
+        data = json.load(json_file)
+        if isinstance(data, list):
+            return data
+        else:
+            raise PhaserError("JSON data file format expected to hold a list of dict records - did not find list.")
+
+
+def save_json(filename, row_data):
+    with open(filename, 'w') as f:
+        json.dump(row_data, f)
+
 
 def read_csv(source, delimiter=','):
     data = []
@@ -139,7 +161,7 @@ def is_empty(value):
         return value.replace('\t', '').replace('\n', '').replace(' ', '') == ""
     return False
 
-def save_csv(filename, row_data):
+def save_csv(filename, row_data, fieldnames=None):
     if not row_data:
         return
 
@@ -149,14 +171,27 @@ def save_csv(filename, row_data):
     except StopIteration:
         return
 
-    fieldnames = list(first.keys())
-    with open(filename, "w", newline="") as fp:
-        w = csv.DictWriter(fp, fieldnames=fieldnames)
-        w.writeheader()
-        w.writerow(first)
-        w.writerows(iterator)
+    if fieldnames is None:
+        fieldnames = list(first.keys())
+    try:
+        with open(filename, "w", newline="") as fp:
+            w = csv.DictWriter(fp, fieldnames=fieldnames)
+            w.writeheader()
+            w.writerow(first)
+            w.writerows(iterator)
+    except ValueError:
+        all_fieldnames = set()
+        [all_fieldnames.update(row.keys()) for row in row_data]
+        extra_fieldnames = [name for name in all_fieldnames if name not in fieldnames]
+        save_csv(filename, row_data, fieldnames=all_fieldnames)
+        logger.info("Data had added fields in some rows, which were duplicated across all rows to save as valid CSV. " +
+                    "If this is not the desired behavior, options include: save as JSON, mark extra fields as " +
+                    "not-saved in Pipeline, or set all fields explicitly on all rows.  (Added fields found: """ +
+                    ', '.join(extra_fieldnames) + ')')
 
-class IOObject(ABC):
+
+class SavableObject():
+    """ Base class for data that can be saved as tabular data - but can reorganize data coming in or out"""
     def __init__(self, name, data_type, data=None):
         self.name = name
         self.data_type = data_type
@@ -165,20 +200,19 @@ class IOObject(ABC):
         self.data = data
         self.to_save = False
 
-    @abstractmethod
-    def load(self, source):
+    def load_data(self, data):
         """ Load data from the source, overwriting any data that may be stored
         in the object already. The source should be in a format that was written
         by the save function."""
-        pass
+        self.data = data
 
-    @abstractmethod
-    def save(self, dest):
+    def prepare_for_save(self):
         """ Save data to the destination in a format that is appropriate to be
         read back in by the load function."""
-        pass
+        return self.data
 
-class ExtraRecords(IOObject):
+
+class ExtraRecords(SavableObject):
     """ A holder of data that either comes from an extra source is will be added
     to as an extra output. Its data is in the form of a sequence, most likely
     a list of dicts and represents data that is meant to be appended to or
@@ -186,30 +220,22 @@ class ExtraRecords(IOObject):
     def __init__(self, name, data=None):
         super().__init__(name, Sequence, data)
 
-    def load(self, source):
-        self.data = read_csv(source)
 
-    def save(self, dest):
-        if self.data:
-            save_csv(dest, self.data)
-
-class ExtraMapping(IOObject):
+class ExtraMapping(SavableObject):
     """ A holder of data that either comes from an extra source is will be added
     to as an extra output. Its data is in the form of a mapping, most likely
     a dict and represents data that is meant to be accessed by a key."""
     def __init__(self, name, data=None):
         super().__init__(name, Mapping, data)
 
-    def load(self, source):
-        in_data = read_csv(source)
+    def load_data(self, tabular_data):
         self.data = {
-            row['key']: row['value'] for row in in_data
+            row['key']: row['value'] for row in tabular_data
         }
 
-    def save(self, dest):
+    def prepare_for_save(self):
         if self.data:
-            out_data = [
+            return [
                 { 'key': key, 'value': value }
                 for key, value in self.data.items()
             ]
-            save_csv(dest, out_data)

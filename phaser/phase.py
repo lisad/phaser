@@ -21,8 +21,10 @@ class PhaseBase(ABC):
         self.context = context or Context()
         self.steps = steps or self.__class__.steps
         self.renumber = renumber
-        self.extra_sources = extra_sources or getattr(self.__class__, 'extra_sources', [])
-        self.extra_outputs = extra_outputs or getattr(self.__class__, 'extra_outputs', [])
+        self.extra_sources = extra_sources or deepcopy(getattr(self.__class__, 'extra_sources', []))
+        self.extra_outputs = extra_outputs or deepcopy(getattr(self.__class__, 'extra_outputs', []))
+        # Note we need to copy the sources and outputs from the class to the instance, if they were
+        # set on the class for declarative convenience, so that this instance doesn't mess with other instances.
         self.headers = None
         self.row_data = None
 
@@ -179,7 +181,7 @@ class Phase(PhaseBase):
     Methods
     -------
     run(source, destination)
-        Loads data from source, applies all the phase's column definitions and steps, and saves to destination.
+        Loads data from source, applies all the phase's column definitions and steps, and prepares for saving.
         If run inside a Pipeline, the pipeline will call this, but for debugging/developing or simpler data
         transformations, this can be used to run the phase without a Pipeline.
 
@@ -188,10 +190,6 @@ class Phase(PhaseBase):
         Besides overriding the load method, users of Phase should not need to run load directly as it is run
         as part of 'run'. if overriding 'load', make sure that both phase.headers and phase.row_data are
         set up before finishing the method.
-
-    save(source)
-        If creating a Phase that sends data to a custom destination, subclass Phase and override the save method.
-        If the method is not overridden, the phase will save the data in CSV format at the destination.
 
     """
     source = None
@@ -237,6 +235,9 @@ class Phase(PhaseBase):
         return self.row_data
 
     def do_column_stuff(self):
+        if self.headers is None:
+            raise DataException(f"Regular Phases require data with columns and known headers. Data did not have headers.")
+
         @row_step
         def cast_each_column_value(row, context):
             """ We run this as a row step to have consistent error handling and DRY.  It could be
