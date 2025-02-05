@@ -23,6 +23,8 @@ class PhaseBase(ABC):
         self.renumber = renumber
         self.extra_sources = extra_sources or deepcopy(getattr(self.__class__, 'extra_sources', []))
         self.extra_outputs = extra_outputs or deepcopy(getattr(self.__class__, 'extra_outputs', []))
+        # Note we need to copy the sources and outputs from the class to the instance, if they were
+        # set on the class for declarative convenience, so that this instance doesn't mess with other instances.
         self.headers = None
         self.row_data = None
 
