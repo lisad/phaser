@@ -1,7 +1,7 @@
 from pathlib import Path
 import pytest
 from phaser import (Phase, Pipeline, check_unique, read_csv, ON_ERROR_STOP_NOW, DataErrorException, IntColumn, sort_by,
-                    filter_rows, flatten_dict, flatten_all)
+                    filter_rows, flatten_column, flatten_all)
 from fixtures import test_data_phase_class
 from test_csv import write_text
 
@@ -122,7 +122,7 @@ def test_filter_rows_message():
 
 
 def test_flatten_one_column_not_all():
-    phase = Phase(name='phase', steps=[flatten_dict('perf', keep_going=True)])
+    phase = Phase(name='phase', steps=[flatten_column('perf', deep=True)])
     phase.load_data(data=[{'employee_id': 123, 'perf': {'leadership': 3, 'communication': 2}, 'extra': {'foo': 'bar'}},
                           {'employee_id': 124, 'perf': {'leadership': 2, 'communication': 4}, 'extra': {'foo': 'baz'}}])
     phase.run_steps()
@@ -151,14 +151,14 @@ RESULT_ROW = {
 
 
 def test_flatten_more_nested_value():
-    phase = Phase(name='phase', steps=[flatten_dict('msg')])
+    phase = Phase(name='phase', steps=[flatten_column('msg')])
     phase.load_data(data=[NESTED_DATA_ROW])
     phase.run_steps()
     assert all([phase.row_data[0][key] == value for key, value in RESULT_ROW.items()])
 
 
 def test_flatten_just_one_level():
-    phase = Phase(name='phase', steps=[flatten_dict('msg', keep_going=False)])
+    phase = Phase(name='phase', steps=[flatten_column('msg', deep=False)])
     phase.load_data(data=[NESTED_DATA_ROW])
     phase.run_steps()
     assert phase.row_data[0]['msg__content'] == "Hello World"
@@ -174,14 +174,14 @@ def test_flatten_all():
 
 
 def test_flatten_value_none():
-    phase = Phase(name='phase', steps=[flatten_dict('perf')])
+    phase = Phase(name='phase', steps=[flatten_column('perf')])
     phase.load_data(data=[{'employee_id': 123, 'perf': None, 'extra': {'foo': 'bar'}}])
     phase.run_steps()
     assert phase.row_data[0]['perf'] is None
 
 
 def test_flatten_empty():
-    phase = Phase(name='phase', steps=[flatten_dict('perf')])
+    phase = Phase(name='phase', steps=[flatten_column('perf')])
     phase.load_data(data=[{'employee_id': 123, 'perf': "", 'extra': {'foo': 'bar'}}])
     phase.run_steps()
     print(phase.row_data[0])
@@ -190,14 +190,14 @@ def test_flatten_empty():
 
 def test_flatten_missing():
     # JSON data can easily be missing some fields in some records:
-    phase = Phase(name='phase', steps=[flatten_dict('perf')])
+    phase = Phase(name='phase', steps=[flatten_column('perf')])
     phase.load_data(data=[{'employee_id': 123,  'extra': {'foo': 'bar'}}])
     phase.run_steps()
     assert 'perf' not in phase.row_data[0].keys()
 
 
 def test_flatten_sometimes_a_dict():
-    phase = Phase(name='phase', steps=[flatten_dict('title')])
+    phase = Phase(name='phase', steps=[flatten_column('title')])
     phase.load_data(data=[{'id': 1, 'title': "Lions and Tigers"},
                           {'id': 2, 'title': {'en_US': 'Bears', 'fr_FR': 'Les ours'} }])
     phase.run_steps()

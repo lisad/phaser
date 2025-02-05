@@ -146,3 +146,12 @@ def test_save_extra_fields(temp_file):
     save_csv(temp_file, [{"id": 1, "val": 1}, {"id": 2, 'val': 2, 'extra': 'yes'}])
     new_data = read_csv(temp_file)
     assert new_data[0] == {"id": '1', "val": '1', 'extra': ''}
+
+
+def test_array_values_quoted(temp_file):
+    # Data with array values gets quoted for safety.  We don't automatically assume that data that's imported that
+    # looks like an array ought to be forced to an array - we would need an ArrayColumn type for that.
+    data = [{"id": "1", "log_entries": ['338822', '45380']}]
+    save_csv(temp_file, data)
+    new_data = read_csv(temp_file)
+    assert new_data[0]['log_entries'] == "['338822', '45380']"

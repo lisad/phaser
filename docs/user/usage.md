@@ -152,7 +152,7 @@ def fill_user_name(row, context):
 
 ## Built-in steps
 
-### JSON utilities: flatten_dict and flatten_all
+### JSON utilities: flatten_column and flatten_all
 
 These two built-in steps are helpful in transforming nested JSON data into values that can be directly processed.
 
@@ -172,7 +172,7 @@ import phaser
 
 class FlattenPhase(phaser.Phase):
     steps = [
-        phaser.flatten_dict('payload')
+        phaser.flatten_column('payload')
     ]
 
 # Phase output
@@ -181,7 +181,7 @@ class FlattenPhase(phaser.Phase):
 ```
 
 In this case the same result can be achieved with the flatten_all builtin method, because there's only one 
-column with a value that is a dict.
+column with a value that is a dict.  The value that is a list is not altered by the flatten methods.
 
 ## Running in production
 

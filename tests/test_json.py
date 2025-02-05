@@ -1,5 +1,5 @@
 import pytest
-from phaser import Pipeline, Phase, flatten_dict, JSON_RECORD_FORMAT, CSV_FORMAT
+from phaser import Pipeline, Phase, flatten_column, JSON_RECORD_FORMAT, CSV_FORMAT
 from test_csv import write_text
 from phaser.io import save_json, read_csv
 
@@ -34,7 +34,7 @@ def test_roundtrip_json_value_to_csv(tmpdir):
     class MyPipeline(Pipeline):
         save_format = CSV_FORMAT
 
-    phase = Phase(steps=[flatten_dict('status')])
+    phase = Phase(steps=[flatten_column('status')])
     pipeline = MyPipeline(working_dir=tmpdir, source=tmpdir / 'ship_data.json', phases=phase)
     pipeline.run()
     assert pipeline.source_copy_filename().endswith('csv')

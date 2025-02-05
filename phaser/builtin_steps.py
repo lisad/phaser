@@ -106,22 +106,22 @@ def _merge_values_if_no_collisions(row, key_name):
     return new_row, new_columns
 
 
-def flatten_dict(column_name, keep_going=True):
+def flatten_column(column_name, deep=True):
     """
-    The flatten_json_data step is useful in JSON data handling, which often has value fields within JSON-formatted
+    The flatten_column step is useful in JSON data handling, which often has value fields within JSON-formatted
     fields within records.  In flattening, new column names are concatenated from hierarchical names.
     For example, flattening a column called 'payload' which is a dict with fields called 'type' and 'id' will create
     one new column for each key called 'payload__type' and 'payload__id'.
 
     Usage:
 
-    flatten_dict('payload')
-    flatten_dict('performance_detail')
+    flatten_column('payload')
+    flatten_column('performance_detail', deep=False)  # Only flatten one layer -- if there are dicts within dict
 
     """
 
     @row_step
-    def flatten_dict_step(row, context, **kwargs):
+    def flatten_col_step(row, context, **kwargs):
         if column_name not in row.keys():
             raise DataErrorException(f"Error flattening nested data - column `{column_name}` not found in row")
         new_row = row.copy()
@@ -134,7 +134,7 @@ def flatten_dict(column_name, keep_going=True):
             #                       {'id': 2, 'title': {'en_US': 'Bears', 'fr_FR': 'Les ours'} }]
             pass
 
-        if keep_going:
+        if deep is True:
             while len(new_columns) > 0:
                 column_to_flatten = new_columns.pop()
                 value = new_row[column_to_flatten]
@@ -144,5 +144,5 @@ def flatten_dict(column_name, keep_going=True):
 
         return new_row
 
-    return flatten_dict_step
+    return flatten_col_step
 
