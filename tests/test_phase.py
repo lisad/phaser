@@ -36,17 +36,38 @@ def test_drop_col_works_if_not_exist(tmpdir):
     phase.prepare_for_save()
     assert 'Status' not in phase.row_data[0].keys()
 
-# The prepare_for_save function used to use a DataFrame to succintcly drop the
+# The prepare_for_save function used to use a DataFrame to succinctly drop the
 # columns, but DataFrame changes types sometimes. In particular, if there was
 # a column of `int`s that had some `None` values in it, DataFrame converted that
 # column to a `float`. Not what we want. This function checks that that behavior
 # no longer occurs.
-def test_dropping_columns_does_not_change_type(tmpdir):
+def test_dropping_columns_does_not_change_type():
     phase = Phase(name="transform",
                   columns=[IntColumn(name="id")])
     phase.load_data([{"id": 1}, {"id": None}, {"id": 2}])
     phase.prepare_for_save()
     assert phase.row_data.to_records() == [{"id": 1}, {"id": None}, {"id": 2}]
+
+
+def test_warning_column_added_can_be_squelched():
+    # Normally, the phase's prepare_for_save will create warnings about values that were added. Can we declare the
+    # column to successfully avoid that warning?  With two rows added in the step, only one should make a warning.
+    @row_step
+    def add_columns(row):
+        row['this_col_should_not_cause_a_warning'] = "Astro sciences standing by, Captain."
+        row['this_col_will_cause_a_warning'] = "Engineering division ready, as always."
+        return row
+
+    phase = Phase(columns=[Column('this_col_should_not_cause_a_warning', required=False)], steps=[add_columns])
+    phase.load_data([{'id': 1}])
+    phase.run()
+    phase.prepare_for_save()
+    first_row_warnings = phase.context.get_events(phase=phase)[1]
+    for warning in first_row_warnings:
+        assert warning['type'] == 'WARNING'
+        assert 'this_col_should_not_cause_a_warning' not in warning['message']
+        assert 'this_col_will_cause_a_warning' in warning['message']
+
 
 def test_subclassing(tmpdir):
     class Transformer(Phase):

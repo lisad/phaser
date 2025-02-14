@@ -54,7 +54,7 @@ def test_pipeline(tmpdir):
     assert "Beginning errors and warnings for Validation" in file_data
     assert "Employee Garak has no ID and inactive" in file_data
     assert "Beginning errors and warnings for Transformation" in file_data
-    assert "'Full name' was added to the row_data and not declared a header'" in file_data
+    assert "'Full name' was added to the row_data and not declared as a column'" in file_data
 
     # The extra output should be listed in the expected outputs.
     assert 'managers.csv' in pipeline.expected_outputs()

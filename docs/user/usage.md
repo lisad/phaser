@@ -120,6 +120,35 @@ Happily, the above example will convert ' 2023-01-01 '  to a date without explic
 Should you require a "fix_value_fn" that applies before the column is cast to its data type, a custom Column class
 may be required instead (see [custom validation for columns](#custom-column-validation))
 
+## Dropping columns
+
+Columns can be dropped individually by telling a Phase not to save them in its output:
+
+```python
+Column('deviceId', save=False)
+```
+
+Declaring the column is going to make the Phase code look for it at the beginning of the Phase, even if it's going
+to leave it out when saving the output of the Phase (after all, you might need to use the column in a step before
+dropping it at the end).  Because of this, if JSON data occasionally contains a field that you don't want to keep,
+it needs to be marked as optional as well as not saved.
+
+```python
+Column('expectedNormal', required=False, save=False)
+```
+
+JSON data can be flattened with builtin steps, creating new columns out of nested data in the middle of the phase
+(see [flatten_column](#flattening_json)).  In the example below, if the 'payload' value has nested values including
+'note', declaring the 'payload__note' column as not required and not saved will cause it to be dropped at the end of
+the Phase.
+
+```python
+class ExtractPhase(Phase):
+    columns = [Column('payload__note', required=False, save=False)]
+    steps = [flatten_column('payload')]
+
+```
+
 ## Row steps
 
 Row steps are steps that can be declared for the Phase to run on the data one row at a time. Row steps can be 
@@ -152,6 +181,7 @@ def fill_user_name(row, context):
 
 ## Built-in steps
 
+(flattening_json)=
 ### JSON utilities: flatten_column and flatten_all
 
 These two built-in steps are helpful in transforming nested JSON data into values that can be directly processed.
