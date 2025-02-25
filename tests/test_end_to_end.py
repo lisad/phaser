@@ -30,7 +30,7 @@ def test_reporting(pipeline):
     assert "Beginning errors and warnings for Validator" in file_data
     assert "Employee Garak has no ID and inactive" in file_data
     assert "Beginning errors and warnings for Transformer" in file_data
-    assert "'Full name' was added to the row_data and not declared a header'" in file_data
+    assert "'Full name' was added to the row_data and not declared as a column'" in file_data
 
 
 def test_line_numbering(pipeline):

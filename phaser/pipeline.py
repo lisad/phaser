@@ -196,7 +196,7 @@ class Pipeline:
         logger.info(f"{phase.name} saved output to {destination}")
         self.report_errors_and_warnings(phase.name)
         if self.context.phase_has_errors(phase.name):
-            raise DataException(f"Phase '{phase.name}' failed with errors.")
+            raise DataException(f"Phase '{phase.name}' failed with errors.  Errors saved to '{self.errors_and_warnings_file()}'")
 
     def report_errors_and_warnings(self, phase_name):
         """ TODO: different formats, flexibility:

@@ -100,7 +100,7 @@ def _merge_values_if_no_collisions(row, key_name):
     for inner_key, inner_value in value.items():
         new_column_name = f"{key_name}__{inner_key}"
         if new_column_name in row.keys():
-            raise DataErrorException(f"Error flattening nested data; key {key_name} already in row")
+            raise DataErrorException(f"Error flattening nested data; key {new_column_name} already in row")
         new_row[new_column_name] = inner_value
         new_columns.append(new_column_name)
     del new_row[key_name]

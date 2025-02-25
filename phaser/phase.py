@@ -248,7 +248,8 @@ class Phase(PhaseBase):
             can assume the correct type). """
             new_row = row
             for col in self.columns:
-                new_row = col.check_and_cast_value(new_row, context)
+                if col.required or col.save or col.name in new_row.keys():
+                    new_row = col.check_and_cast_value(new_row, context)
             return new_row
 
         # Header work is done first
@@ -315,13 +316,15 @@ class Phase(PhaseBase):
         added_header_names = set()
         for row in self.row_data:
             for field_name in row.keys():
-                if field_name not in self.headers and field_name not in added_header_names:
+                if (field_name not in self.headers
+                        and field_name not in added_header_names
+                        and field_name not in [c.name for c in self.columns]):
                     # TODO: Fix -- context adds warnings to the 'current_row'
                     # record, not the record associated with the row passed in
                     # here. In this method, all of the errors are logged on the
                     # last row of the data, because current_row is not changed.
                     self.context.add_warning('consistency_check', row,
-                        f"New field '{field_name}' was added to the row_data and not declared a header")
+                        f"New field '{field_name}' was added to the row_data and not declared as a column")
                     added_header_names.add(field_name)
 
     def diffable(self):

@@ -5,7 +5,7 @@ import pytest
 from dateutil.tz import gettz
 
 from phaser import (Phase, Column, IntColumn, FloatColumn, DateColumn, DateTimeColumn, BooleanColumn,
-                    DataErrorException, DropRowException, ON_ERROR_DROP_ROW, PhaserError)
+                    DataErrorException, DropRowException, ON_ERROR_DROP_ROW, PhaserError, row_step)
 
 
 # Constructor tests
@@ -367,6 +367,30 @@ def test_boolean_required():
     phase.load_data([{'id': 1}])
     with pytest.raises(DataErrorException):
         phase.do_column_stuff()
+
+
+def test_column_not_set_if_not_required_and_not_saved():
+    # Making this work -- not add the column at the beginning of the phase only to drop it at the end -- allows
+    # a phase to flatten JSON columns and then not save some of the flattened results at the end of the phase.
+    # E.g. without this, a phase can't have both "Column('payload__content', required=False, save=False)" and a step
+    # like "flatten_column('payload')", because the flatten method fails when the payload__content was added during
+    # column logic handling.
+
+    phase = Phase(columns=[Column("test", required=False, save=False)])
+    phase.load_data([{'id': 1}])
+    phase.do_column_stuff()
+    assert 'test' not in phase.row_data[0].keys()
+
+
+def test_column_cast_if_not_required_and_not_saved_but_is_there():
+    # This is the flip side of the logic tested in test_column_not_set_if_not_required_and_not_saved - if the column
+    # is not saved at the end, and not required to be there, but it *might* be there and it *might* be used,
+    # we want to operate on the column as normal rather than skip it in 'cast_each_column_value'.
+    phase = Phase(columns=[IntColumn("test", required=False, save=False)])
+    phase.load_data([{'id': 1, 'test': "5"}, {'id': 2}])
+    phase.do_column_stuff()
+    assert phase.row_data[0]['test'] == 5
+    assert 'test' not in phase.row_data[1].keys()
 
 
 def test_boolean_not_null():
