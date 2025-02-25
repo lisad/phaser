@@ -1,6 +1,7 @@
 from pathlib import Path
 
 import pandas
+import pandas as pd
 import pytest
 
 from phaser import (Phase, row_step, batch_step, context_step,
@@ -345,6 +346,22 @@ def test_dataframe_step_doesnt_return_df():
     with pytest.raises(PhaserError) as e:
         phase.run_steps()
     assert 'pandas DataFrame' in e.value.message
+
+
+def test_dataframe_step_is_testable():
+    # We want to make sure that a developer can write unit tests for their step functions.
+    # The @dataframe_step decorator should not make those unit tests unnecessarily complex.
+    @dataframe_step
+    def sum_bonuses(df, context):
+        df['total'] = df.sum(axis=1, numeric_only=True)
+        return df
+
+    data = {'eid': ['001', '001'], 'commission': [1000, 1000], 'performance': [9000, 1000]}
+    output = [{'eid': '001', 'commission': 1000, 'performance': 9000, 'total': 10000},
+              {'eid': '001', 'commission': 1000, 'performance': 1000, 'total': 2000}]
+    bonus_df = pd.DataFrame(data)
+    test_step_output, check_size_flag = sum_bonuses(bonus_df)
+    assert test_step_output == output
 
 
 def test_multiple_step_types():

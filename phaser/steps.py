@@ -3,6 +3,7 @@ from collections.abc import Mapping, Sequence
 from functools import wraps, partial
 from .exceptions import DataErrorException, DropRowException, PhaserError
 from .pipeline import PHASER_ROW_NUM
+from .records import Records
 
 ROW_STEP = "ROW_STEP"
 BATCH_STEP = "BATCH_STEP"
@@ -179,7 +180,10 @@ def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_o
         try:
             from pandas import DataFrame
             dataframe = DataFrame.from_records(target)
-            if pass_row_nums:
+            if pass_row_nums and isinstance(target, Records):
+                # We used to assume row numbers, but that doesn't work well in renumbering phases.
+                # We used to assume that the data was in Records format, but that prevents developers
+                # from directly testing their step functions by passing dict data in their unit tests.
                 dataframe[PHASER_ROW_NUM] = [row.row_num for row in target]
             return dataframe
         except ImportError:
