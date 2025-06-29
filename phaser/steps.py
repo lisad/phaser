@@ -170,6 +170,8 @@ def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_o
     :param extra_output: An array of names of outputs
     :param check_size: A boolean indicating whether or not to validate the size of the
         DataFrame after the step is run
+    :return: a DataFrame (or something else supporting to_dict-- be wary of returning a Series
+        unless you mean to)
     """
     def handle_exception(step_function, exc):
         if isinstance(exc, DropRowException):
@@ -190,9 +192,12 @@ def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_o
             raise PhaserError("Using dataframe step requires pandas to be installed")
 
     def postprocess(step_function, result):
-        if not "DataFrame" in str(result.__class__):
+        if result is None:
             raise PhaserError(
-                f"Step {step_function} returned a {result.__class__} rather than a pandas DataFrame")
+                f"Step {step_function} returned no result. Remember to return the data for the next step.")
+        if not hasattr(result, 'to_dict'):
+            raise PhaserError(
+                f"Step {step_function} return a result that is not a DataFrame, or does not support to_dict")
         return result.to_dict(orient='records'), check_size
 
     wrapper = StepWrapper(

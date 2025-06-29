@@ -5,11 +5,10 @@ import pandas as pd
 import pytest
 from unittest.mock import patch
 
-from phaser import (Phase, row_step, batch_step, context_step,
+from phaser import (Phase, row_step, batch_step, context_step, Context,
                     DropRowException, PhaserError, dataframe_step,
-                    PHASER_ROW_NUM, ON_ERROR_STOP_NOW)
+                    PHASER_ROW_NUM, ON_ERROR_STOP_NOW, records)
 from phaser.io import ExtraMapping
-import phaser
 from steps import sum_bonuses
 
 current_path = Path(__file__).parent
@@ -114,13 +113,14 @@ def test_row_step_wrong_return_type_errors():
     def step_returns_value_other_than_row(row, context):
         return context.get('return_value')
 
-    with patch.object(phaser.Context, 'get', return_value=1):
-        with pytest.raises(PhaserError) as exc_info:
-            step_returns_value_other_than_row({'data': 'testrow'}, phaser.Context())
+    context = Context()
+    context.add_variable('step_return_value', 1)
+    with pytest.raises(PhaserError) as exc_info:
+        step_returns_value_other_than_row({'data': 'testrow'}, context)
         assert "return row in dict format, not 1" in exc_info.value.message
-    with patch.object(phaser.Context, 'get', return_value=[]):
-        with pytest.raises(PhaserError) as exc_info:
-            step_returns_value_other_than_row({'data': 'testrow'}, phaser.Context())
+    context.add_variable('step_return_value', 1)
+    with pytest.raises(PhaserError) as exc_info:
+        step_returns_value_other_than_row({'data': 'testrow'}, context)
         assert "return row in dict format, not []" in exc_info.value.message
 
 # Batch steps
@@ -272,13 +272,13 @@ def test_context_step_keeps_numbers():
     def a_step(context):
         assert 1 > 0
 
-    row_num_gen = phaser.records.row_num_generator()
+    row_num_gen = records.row_num_generator()
     # PIpeline will set up Records that converts __phaser_row_num__ into record.row_num.  Replicate that setup
     # so we can see that it keeps that setup.
     data_with_row_numbers = [
         {'id': 3, 'age': 48, PHASER_ROW_NUM: 3}
     ]
-    data = phaser.records.Records(data_with_row_numbers, row_num_gen)
+    data = records.Records(data_with_row_numbers, row_num_gen)
     phase = Phase("test", steps=[a_step])
     phase.load_data(data)
     # Before running, the 2nd row, index 1, should keep the # 3... and after running also
@@ -351,7 +351,7 @@ def test_dataframe_step_doesnt_declare_context():
     assert phase.row_data[0]['total'] == 10000
 
 
-def test_dataframe_step_doesnt_return_df():
+def test_dataframe_step_returns_nothing():
     @dataframe_step
     def sum_bonuses_forgot_return(df):
         df['total'] = df.sum(axis=1, numeric_only=True)
@@ -360,7 +360,20 @@ def test_dataframe_step_doesnt_return_df():
     phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
     with pytest.raises(PhaserError) as e:
         phase.run_steps()
-    assert 'pandas DataFrame' in e.value.message
+    assert 'Remember to return' in e.value.message
+
+def test_dataframe_step_returns_non_df():
+    @dataframe_step
+    def sum_bonuses_return_non_df(df):
+        df['total'] = df.sum(axis=1, numeric_only=True)
+        return 'total'
+
+    phase = Phase(steps=[sum_bonuses_return_non_df])
+    phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
+    with pytest.raises(PhaserError) as e:
+        phase.run_steps()
+    assert 'does not support to_dict' in e.value.message
+
 
 
 def test_dataframe_step_is_testable():
