@@ -351,7 +351,7 @@ def test_dataframe_step_doesnt_declare_context():
     assert phase.row_data[0]['total'] == 10000
 
 
-def test_dataframe_step_doesnt_return_df():
+def test_dataframe_step_returns_nothing():
     @dataframe_step
     def sum_bonuses_forgot_return(df):
         df['total'] = df.sum(axis=1, numeric_only=True)
@@ -360,7 +360,20 @@ def test_dataframe_step_doesnt_return_df():
     phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
     with pytest.raises(PhaserError) as e:
         phase.run_steps()
-    assert 'pandas DataFrame' in e.value.message
+    assert 'Remember to return' in e.value.message
+
+def test_dataframe_step_returns_non_df():
+    @dataframe_step
+    def sum_bonuses_return_non_df(df):
+        df['total'] = df.sum(axis=1, numeric_only=True)
+        return 'total'
+
+    phase = Phase(steps=[sum_bonuses_return_non_df])
+    phase.load_data([{'eid': '001', 'commission': 1000, 'performance': 9000}])
+    with pytest.raises(PhaserError) as e:
+        phase.run_steps()
+    assert 'does not support to_dict' in e.value.message
+
 
 
 def test_dataframe_step_is_testable():
