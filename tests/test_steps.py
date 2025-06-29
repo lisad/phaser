@@ -3,6 +3,7 @@ from pathlib import Path
 import pandas
 import pandas as pd
 import pytest
+from unittest.mock import patch
 
 from phaser import (Phase, row_step, batch_step, context_step,
                     DropRowException, PhaserError, dataframe_step,
@@ -107,6 +108,20 @@ def test_extra_outputs_but_no_context():
         collect_extra_from_row({'id': 1, 'what': 'the row'}, ExtraMapping('extra', {}))
     assert "without a context" in exc_info.value.message
 
+
+def test_row_step_wrong_return_type_errors():
+    @row_step
+    def step_returns_value_other_than_row(row, context):
+        return context.get('return_value')
+
+    with patch.object(phaser.Context, 'get', return_value=1):
+        with pytest.raises(PhaserError) as exc_info:
+            step_returns_value_other_than_row({'data': 'testrow'}, phaser.Context())
+        assert "return row in dict format, not 1" in exc_info.value.message
+    with patch.object(phaser.Context, 'get', return_value=[]):
+        with pytest.raises(PhaserError) as exc_info:
+            step_returns_value_other_than_row({'data': 'testrow'}, phaser.Context())
+        assert "return row in dict format, not []" in exc_info.value.message
 
 # Batch steps
 
