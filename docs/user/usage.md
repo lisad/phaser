@@ -177,6 +177,81 @@ def fill_user_name(row, context):
 
 ## Batch steps
 
+Phaser has a number of built-in steps that operate on the whole batch.  This kind of step can be useful to 
+have transformations that drop duplicate rows, or test that indexes that are supposed to be unique are in fact unique.
+
+### Built-in batch steps
+
+Some of the more common batch steps are already built-in, ready to use:
+ * [drop_duplicate_rows](#drop_duplicate_rows) - rows that have the same values in one column, several columns or all 
+columns can be dropped. E.g. to simply drop rows with duplicate 'id' values, use the step 'drop_duplicate_rows(['id'])
+in a phase of your pipeline.
+ * [check_unique](#check_unique) - rows that have the same value in key columns will cause exceptions to be raised
+ * [sort_by](#sort_by) - can sort the batch of data by one or more columns
+ * [filter_rows](#filter_rows) - can keep only rows that match a value test, e.g. `filter_rows(lambda row: 
+row['id'] is not None)`
+
+```python
+import phaser
+# Example of using a built-in steps. This phase uses only built-in 
+# steps and Column attributes to reduce the incoming blood-glucose 
+# monitor data to a smaller set of useful columns and rows.
+
+class ExtractPhase(phaser.Phase):
+    columns = [
+        phaser.Column('deviceId', save=False),
+        phaser.Column('uploadId', save=False),
+        phaser.Column('guid', save=False),
+        phaser.Column('clockDriftOffset', save=False),
+        phaser.Column('conversionOffset', save=False)
+    ]
+    steps = [
+        phaser.filter_rows(lambda row: row['type'] in ['cbg', 'basal']),
+        phaser.drop_duplicate_rows(['type', 'timestamp'])
+    ]
+```
+
+### Writing a custom batch step
+
+A custom batch step accepts a batch of data in record format (list of dicts).  It returns the data in the same format.
+The following example returns the data unchanged unless the variance of one column is too high for the pipeline to
+continue.
+
+```python
+import phaser
+
+def variance(array):
+    mean = sum(array) / len(array)
+    return sum((value - mean) ** 2 for value in array) / len(array)
+
+@phaser.batch_step
+def error_tachyon_level_variance(batch, context):
+    tachyon_values = [row['tachyon_level'] for row in batch]
+    if variance(tachyon_values) > 10:
+        raise Exception("Tachyon variance at high levels")
+    return batch
+
+```
+
+A batch step may add or remove rows, but if it does, add `check_size=False` to the batch_step declaration.  Otherwise,
+the decorator will check whether there are the same number of rows as before running the step, to avoid common errors
+where conditional logic is used and the developer accidentally only returns some rows.  Note that the decorator
+also checks to make sure the batch data is returned (explicitly returning it helps the developer if they 
+accidentally forgot to return the data, modified or unmodified) and to make sure the batch data is returned in 
+a format that Phaser can use.
+
+```python
+import phaser
+
+@phaser.batch_step(check_size=False)
+def separate_count_values_into_different_rows(batch, context):
+    new_data = []
+    for row in batch:
+        new_data.append({'timestamp': row['timestamp'], 'count': row['northbound_count']})
+        new_data.append({'timestamp': row['timestamp'], 'count': row['southbound_count']})
+    return new_data
+```
+
 ## DataFrame steps
 
 ## Built-in steps

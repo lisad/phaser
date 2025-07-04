@@ -1,14 +1,55 @@
 from pathlib import Path
 import pytest
 from phaser import (Phase, Pipeline, check_unique, read_csv, ON_ERROR_STOP_NOW, DataErrorException, IntColumn, sort_by,
-                    filter_rows, flatten_column, flatten_all)
+                    filter_rows, flatten_column, flatten_all, drop_duplicate_rows)
 from fixtures import test_data_phase_class
 from test_csv import write_text
 
 current_path = Path(__file__).parent
 
-# Tests of the check_unique step
 
+# Tests of the drop duplicates step
+def test_drop_no_dupes():
+    # If there are no duplicate rows, the resulting row data should be the same as the original data.
+    data = [{'id': 1, 'val': 'left'}, {'id': 2, 'val': 'right'}]
+    phase = Phase(name='phase', steps=[drop_duplicate_rows(None)])
+    phase.load_data(data=data)
+    phase.run_steps()
+    assert phase.row_data == data
+
+
+def test_drop_all_columns():
+    # Using all columns to determine uniqueness, should result in 2 rows.
+    phase = Phase(name='phase', steps=[drop_duplicate_rows(None)])
+    phase.load_data(data=[{'id': 1, 'val': 'Samwell'}, {'id': 1, 'val': 'Wealwell'}, {'id': 1, 'val': 'Samwell'}])
+    phase.run_steps()
+    assert len(phase.row_data) == 2
+
+
+def test_drop_one_column():
+    # Using only one column 'id' to determine uniqueness, should result in 1 row.
+    phase = Phase(name='phase', steps=[drop_duplicate_rows('id')])
+    phase.load_data(data=[{'id': 1, 'val': 'Samwell'}, {'id': 1, 'val': 'Wealwell'}, {'id': 1, 'val': 'Samwell'}])
+    phase.run_steps()
+    assert len(phase.row_data) == 1
+
+def test_drop_using_several_columns():
+    # In this example, 'id' is not in the columns used to detect duplicates, so all rows are dropped but one.
+    data = [{'id': aid, 'name': 'Barry', 'occupation': 'agent'} for aid in [1, 2, 3, 4, 5]]
+    phase = Phase(name='phase', steps=[drop_duplicate_rows(['name', 'occupation'])])
+    phase.load_data(data)
+    phase.run_steps()
+    assert len(phase.row_data) == 1
+
+def test_drop_fn_provides_count():
+    data = [{'id': aid, 'name': 'Barry', 'occupation': 'agent'} for aid in [1, 2, 3, 4, 5]]
+    phase = Phase(name='phase', steps=[drop_duplicate_rows(['name', 'occupation'])])
+    phase.load_data(data)
+    phase.run_steps()
+    events = phase.context.get_events(phase, 'none')
+    assert events[0]['message'] == "4 rows dropped by drop_duplicate_rows(columns=['name', 'occupation'])"
+
+# Tests of the check_unique step
 
 def test_check_unique_works():
     phase = Phase(steps=[check_unique('crew id')])
