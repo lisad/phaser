@@ -86,6 +86,24 @@ All steps can accept a parameter named `context` which will be the
 .. autodecorator:: phaser.dataframe_step
 ```
 
+## Builtin steps
+
+```{eval-rst}
+.. autodecorator:: phaser.drop_duplicate_rows
+
+.. autodecorator:: phaser.check_unique
+
+.. autodecorator:: phaser.sort_by
+
+.. autodecorator:: phaser.filter_rows
+
+.. autodecorator:: phaser.flatten_all
+
+.. autodecorator:: phaser.flatten_column
+
+```
+
+
 ## Diff logic
 
 See [Checkpoint files](#checkpoint-files) and [Table-oriented diffs](#table-oriented-diffs) for how saving
