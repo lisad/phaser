@@ -150,6 +150,9 @@ def batch_step(func=None, *, extra_sources=None, extra_outputs=None, check_size=
         raise exc
 
     def postprocess(step_function, result):
+        if isinstance(result, type({}.values())):
+            # If a step returned the values of a dict and forgot to convert to a list, we can convert for it.
+            result = list(result)
         if not isinstance(result, Sequence):
             raise PhaserError(
                 f"Step {step_function} returned a {result.__class__} rather than a list of rows")

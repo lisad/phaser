@@ -141,6 +141,19 @@ def test_simple_batch_step():
     assert phase.row_data == [{'value': 1, 'sum': 1}, {'value': 2, 'sum': 3}]
 
 
+def test_batch_step_returns_dict_array():
+    @batch_step
+    def return_as_dict_array(batch, context):
+        the_dict = {}
+        for (index, row) in enumerate(batch):
+            the_dict[index] = row
+        return the_dict.values()
+
+    phase = Phase(steps=[return_as_dict_array])
+    phase.load_data([{'id': 1, 'val': 'a'}])
+    phase.run_steps()
+    assert phase.row_data == [{'id': 1, 'val': 'a'}]
+
 def test_batch_step_cant_use_drop_row_exception():
     @batch_step
     def try_something_nonsensical(batch, context):
