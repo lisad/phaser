@@ -37,7 +37,7 @@ class Column:
         such as a builtin 'capitalize' or a custom function defined in scope.
     :param rename: A set of alternate names that may be used for this column, all of which should be mapped to
         the preferred name of this column. Upon loading the data, all rows that have columns matching
-        any alternate name in this set will have the alternate name replaced with the preferred `name` value.
+        any alternate name in this set will have the alternate name replaced with the preferred 'name' value.
     :param allowed_values: If allowed_values is empty or None, it is not checked.  If allowed_values is a
         single value or list of values, column logic checks every row to see that values are in the allowed list.
     :param save: if True, column is saved at the end of the phase; if not it is omitted.
@@ -130,7 +130,7 @@ class Column:
     def cast(self, value):
         """
         When subclassing Column to provide a custom column type, override the `cast` method to do type-casting.
-        For example, the builtin IntColumn uses this method to cast to an `int`.
+        For example, the builtin IntColumn uses this method to cast to an int.
 
         :param value: this parameter will hold a single value from the column, for this method to cast
             to the correct data type.
@@ -164,8 +164,8 @@ class Column:
     def fix_value(self, value):
         """
         When subclassing Column to provide custom data cleaning in a re-usable form, override the 'fix_value'
-        method.  The default implementation of this method applies the `default` parameter value and
-        also applies functions passed into the `fix_value_fn` parameter.  This is called after casting the
+        method.  The default implementation of this method applies the 'default' parameter value and
+        also applies functions passed into the 'fix_value_fn' parameter.  This is called after casting the
         column to the appropriate date type if using IntColumn, DateColumn, etc.
 
         Tips:
@@ -235,7 +235,7 @@ class IntColumn(Column):
     :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
         the preferred name of this column. Upon loading the data, all rows that have columns matching
         any alternate name in this set will have a column with the preferred name with the same data in
-        it. In other words, any data in a column name in `rename` will end up in a column named `name`.
+        it. In other words, any data in a column name in 'rename' will end up in a column named 'name'.
     :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
         To supply a range, use min_value and max_value instead.  NOTE: this is checked after casting,
         so to check allowed values of a column specified to cast to int, such as IntColumn, check for
@@ -308,7 +308,7 @@ class DateTimeColumn(Column):
     :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
         the preferred name of this column. Upon loading the data, all rows that have columns matching
         any alternate name in this set will have a column with the preferred name with the same data in
-        it. In other words, any data in a column name in `rename` will end up in a column named `name`.
+        it. In other words, any data in a column name in 'rename' will end up in a column named 'name'.
     :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
         To supply a range, use min_value and max_value instead.
     :param save: if True, column is saved at the end of the phase; if not it is omitted.
@@ -392,7 +392,7 @@ class DateColumn(DateTimeColumn):
     :param rename: A set of names that may be used in the data as column headers, all of which should be mapped to
         the preferred name of this column. Upon loading the data, all rows that have columns matching
         any alternate name in this set will have a column with the preferred name with the same data in
-        it. In other words, any data in a column name in `rename` will end up in a column named `name`.
+        it. In other words, any data in a column name in 'rename' will end up in a column named 'name'.
     :param allowed_values: If allowed_values is not empty and a column value is not in the list, raises errors.
         To supply a range, use min_value and max_value instead.
     :param save: if True, column is saved at the end of the phase; if not it is omitted.
