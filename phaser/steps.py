@@ -163,12 +163,12 @@ def batch_step(func=None, *, extra_sources=None, extra_outputs=None, check_size=
 
 def dataframe_step(func=None, *, pass_row_nums=True, extra_sources=None, extra_outputs=None, check_size=False):
     """
-    Used to define a step that needs to run on the whole set of data as a `pandas.DataFrame`.
+    Used to define a step that needs to run on the whole set of data as a pandas.DataFrame.
 
     The decorated function should accept a DataFrame as its first parameter.
 
     :param pass_row_nums: If True, the row numbers will be set in the DataFrame
-        in a column named the value of `PHASER_ROW_NUM`
+        in a column named the value of PHASER_ROW_NUM
     :param extra_sources: An array of source names
     :param extra_output: An array of names of outputs
     :param check_size: A boolean indicating whether or not to validate the size of the
