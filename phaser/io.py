@@ -229,7 +229,7 @@ class ExtraMapping(SavableObject):
         super().__init__(name, Mapping, data)
 
     def load_data(self, tabular_data):
-        if 'key' not in tabular_data[0].keys():
+        if 'key' not in tabular_data[0].keys() or 'value' not in tabular_data[0].keys():
             raise Exception(f"""Extra mapping data '{self.name}' loaded in for use needs to be formatted as a mapping
                 - specifically needs 'key' column and 'value' column""")
         self.data = {
