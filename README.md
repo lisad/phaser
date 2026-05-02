@@ -19,7 +19,7 @@ Record-oriented data can be stored or expressed in various formats and objects i
 * CSV files
 * Excel files
 * Pandas dataframes
-* JSON files, provided the JSON format is in record format (a list of dicts)
+* JSON files in [JSONL](https://jsonltools.com/what-is-jsonl) or panda's [JSON "records" format](https://pandas.pydata.org/pandas-docs/stable/reference/api/pandas.read_json.html)
 
 In this project, record consistency is somewhat forgiving.  The library does not insist that
 each record must have a value for every column.  Some records may not have some fields, i.e. 'sparse' data.
